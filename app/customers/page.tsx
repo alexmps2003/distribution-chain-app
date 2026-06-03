@@ -110,18 +110,18 @@ export default async function CustomersPage() {
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
                         <div className="flex justify-end gap-2">
-                          <button
-                            type="button"
+                          <Link
+                            href={`/customers/${customer.id}`}
                             className="inline-flex h-8 items-center justify-center rounded-md border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
                           >
                             View
-                          </button>
-                          <button
-                            type="button"
+                          </Link>
+                          <Link
+                            href={`/customers/${customer.id}/edit`}
                             className="inline-flex h-8 items-center justify-center rounded-md bg-zinc-950 px-3 text-xs font-medium text-white hover:bg-zinc-800"
                           >
                             Edit
-                          </button>
+                          </Link>
                         </div>
                       </td>
                     </tr>
