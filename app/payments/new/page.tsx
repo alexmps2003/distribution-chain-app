@@ -102,6 +102,15 @@ export default async function NewPaymentPage() {
 
           <div className="flex flex-col gap-4 border-t border-zinc-200 pt-6">
             <h2 className="text-lg font-medium tracking-tight">
+              Invoice Allocation
+            </h2>
+            <div className="rounded-md border border-dashed border-zinc-300 bg-zinc-50 p-8 text-center text-sm text-zinc-500">
+              Invoice allocation will be added here.
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-4 border-t border-zinc-200 pt-6">
+            <h2 className="text-lg font-medium tracking-tight">
               Payment Methods
             </h2>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -124,15 +133,6 @@ export default async function NewPaymentPage() {
               Payment allocation and amount entry will be added in the next
               step.
             </p>
-          </div>
-
-          <div className="flex flex-col gap-4 border-t border-zinc-200 pt-6">
-            <h2 className="text-lg font-medium tracking-tight">
-              Invoice Allocation
-            </h2>
-            <div className="rounded-md border border-dashed border-zinc-300 bg-zinc-50 p-8 text-center text-sm text-zinc-500">
-              Invoice allocation will be added here.
-            </div>
           </div>
 
           <div className="flex justify-end gap-3 border-t border-zinc-200 pt-6">
