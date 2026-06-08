@@ -31,9 +31,9 @@ model Customer {
 }
 
 model Invoice {
-  id            String  @id @default(cuid())
-  invoiceNumber String  @unique
-  amount        Decimal @db.Decimal(12, 2)
+  id            String        @id @default(cuid())
+  invoiceNumber String        @unique
+  amount        Decimal       @db.Decimal(12, 2)
   invoiceDate   DateTime
   dueDate       DateTime?
   status        InvoiceStatus @default(UNPAID)
@@ -49,7 +49,9 @@ model Invoice {
 model Payment {
   id String @id @default(cuid())
 
-  amount Decimal @db.Decimal(12, 2)
+  amount      Decimal  @db.Decimal(12, 2)
+  paymentDate DateTime @default(now())
+  notes       String?
 
   paymentMethod String
 
@@ -59,6 +61,26 @@ model Payment {
   createdAt DateTime @default(now())
 
   allocations PaymentAllocation[]
+  parts       PaymentPart[]
+}
+
+model PaymentPart {
+  id String @id @default(cuid())
+
+  paymentId String
+  payment   Payment @relation(fields: [paymentId], references: [id])
+
+  method PaymentMethod
+  amount Decimal       @db.Decimal(12, 2)
+
+  chequeNumber String?
+  chequeBank   String?
+  chequeDate   DateTime?
+
+  bankReference String?
+  cardReference String?
+
+  createdAt DateTime @default(now())
 }
 
 model PaymentAllocation {
@@ -79,4 +101,11 @@ enum InvoiceStatus {
   PAID
   OVERDUE
   CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  CHEQUE
+  BANK_TRANSFER
+  CARD
 }
