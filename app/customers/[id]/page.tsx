@@ -45,6 +45,20 @@ export default async function CustomerDetailPage({
     );
   }
 
+  const invoicesAggr = await prisma.invoice.aggregate({
+    where: { customerId: id },
+    _sum: { amount: true },
+  });
+
+  const allocationsAggr = await prisma.paymentAllocation.aggregate({
+    where: { invoice: { customerId: id } },
+    _sum: { amount: true },
+  });
+
+  const totalInvoiced = Number(invoicesAggr._sum.amount ?? 0);
+  const totalCollected = Number(allocationsAggr._sum.amount ?? 0);
+  const outstandingBalance = totalInvoiced - totalCollected;
+
   return (
     <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-8">
@@ -64,6 +78,38 @@ export default async function CustomerDetailPage({
             Back to Customers
           </Link>
         </div>
+
+        <section className="rounded-md border border-zinc-200 bg-white p-6">
+          <h2 className="mb-6 text-lg font-semibold text-zinc-950">
+            Financial Summary
+          </h2>
+          <div className="grid gap-6 sm:grid-cols-3">
+            <div>
+              <label className="text-xs font-medium uppercase text-zinc-600">
+                Total Invoiced
+              </label>
+              <p className="mt-1 text-2xl font-semibold tracking-tight text-zinc-950">
+                {formatAmount(totalInvoiced)}
+              </p>
+            </div>
+            <div>
+              <label className="text-xs font-medium uppercase text-zinc-600">
+                Total Collected
+              </label>
+              <p className="mt-1 text-2xl font-semibold tracking-tight text-zinc-950">
+                {formatAmount(totalCollected)}
+              </p>
+            </div>
+            <div>
+              <label className="text-xs font-medium uppercase text-zinc-600">
+                Outstanding Balance
+              </label>
+              <p className="mt-1 text-2xl font-semibold tracking-tight text-zinc-950">
+                {formatAmount(outstandingBalance)}
+              </p>
+            </div>
+          </div>
+        </section>
 
         <div className="grid gap-8 lg:grid-cols-2">
           {/* Customer Information */}
