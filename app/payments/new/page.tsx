@@ -2,12 +2,48 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 
-export default async function NewPaymentPage() {
+import CustomerSelect from "./CustomerSelect";
+
+const numberFormatter = new Intl.NumberFormat("en-US", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+function formatAmount(value: { toString(): string }) {
+  return numberFormatter.format(Number(value.toString()));
+}
+
+function formatDate(date: Date | null) {
+  if (!date) return "-";
+  return date.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+export default async function NewPaymentPage(props: {
+  searchParams: Promise<{ customerId?: string }>;
+}) {
+  const searchParams = await props.searchParams;
+  const customerId = searchParams?.customerId;
+
   const customers = await prisma.customer.findMany({
     where: { isActive: true },
     select: { id: true, name: true, code: true },
     orderBy: { name: "asc" },
   });
+
+  let outstandingInvoices: any[] = [];
+  if (customerId) {
+    outstandingInvoices = await prisma.invoice.findMany({
+      where: {
+        customerId,
+        status: { in: ["UNPAID", "PARTIALLY_PAID"] },
+      },
+      orderBy: { invoiceDate: "asc" },
+    });
+  }
 
   async function createPayment(formData: FormData) {
     "use server";
@@ -68,18 +104,7 @@ export default async function NewPaymentPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="flex flex-col gap-2 text-sm font-medium text-zinc-800">
                 Customer <span className="text-red-500">*</span>
-                <select
-                  name="customerId"
-                  required
-                  className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
-                >
-                  <option value="">Select a customer</option>
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.code})
-                    </option>
-                  ))}
-                </select>
+                <CustomerSelect customers={customers} />
               </label>
 
               <Field
@@ -104,9 +129,75 @@ export default async function NewPaymentPage() {
             <h2 className="text-lg font-medium tracking-tight">
               Invoice Allocation
             </h2>
-            <div className="rounded-md border border-dashed border-zinc-300 bg-zinc-50 p-8 text-center text-sm text-zinc-500">
-              Invoice allocation will be added here.
-            </div>
+            {!customerId ? (
+              <div className="rounded-md border border-dashed border-zinc-300 bg-zinc-50 p-8 text-center text-sm text-zinc-500">
+                Select a customer to view outstanding invoices.
+              </div>
+            ) : outstandingInvoices.length === 0 ? (
+              <div className="rounded-md border border-dashed border-zinc-300 bg-zinc-50 p-8 text-center text-sm text-zinc-500">
+                No outstanding invoices.
+              </div>
+            ) : (
+              <div className="overflow-hidden rounded-md border border-zinc-200 bg-white">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-zinc-200 text-sm">
+                    <thead className="bg-zinc-100 text-left text-xs font-semibold uppercase text-zinc-600">
+                      <tr>
+                        <th scope="col" className="px-4 py-3 w-10">
+                          <span className="sr-only">Select</span>
+                        </th>
+                        <th scope="col" className="px-4 py-3">
+                          Invoice
+                        </th>
+                        <th scope="col" className="px-4 py-3">
+                          Date
+                        </th>
+                        <th scope="col" className="px-4 py-3">
+                          Due Date
+                        </th>
+                        <th scope="col" className="px-4 py-3 text-right">
+                          Amount
+                        </th>
+                        <th scope="col" className="px-4 py-3">
+                          Status
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-200">
+                      {outstandingInvoices.map((invoice) => (
+                        <tr key={invoice.id} className="hover:bg-zinc-50">
+                          <td className="px-4 py-3">
+                            <input
+                              type="checkbox"
+                              name="invoiceIds"
+                              value={invoice.id}
+                              className="h-4 w-4 rounded border-zinc-300 text-zinc-950 focus:ring-zinc-950"
+                            />
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3 text-zinc-950 font-medium">
+                            {invoice.invoiceNumber}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
+                            {formatDate(invoice.invoiceDate)}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
+                            {formatDate(invoice.dueDate)}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3 text-right text-zinc-600 font-medium">
+                            {formatAmount(invoice.amount)}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3">
+                            <span className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20">
+                              {invoice.status.replace("_", " ")}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col gap-4 border-t border-zinc-200 pt-6">
