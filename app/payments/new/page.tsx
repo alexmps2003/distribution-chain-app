@@ -1,6 +1,5 @@
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
-import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 
 import CustomerSelect from "./CustomerSelect";
@@ -49,34 +48,6 @@ export default async function NewPaymentPage(props: {
     });
   }
 
-  async function createPayment(formData: FormData) {
-    "use server";
-
-    const customerId = formData.get("customerId") as string;
-    const paymentDateStr = formData.get("paymentDate") as string;
-    const notes = formData.get("notes") as string;
-
-    if (!customerId || !paymentDateStr) {
-      throw new Error("Missing required fields");
-    }
-
-    const paymentDate = new Date(paymentDateStr);
-
-    // Business logic placeholder - do not implement yet
-    // For now we persist a zero amount payment
-    await prisma.payment.create({
-      data: {
-        customerId,
-        paymentDate,
-        notes,
-        amount: 0,
-        paymentMethod: "MIXED", // Placeholder
-      },
-    });
-
-    redirect("/payments");
-  }
-
   return (
     <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-8">
@@ -97,10 +68,7 @@ export default async function NewPaymentPage(props: {
           </Link>
         </div>
 
-        <form
-          action={createPayment}
-          className="grid gap-6 rounded-md border border-zinc-200 bg-white p-6"
-        >
+        <form className="grid gap-6 rounded-md border border-zinc-200 bg-white p-6">
           <div className="flex flex-col gap-4">
             <h2 className="text-lg font-medium tracking-tight">
               Payment Details
@@ -214,10 +182,11 @@ export default async function NewPaymentPage(props: {
               Cancel
             </Link>
             <button
-              type="submit"
-              className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
+              type="button"
+              disabled
+              className="inline-flex h-10 cursor-not-allowed items-center justify-center rounded-md bg-zinc-300 px-4 text-sm font-medium text-zinc-600"
             >
-              Record Payment
+              Save Coming Next
             </button>
           </div>
         </form>
