@@ -10,6 +10,15 @@ function formatAmount(value: { toString(): string }) {
   return numberFormatter.format(Number(value.toString()));
 }
 
+function formatDate(date: Date | null) {
+  if (!date) return "-";
+  return date.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
 interface CustomerDetailPageProps {
   params: Promise<{
     id: string;
@@ -23,6 +32,11 @@ export default async function CustomerDetailPage({
 
   const customer = await prisma.customer.findUnique({
     where: { id },
+    include: {
+      invoices: {
+        orderBy: { invoiceDate: "desc" },
+      },
+    },
   });
 
   if (!customer) {
@@ -109,6 +123,76 @@ export default async function CustomerDetailPage({
               </p>
             </div>
           </div>
+        </section>
+
+        <section className="rounded-md border border-zinc-200 bg-white p-6">
+          <h2 className="mb-6 text-lg font-semibold text-zinc-950">
+            Invoice History
+          </h2>
+          {customer.invoices.length === 0 ? (
+            <div className="rounded-md border border-dashed border-zinc-300 bg-zinc-50 p-8 text-center text-sm text-zinc-600">
+              No invoices found.
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-md border border-zinc-200 bg-white">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-zinc-200 text-sm">
+                  <thead className="bg-zinc-100 text-left text-xs font-semibold uppercase text-zinc-600">
+                    <tr>
+                      <th scope="col" className="px-4 py-3">
+                        Invoice Number
+                      </th>
+                      <th scope="col" className="px-4 py-3">
+                        Invoice Date
+                      </th>
+                      <th scope="col" className="px-4 py-3">
+                        Due Date
+                      </th>
+                      <th scope="col" className="px-4 py-3 text-right">
+                        Amount
+                      </th>
+                      <th scope="col" className="px-4 py-3">
+                        Status
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-200">
+                    {customer.invoices.map((invoice) => (
+                      <tr key={invoice.id}>
+                        <td className="whitespace-nowrap px-4 py-3 font-medium">
+                          {invoice.invoiceNumber}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
+                          {formatDate(invoice.invoiceDate)}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
+                          {formatDate(invoice.dueDate)}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-right text-zinc-600 font-medium">
+                          {formatAmount(invoice.amount)}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3">
+                          <span
+                            className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
+                              invoice.status === "PAID"
+                                ? "bg-emerald-100 text-emerald-800"
+                                : invoice.status === "UNPAID"
+                                  ? "bg-rose-100 text-rose-800"
+                                  : invoice.status === "PARTIALLY_PAID"
+                                    ? "bg-amber-100 text-amber-800"
+                                    : "bg-zinc-200 text-zinc-800"
+                            }`}
+                          >
+                            {invoice.status.replace("_", " ")}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </section>
 
         <div className="grid gap-8 lg:grid-cols-2">

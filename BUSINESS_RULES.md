@@ -12,3 +12,18 @@
 - Customers need fixed credit periods.
 - Invoice and payment SMS should be sent to customers.
 - Collector petty cash/float must be tracked later.
+
+
+Payment workflow:
+- Collector searches/selects customer.
+- Collector opens customer profile.
+- Collector selects bill/invoice from outstanding list.
+- Collector chooses one or more payment methods.
+- Supported methods: cash, cheque, bank transfer, card in future.
+- Collector enters amount per method.
+- The collector decides which invoice(s) the payment is applied to.
+- Partial payments are allowed.
+- Invoice status becomes:
+  - UNPAID if no payment
+  - PARTIALLY_PAID if some amount paid
+  - PAID if fully paid
