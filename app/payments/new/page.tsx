@@ -104,10 +104,26 @@ export default async function NewPaymentPage() {
             <h2 className="text-lg font-medium tracking-tight">
               Payment Methods
             </h2>
-            <div className="rounded-md border border-dashed border-zinc-300 bg-zinc-50 p-8 text-center text-sm text-zinc-500">
-              Payment methods definition will be added here. (Cash, Cheque, Bank
-              Transfer)
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              {["Cash", "Cheque", "Bank Transfer", "Card"].map((method) => (
+                <label
+                  key={method}
+                  className="flex cursor-pointer items-center justify-center rounded-md border border-zinc-300 bg-white p-4 text-sm font-medium text-zinc-800 transition-colors hover:bg-zinc-50 has-checked:border-zinc-950 has-checked:bg-zinc-50 has-checked:ring-1 has-checked:ring-zinc-950"
+                >
+                  <input
+                    type="checkbox"
+                    name="paymentMethods"
+                    value={method}
+                    className="sr-only"
+                  />
+                  {method}
+                </label>
+              ))}
             </div>
+            <p className="text-sm text-zinc-500">
+              Payment allocation and amount entry will be added in the next
+              step.
+            </p>
           </div>
 
           <div className="flex flex-col gap-4 border-t border-zinc-200 pt-6">
