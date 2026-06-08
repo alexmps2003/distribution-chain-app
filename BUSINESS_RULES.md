@@ -27,3 +27,15 @@ Payment workflow:
   - UNPAID if no payment
   - PARTIALLY_PAID if some amount paid
   - PAID if fully paid
+
+  Payment Creation Rules
+
+1. Collector selects customer.
+2. Collector selects one or more invoices.
+3. Partial invoice payments are allowed.
+4. One payment can settle multiple invoices.
+5. One invoice can receive multiple payments.
+6. One payment can contain multiple payment methods.
+7. Payment method total must equal allocation total.
+8. Cheque received does not mean cheque cleared.
+9. Cheque clearing is handled by office staff later.
