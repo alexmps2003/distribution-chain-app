@@ -1,8 +1,12 @@
 import Link from "next/link";
+import type { Prisma } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 
 import CustomerSelect from "./CustomerSelect";
+import PaymentMethodEntry from "./PaymentMethodEntry";
+
+type OutstandingInvoice = Prisma.InvoiceGetPayload<Record<string, never>>;
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
@@ -34,7 +38,7 @@ export default async function NewPaymentPage(props: {
     orderBy: { name: "asc" },
   });
 
-  let outstandingInvoices: any[] = [];
+  let outstandingInvoices: OutstandingInvoice[] = [];
   if (customerId) {
     outstandingInvoices = await prisma.invoice.findMany({
       where: {
@@ -200,31 +204,7 @@ export default async function NewPaymentPage(props: {
             )}
           </div>
 
-          <div className="flex flex-col gap-4 border-t border-zinc-200 pt-6">
-            <h2 className="text-lg font-medium tracking-tight">
-              Payment Methods
-            </h2>
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              {["Cash", "Cheque", "Bank Transfer", "Card"].map((method) => (
-                <label
-                  key={method}
-                  className="flex cursor-pointer items-center justify-center rounded-md border border-zinc-300 bg-white p-4 text-sm font-medium text-zinc-800 transition-colors hover:bg-zinc-50 has-checked:border-zinc-950 has-checked:bg-zinc-50 has-checked:ring-1 has-checked:ring-zinc-950"
-                >
-                  <input
-                    type="checkbox"
-                    name="paymentMethods"
-                    value={method}
-                    className="sr-only"
-                  />
-                  {method}
-                </label>
-              ))}
-            </div>
-            <p className="text-sm text-zinc-500">
-              Payment allocation and amount entry will be added in the next
-              step.
-            </p>
-          </div>
+          <PaymentMethodEntry />
 
           <div className="flex justify-end gap-3 border-t border-zinc-200 pt-6">
             <Link
