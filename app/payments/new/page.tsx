@@ -7,24 +7,6 @@ import PaymentMethodEntry from "./PaymentMethodEntry";
 
 type OutstandingInvoice = Prisma.InvoiceGetPayload<Record<string, never>>;
 
-const numberFormatter = new Intl.NumberFormat("en-US", {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
-function formatAmount(value: { toString(): string }) {
-  return numberFormatter.format(Number(value.toString()));
-}
-
-function formatDate(date: Date | null) {
-  if (!date) return "-";
-  return date.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
-
 export default async function NewPaymentPage(props: {
   searchParams: Promise<{ customerId?: string }>;
 }) {
@@ -47,6 +29,15 @@ export default async function NewPaymentPage(props: {
       orderBy: { invoiceDate: "asc" },
     });
   }
+
+  const allocationInvoices = outstandingInvoices.map((invoice) => ({
+    id: invoice.id,
+    invoiceNumber: invoice.invoiceNumber,
+    invoiceDate: invoice.invoiceDate.toISOString(),
+    dueDate: invoice.dueDate?.toISOString() ?? null,
+    amount: invoice.amount.toString(),
+    status: invoice.status,
+  }));
 
   return (
     <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
@@ -97,82 +88,10 @@ export default async function NewPaymentPage(props: {
             </label>
           </div>
 
-          <div className="flex flex-col gap-4 border-t border-zinc-200 pt-6">
-            <h2 className="text-lg font-medium tracking-tight">
-              Invoice Allocation
-            </h2>
-            {!customerId ? (
-              <div className="rounded-md border border-dashed border-zinc-300 bg-zinc-50 p-8 text-center text-sm text-zinc-500">
-                Select a customer to view outstanding invoices.
-              </div>
-            ) : outstandingInvoices.length === 0 ? (
-              <div className="rounded-md border border-dashed border-zinc-300 bg-zinc-50 p-8 text-center text-sm text-zinc-500">
-                No outstanding invoices.
-              </div>
-            ) : (
-              <div className="overflow-hidden rounded-md border border-zinc-200 bg-white">
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-zinc-200 text-sm">
-                    <thead className="bg-zinc-100 text-left text-xs font-semibold uppercase text-zinc-600">
-                      <tr>
-                        <th scope="col" className="px-4 py-3 w-10">
-                          <span className="sr-only">Select</span>
-                        </th>
-                        <th scope="col" className="px-4 py-3">
-                          Invoice
-                        </th>
-                        <th scope="col" className="px-4 py-3">
-                          Date
-                        </th>
-                        <th scope="col" className="px-4 py-3">
-                          Due Date
-                        </th>
-                        <th scope="col" className="px-4 py-3 text-right">
-                          Amount
-                        </th>
-                        <th scope="col" className="px-4 py-3">
-                          Status
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-200">
-                      {outstandingInvoices.map((invoice) => (
-                        <tr key={invoice.id} className="hover:bg-zinc-50">
-                          <td className="px-4 py-3">
-                            <input
-                              type="checkbox"
-                              name="invoiceIds"
-                              value={invoice.id}
-                              className="h-4 w-4 rounded border-zinc-300 text-zinc-950 focus:ring-zinc-950"
-                            />
-                          </td>
-                          <td className="whitespace-nowrap px-4 py-3 text-zinc-950 font-medium">
-                            {invoice.invoiceNumber}
-                          </td>
-                          <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
-                            {formatDate(invoice.invoiceDate)}
-                          </td>
-                          <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
-                            {formatDate(invoice.dueDate)}
-                          </td>
-                          <td className="whitespace-nowrap px-4 py-3 text-right text-zinc-600 font-medium">
-                            {formatAmount(invoice.amount)}
-                          </td>
-                          <td className="whitespace-nowrap px-4 py-3">
-                            <span className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20">
-                              {invoice.status.replace("_", " ")}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <PaymentMethodEntry />
+          <PaymentMethodEntry
+            customerId={customerId}
+            invoices={allocationInvoices}
+          />
 
           <div className="flex justify-end gap-3 border-t border-zinc-200 pt-6">
             <Link
