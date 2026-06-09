@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 
-
 const numberFormatter = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
@@ -70,6 +69,9 @@ export default async function PaymentsPage() {
                     <th scope="col" className="px-4 py-3">
                       Created Date
                     </th>
+                    <th scope="col" className="px-4 py-3 text-right">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200">
@@ -86,6 +88,14 @@ export default async function PaymentsPage() {
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
                         {formatDate(payment.createdAt)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right">
+                        <Link
+                          href={`/payments/${payment.id}`}
+                          className="inline-flex h-8 items-center justify-center rounded-md border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
+                        >
+                          View
+                        </Link>
                       </td>
                     </tr>
                   ))}
