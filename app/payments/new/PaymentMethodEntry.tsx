@@ -62,9 +62,11 @@ function formatDate(value: string | null) {
 export default function PaymentMethodEntry({
   customerId,
   invoices,
+  saveAction,
 }: {
   customerId?: string;
   invoices: AllocationInvoice[];
+  saveAction: (formData: FormData) => void | Promise<void>;
 }) {
   const [selectedInvoices, setSelectedInvoices] = useState<
     Record<string, boolean>
@@ -281,7 +283,7 @@ export default function PaymentMethodEntry({
                         </td>
                         <td className="whitespace-nowrap px-4 py-3">
                           <input
-                            name="allocationAmounts"
+                            name={`allocationAmount:${invoice.id}`}
                             type="number"
                             min="0"
                             max={invoice.outstandingAmount}
@@ -470,7 +472,8 @@ export default function PaymentMethodEntry({
             Cancel
           </Link>
           <button
-            type="button"
+            type="submit"
+            formAction={saveAction}
             disabled={!isValid}
             className={
               isValid
