@@ -118,21 +118,6 @@ export default async function NewPaymentPage(props: {
             invoices={allocationInvoices}
           />
 
-          <div className="flex justify-end gap-3 border-t border-zinc-200 pt-6">
-            <Link
-              href="/payments"
-              className="inline-flex h-10 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium hover:bg-zinc-100"
-            >
-              Cancel
-            </Link>
-            <button
-              type="button"
-              disabled
-              className="inline-flex h-10 cursor-not-allowed items-center justify-center rounded-md bg-zinc-300 px-4 text-sm font-medium text-zinc-600"
-            >
-              Save Coming Next
-            </button>
-          </div>
         </form>
       </div>
     </main>

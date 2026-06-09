@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 type PaymentMethod = "cash" | "cheque" | "bankTransfer" | "card";
@@ -106,10 +107,36 @@ export default function PaymentMethodEntry({
     }, 0);
   }, [paymentAmounts, selectedMethods]);
 
-  const isBalanced =
-    paymentTotal > 0 &&
-    totalAllocated > 0 &&
-    toCents(paymentTotal) === toCents(totalAllocated);
+  const selectedInvoiceCount = invoices.filter(
+    (invoice) => selectedInvoices[invoice.id],
+  ).length;
+  const selectedMethodCount = paymentMethods.filter(
+    (method) => selectedMethods[method.id],
+  ).length;
+  const hasAllocationOverOutstanding = invoices.some((invoice) => {
+    if (!selectedInvoices[invoice.id]) {
+      return false;
+    }
+
+    return (
+      toCents(parseAmount(allocationAmounts[invoice.id] ?? "")) >
+      toCents(parseAmount(invoice.outstandingAmount))
+    );
+  });
+  const totalsMatch = toCents(paymentTotal) === toCents(totalAllocated);
+  const isBalanced = paymentTotal > 0 && totalAllocated > 0 && totalsMatch;
+  const isValid =
+    isBalanced &&
+    selectedInvoiceCount > 0 &&
+    selectedMethodCount > 0 &&
+    !hasAllocationOverOutstanding;
+  const validationMessage = getValidationMessage({
+    hasAllocationOverOutstanding,
+    paymentTotal,
+    selectedInvoiceCount,
+    selectedMethodCount,
+    totalsMatch,
+  });
 
   function toggleInvoice(invoiceId: string) {
     setSelectedInvoices((current) => {
@@ -424,8 +451,75 @@ export default function PaymentMethodEntry({
           </div>
         </div>
       </div>
+
+      <div className="flex flex-col gap-3 border-t border-zinc-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
+        <p
+          className={
+            isValid
+              ? "text-sm font-medium text-emerald-700"
+              : "text-sm font-medium text-zinc-600"
+          }
+        >
+          {validationMessage}
+        </p>
+        <div className="flex justify-end gap-3">
+          <Link
+            href="/payments"
+            className="inline-flex h-10 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium hover:bg-zinc-100"
+          >
+            Cancel
+          </Link>
+          <button
+            type="button"
+            disabled={!isValid}
+            className={
+              isValid
+                ? "inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
+                : "inline-flex h-10 cursor-not-allowed items-center justify-center rounded-md bg-zinc-300 px-4 text-sm font-medium text-zinc-600"
+            }
+          >
+            Record Payment
+          </button>
+        </div>
+      </div>
     </>
   );
+}
+
+function getValidationMessage({
+  hasAllocationOverOutstanding,
+  paymentTotal,
+  selectedInvoiceCount,
+  selectedMethodCount,
+  totalsMatch,
+}: {
+  hasAllocationOverOutstanding: boolean;
+  paymentTotal: number;
+  selectedInvoiceCount: number;
+  selectedMethodCount: number;
+  totalsMatch: boolean;
+}) {
+  if (selectedInvoiceCount === 0) {
+    return "Select at least one invoice before saving.";
+  }
+
+  if (selectedMethodCount === 0) {
+    return "Select at least one payment method before saving.";
+  }
+
+  if (paymentTotal <= 0) {
+    return "Payment total must be greater than 0.";
+  }
+
+  if (hasAllocationOverOutstanding) {
+    return "Allocation amount cannot exceed the invoice outstanding amount.";
+  }
+
+  if (!totalsMatch) {
+    return "Payment Total must equal Total Allocated.";
+  }
+
+  return "Ready to record payment.";
 }
 
 function Field({
