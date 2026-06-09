@@ -7,9 +7,9 @@ type PaymentMethod = "cash" | "cheque" | "bankTransfer" | "card";
 type AllocationInvoice = {
   id: string;
   invoiceNumber: string;
-  invoiceDate: string;
   dueDate: string | null;
-  amount: string;
+  invoiceTotal: string;
+  outstandingAmount: string;
   status: string;
 };
 
@@ -130,9 +130,19 @@ export default function PaymentMethodEntry({
   }
 
   function updateAllocationAmount(invoiceId: string, value: string) {
+    const invoice = invoices.find((item) => item.id === invoiceId);
+    const outstandingAmount = invoice
+      ? parseAmount(invoice.outstandingAmount)
+      : 0;
+    const requestedAmount = parseAmount(value);
+    const nextValue =
+      value !== "" && requestedAmount > outstandingAmount
+        ? outstandingAmount.toFixed(2)
+        : value;
+
     setAllocationAmounts((current) => ({
       ...current,
-      [invoiceId]: value,
+      [invoiceId]: nextValue,
     }));
   }
 
@@ -192,20 +202,20 @@ export default function PaymentMethodEntry({
                     <th scope="col" className="px-4 py-3">
                       Invoice
                     </th>
-                    <th scope="col" className="px-4 py-3">
-                      Date
+                    <th scope="col" className="px-4 py-3 text-right">
+                      Invoice Total
+                    </th>
+                    <th scope="col" className="px-4 py-3 text-right">
+                      Outstanding
                     </th>
                     <th scope="col" className="px-4 py-3">
                       Due Date
-                    </th>
-                    <th scope="col" className="px-4 py-3 text-right">
-                      Amount
                     </th>
                     <th scope="col" className="px-4 py-3">
                       Status
                     </th>
                     <th scope="col" className="px-4 py-3 text-right">
-                      Allocation Amount
+                      Allocate
                     </th>
                   </tr>
                 </thead>
@@ -228,14 +238,14 @@ export default function PaymentMethodEntry({
                         <td className="whitespace-nowrap px-4 py-3 font-medium text-zinc-950">
                           {invoice.invoiceNumber}
                         </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
-                          {formatDate(invoice.invoiceDate)}
+                        <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-zinc-600">
+                          {formatAmount(invoice.invoiceTotal)}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-zinc-600">
+                          {formatAmount(invoice.outstandingAmount)}
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
                           {formatDate(invoice.dueDate)}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-zinc-600">
-                          {formatAmount(invoice.amount)}
                         </td>
                         <td className="whitespace-nowrap px-4 py-3">
                           <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20">
@@ -247,6 +257,7 @@ export default function PaymentMethodEntry({
                             name="allocationAmounts"
                             type="number"
                             min="0"
+                            max={invoice.outstandingAmount}
                             step="0.01"
                             disabled={!isSelected}
                             value={allocationAmounts[invoice.id] ?? ""}

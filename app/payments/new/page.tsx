@@ -5,7 +5,15 @@ import { prisma } from "@/lib/prisma";
 import CustomerSelect from "./CustomerSelect";
 import PaymentMethodEntry from "./PaymentMethodEntry";
 
-type OutstandingInvoice = Prisma.InvoiceGetPayload<Record<string, never>>;
+type OutstandingInvoice = Prisma.InvoiceGetPayload<{
+  include: {
+    payments: {
+      select: {
+        amount: true;
+      };
+    };
+  };
+}>;
 
 export default async function NewPaymentPage(props: {
   searchParams: Promise<{ customerId?: string }>;
@@ -26,18 +34,35 @@ export default async function NewPaymentPage(props: {
         customerId,
         status: { in: ["UNPAID", "PARTIALLY_PAID"] },
       },
+      include: {
+        payments: {
+          select: {
+            amount: true,
+          },
+        },
+      },
       orderBy: { invoiceDate: "asc" },
     });
   }
 
-  const allocationInvoices = outstandingInvoices.map((invoice) => ({
-    id: invoice.id,
-    invoiceNumber: invoice.invoiceNumber,
-    invoiceDate: invoice.invoiceDate.toISOString(),
-    dueDate: invoice.dueDate?.toISOString() ?? null,
-    amount: invoice.amount.toString(),
-    status: invoice.status,
-  }));
+  const allocationInvoices = outstandingInvoices
+    .map((invoice) => {
+      const previousAllocated = invoice.payments.reduce((total, allocation) => {
+        return total + Number(allocation.amount.toString());
+      }, 0);
+      const outstandingAmount =
+        Number(invoice.amount.toString()) - previousAllocated;
+
+      return {
+        id: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        dueDate: invoice.dueDate?.toISOString() ?? null,
+        invoiceTotal: invoice.amount.toString(),
+        outstandingAmount: outstandingAmount.toFixed(2),
+        status: invoice.status,
+      };
+    })
+    .filter((invoice) => Number(invoice.outstandingAmount) > 0);
 
   return (
     <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">

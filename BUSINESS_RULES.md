@@ -28,7 +28,7 @@ Payment workflow:
   - PARTIALLY_PAID if some amount paid
   - PAID if fully paid
 
-  Payment Creation Rules
+Payment Creation Rules
 
 1. Collector selects customer.
 2. Collector selects one or more invoices.
@@ -39,3 +39,30 @@ Payment workflow:
 7. Payment method total must equal allocation total.
 8. Cheque received does not mean cheque cleared.
 9. Cheque clearing is handled by office staff later.
+
+### Invoice Outstanding Calculation
+
+Invoice Outstanding =
+Invoice Total − Total Successfully Recorded Allocations
+
+Collectors may only allocate amounts up to the current outstanding value.
+
+The original invoice amount must remain unchanged for audit purposes.
+
+
+
+### Cheque Handling
+
+Collectors treat cheques the same as cash at collection time.
+
+When a cheque is received:
+- The payment is recorded immediately.
+- Customer outstanding balance reduces immediately.
+- Invoice status updates immediately.
+
+If a cheque bounces later:
+- Office staff must be able to mark the cheque as bounced.
+- The system must reverse the related payment allocation.
+- The customer outstanding balance must increase again.
+- The invoice status must be recalculated.
+- The original payment history must remain for audit purposes.
