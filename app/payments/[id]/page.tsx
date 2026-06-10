@@ -48,26 +48,28 @@ function getMethodDetails(part: {
 }) {
   if (part.method === "CHEQUE") {
     return [
-      part.chequeNumber ? `No: ${part.chequeNumber}` : "",
+      part.chequeNumber ? `Cheque #${part.chequeNumber}` : "",
       part.chequeBank ? `Bank: ${part.chequeBank}` : "",
-      part.chequeDate ? `Date: ${formatDate(part.chequeDate)}` : "",
-    ]
-      .filter(Boolean)
-      .join(", ");
+      part.chequeDate ? formatDate(part.chequeDate) : "",
+    ].filter(Boolean);
   }
 
   if (part.method === "BANK_TRANSFER") {
-    return part.bankReference ? `Ref: ${part.bankReference}` : "-";
+    return [part.bankReference ? `Ref: ${part.bankReference}` : "-"];
   }
 
   if (part.method === "CARD") {
-    return part.cardReference ? `Ref: ${part.cardReference}` : "-";
+    return [part.cardReference ? `Ref: ${part.cardReference}` : "-"];
   }
 
-  return "-";
+  return ["-"];
 }
 
 function formatStatus(status: string) {
+  if (status === "ACTIVE") {
+    return "COMPLETED";
+  }
+
   return status;
 }
 
@@ -423,10 +425,14 @@ export default async function PaymentDetailsPage({
                         <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-zinc-600">
                           {formatAmount(part.amount)}
                         </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
-                          {part.details}
+                        <td className="w-[24%] px-4 py-3 text-zinc-600">
+                          <div className="grid gap-1">
+                            {part.details.map((detail) => (
+                              <div key={detail}>{detail}</div>
+                            ))}
+                          </div>
                         </td>
-                        <td className="px-4 py-3 text-zinc-600">
+                        <td className="w-[40%] px-4 py-3 text-zinc-600">
                           {part.allocations.length === 0 ? (
                             "-"
                           ) : (

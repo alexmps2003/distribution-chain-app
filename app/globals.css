@@ -27,18 +27,21 @@ body {
 
 @media print {
   @page {
-    margin: 16mm;
+    margin: 0;
+    size: auto;
   }
 
   html,
   body {
     background: #ffffff !important;
     color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
   main {
     background: #ffffff !important;
-    padding: 0 !important;
+    padding: 16mm !important;
   }
 
   .receipt-summary-card,
