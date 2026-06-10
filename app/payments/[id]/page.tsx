@@ -83,6 +83,19 @@ function getPaymentStatus(payment: unknown) {
   return null;
 }
 
+function getPaymentNumber(payment: unknown) {
+  if (
+    payment &&
+    typeof payment === "object" &&
+    "paymentNumber" in payment &&
+    typeof payment.paymentNumber === "string"
+  ) {
+    return payment.paymentNumber;
+  }
+
+  return null;
+}
+
 function getStatusBadgeClass(status: string) {
   if (status === "PAID" || status === "ACTIVE") {
     return "bg-emerald-50 text-emerald-700 ring-emerald-600/20";
@@ -274,33 +287,24 @@ export default async function PaymentDetailsPage({
   }
 
   const invoiceAllocations = Array.from(allocationsByInvoice.values());
-  const paymentStatus = getPaymentStatus(payment);
+  const paymentStatus = getPaymentStatus(payment) ?? "ACTIVE";
+  const paymentNumber = getPaymentNumber(payment);
 
   return (
     <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-8">
-        <div className="rounded-md border border-zinc-200 bg-white p-6">
+        <section className="rounded-md border border-zinc-200 bg-white p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <div className="flex flex-wrap items-center gap-3">
                 <h1 className="text-3xl font-semibold tracking-tight">
                   Payment Details
                 </h1>
-                {paymentStatus && <StatusBadge status={paymentStatus} />}
+                <StatusBadge status={paymentStatus} />
               </div>
               <p className="mt-2 text-sm font-medium text-zinc-700">
                 {payment.customer.name} ({payment.customer.code})
               </p>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <HeaderMetric
-                  label="Payment Date"
-                  value={formatDate(payment.paymentDate)}
-                />
-                <HeaderMetric
-                  label="Total Amount"
-                  value={formatAmount(payment.amount)}
-                />
-              </div>
             </div>
             <Link
               href="/payments"
@@ -309,20 +313,20 @@ export default async function PaymentDetailsPage({
               Back to Payments
             </Link>
           </div>
-        </div>
-
-        <section className="rounded-md border border-zinc-200 bg-white p-6">
-          <h2 className="text-lg font-medium tracking-tight">
-            Payment Details
-          </h2>
-          <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <DetailItem label="Customer" value={payment.customer.name} />
+          <dl className="mt-6 grid gap-4 border-t border-zinc-200 pt-5 sm:grid-cols-2 lg:grid-cols-4">
+            {paymentNumber && (
+              <DetailItem label="Payment Number" value={paymentNumber} />
+            )}
+            <DetailItem label="Customer Name" value={payment.customer.name} />
             <DetailItem label="Customer Code" value={payment.customer.code} />
             <DetailItem
               label="Payment Date"
               value={formatDate(payment.paymentDate)}
             />
-            <DetailItem label="Amount" value={formatAmount(payment.amount)} />
+            <DetailItem
+              label="Total Amount"
+              value={formatAmount(payment.amount)}
+            />
             <DetailItem label="Payment Method" value={payment.paymentMethod} />
             <DetailItem label="Area" value={payment.customer.area ?? "-"} />
             <DetailItem
@@ -331,14 +335,6 @@ export default async function PaymentDetailsPage({
             />
             <DetailItem label="Created" value={formatDate(payment.createdAt)} />
           </dl>
-          {payment.notes && (
-            <div className="mt-4 border-t border-zinc-200 pt-4">
-              <p className="text-xs font-semibold uppercase text-zinc-500">
-                Notes
-              </p>
-              <p className="mt-1 text-sm text-zinc-700">{payment.notes}</p>
-            </div>
-          )}
         </section>
 
         <section className="rounded-md border border-zinc-200 bg-white p-6">
@@ -481,15 +477,6 @@ function DetailItem({ label, value }: { label: string; value: string }) {
     <div>
       <dt className="text-xs font-semibold uppercase text-zinc-500">{label}</dt>
       <dd className="mt-1 text-sm font-medium text-zinc-950">{value}</dd>
-    </div>
-  );
-}
-
-function HeaderMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md border border-zinc-200 bg-zinc-50 px-4 py-3">
-      <p className="text-xs font-semibold uppercase text-zinc-500">{label}</p>
-      <p className="mt-1 text-base font-semibold text-zinc-950">{value}</p>
     </div>
   );
 }
