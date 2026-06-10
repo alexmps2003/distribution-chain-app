@@ -118,10 +118,12 @@ export default async function InvoicesPage({
       const paidAmount = getActivePaidAmount(invoice.payments);
       const outstandingAmount = invoice.amount.minus(paidAmount);
       const displayStatus = getDisplayStatus(invoice.amount, paidAmount);
+      const invoiceHref = `/invoices/${invoice.id}?customerId=${customerId}`;
 
       return {
         ...invoice,
         displayStatus,
+        invoiceHref,
         outstandingAmount,
         paidAmount,
       };
@@ -196,7 +198,7 @@ export default async function InvoicesPage({
                       <tr key={invoice.id} className="hover:bg-zinc-50">
                         <td className="whitespace-nowrap font-medium">
                           <Link
-                            href={`/invoices/${invoice.id}`}
+                            href={invoice.invoiceHref}
                             className="block px-4 py-3 font-semibold text-zinc-950"
                           >
                             {invoice.invoiceNumber}
@@ -204,7 +206,7 @@ export default async function InvoicesPage({
                         </td>
                         <td className="whitespace-nowrap text-zinc-600">
                           <Link
-                            href={`/invoices/${invoice.id}`}
+                            href={invoice.invoiceHref}
                             className="block px-4 py-3"
                           >
                             {formatDate(invoice.invoiceDate)}
@@ -212,7 +214,7 @@ export default async function InvoicesPage({
                         </td>
                         <td className="whitespace-nowrap text-zinc-600">
                           <Link
-                            href={`/invoices/${invoice.id}`}
+                            href={invoice.invoiceHref}
                             className="block px-4 py-3"
                           >
                             {formatDate(invoice.dueDate)}
@@ -220,7 +222,7 @@ export default async function InvoicesPage({
                         </td>
                         <td className="whitespace-nowrap text-right font-medium text-zinc-600">
                           <Link
-                            href={`/invoices/${invoice.id}`}
+                            href={invoice.invoiceHref}
                             className="block px-4 py-3"
                           >
                             {formatAmount(invoice.amount)}
@@ -228,7 +230,7 @@ export default async function InvoicesPage({
                         </td>
                         <td className="whitespace-nowrap text-right font-medium text-zinc-600">
                           <Link
-                            href={`/invoices/${invoice.id}`}
+                            href={invoice.invoiceHref}
                             className="block px-4 py-3"
                           >
                             {formatAmount(invoice.paidAmount)}
@@ -236,7 +238,7 @@ export default async function InvoicesPage({
                         </td>
                         <td className="whitespace-nowrap text-right font-medium text-zinc-600">
                           <Link
-                            href={`/invoices/${invoice.id}`}
+                            href={invoice.invoiceHref}
                             className="block px-4 py-3"
                           >
                             {formatAmount(invoice.outstandingAmount)}
@@ -244,7 +246,7 @@ export default async function InvoicesPage({
                         </td>
                         <td className="whitespace-nowrap">
                           <Link
-                            href={`/invoices/${invoice.id}`}
+                            href={invoice.invoiceHref}
                             className="block px-4 py-3"
                           >
                             <span
@@ -258,7 +260,7 @@ export default async function InvoicesPage({
                         </td>
                         <td className="whitespace-nowrap text-xs text-zinc-600">
                           <Link
-                            href={`/invoices/${invoice.id}`}
+                            href={invoice.invoiceHref}
                             className="block px-4 py-3"
                           >
                             {formatDate(invoice.createdAt)}

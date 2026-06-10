@@ -113,10 +113,20 @@ function DetailItem({ label, value }: { label: string; value: string }) {
 
 export default async function InvoiceDetailsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ customerId?: string | string[] }>;
 }) {
   const { id } = await params;
+  const { customerId } = await searchParams;
+  const selectedCustomerId = Array.isArray(customerId)
+    ? customerId[0]
+    : customerId;
+
+  const backHref = selectedCustomerId
+    ? `/invoices?customerId=${encodeURIComponent(selectedCustomerId)}`
+    : "/invoices";
   const invoice = await prisma.invoice.findUnique({
     where: {
       id,
@@ -180,7 +190,7 @@ export default async function InvoiceDetailsPage({
             Invoice Details
           </h1>
           <Link
-            href="/invoices"
+            href={backHref}
             className="inline-flex h-10 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium hover:bg-zinc-100"
           >
             Back to Invoices
