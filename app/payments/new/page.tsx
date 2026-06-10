@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import CustomerSelect from "./CustomerSelect";
 import PaymentMethodEntry from "./PaymentMethodEntry";
 
+
 type OutstandingInvoice = Prisma.InvoiceGetPayload<{
   include: {
     payments: {
