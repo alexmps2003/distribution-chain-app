@@ -26,6 +26,14 @@ type PaymentPartInput = {
   cardReference?: string;
 };
 
+type AddedMethodInput = PaymentPartInput & {
+  clientId: string;
+  allocations: {
+    invoiceId: string;
+    amount: Prisma.Decimal;
+  }[];
+};
+
 function getString(formData: FormData, name: string) {
   const value = formData.get(name);
 
@@ -34,10 +42,6 @@ function getString(formData: FormData, name: string) {
   }
 
   return value.trim();
-}
-
-function hasPaymentMethod(formData: FormData, method: string) {
-  return formData.getAll("paymentMethods").includes(method);
 }
 
 function getDecimal(formData: FormData, name: string) {
@@ -67,54 +71,6 @@ function sumDecimals(values: Prisma.Decimal[]) {
   );
 }
 
-function buildPaymentParts(formData: FormData) {
-  const parts: PaymentPartInput[] = [];
-
-  if (hasPaymentMethod(formData, "Cash")) {
-    parts.push({
-      method: "CASH",
-      amount: getDecimal(formData, "cashAmount"),
-    });
-  }
-
-  if (hasPaymentMethod(formData, "Cheque")) {
-    const chequeDate = getString(formData, "chequeDate");
-
-    parts.push({
-      method: "CHEQUE",
-      amount: getDecimal(formData, "chequeAmount"),
-      chequeNumber: getString(formData, "chequeNumber") || undefined,
-      chequeBank: getString(formData, "chequeBankName") || undefined,
-      chequeDate: chequeDate ? new Date(chequeDate) : undefined,
-    });
-  }
-
-  if (hasPaymentMethod(formData, "Bank Transfer")) {
-    parts.push({
-      method: "BANK_TRANSFER",
-      amount: getDecimal(formData, "bankTransferAmount"),
-      bankReference:
-        getString(formData, "bankTransferReferenceNumber") || undefined,
-    });
-  }
-
-  if (hasPaymentMethod(formData, "Card")) {
-    parts.push({
-      method: "CARD",
-      amount: getDecimal(formData, "cardAmount"),
-      cardReference: getString(formData, "cardReferenceNumber") || undefined,
-    });
-  }
-
-  for (const part of parts) {
-    if (!part.amount.gt(0)) {
-      throw new Error("Selected payment method amounts must be greater than 0");
-    }
-  }
-
-  return parts;
-}
-
 function buildAllocations(formData: FormData) {
   const invoiceIds = formData
     .getAll("invoiceIds")
@@ -134,6 +90,124 @@ function buildAllocations(formData: FormData) {
   });
 }
 
+function getPaymentMethod(value: string): PaymentPartInput["method"] {
+  if (
+    value === "CASH" ||
+    value === "CHEQUE" ||
+    value === "BANK_TRANSFER" ||
+    value === "CARD"
+  ) {
+    return value;
+  }
+
+  throw new Error("Payment method must be valid");
+}
+
+function getOptionalDate(value: string, fieldName: string) {
+  if (!value) {
+    return undefined;
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(`${fieldName} must be valid`);
+  }
+
+  return date;
+}
+
+function buildAddedMethods(formData: FormData): AddedMethodInput[] {
+  const methodIds = formData
+    .getAll("addedMethodIds")
+    .filter((value): value is string => typeof value === "string");
+
+  const methods = methodIds.map((clientId) => {
+    const method = getPaymentMethod(
+      getString(formData, `addedMethod:${clientId}:method`),
+    );
+    const amount = getDecimal(formData, `addedMethod:${clientId}:amount`);
+    const chequeDateValue = getString(
+      formData,
+      `addedMethod:${clientId}:chequeDate`,
+    );
+    const invoiceIds = formData
+      .getAll(`addedMethod:${clientId}:invoiceIds`)
+      .filter((value): value is string => typeof value === "string");
+    const allocations = invoiceIds.map((invoiceId) => {
+      const allocationAmount = getDecimal(
+        formData,
+        `addedMethod:${clientId}:allocation:${invoiceId}`,
+      );
+
+      if (!allocationAmount.gt(0)) {
+        throw new Error("Method allocation amounts must be greater than 0");
+      }
+
+      return {
+        invoiceId,
+        amount: allocationAmount,
+      };
+    });
+    const allocationTotal = sumDecimals(
+      allocations.map((allocation) => allocation.amount),
+    );
+
+    if (!amount.gt(0)) {
+      throw new Error("Added method amounts must be greater than 0");
+    }
+
+    if (!amount.equals(allocationTotal)) {
+      throw new Error("Each method amount must equal its method allocations");
+    }
+
+    return {
+      clientId,
+      method,
+      amount,
+      chequeNumber:
+        method === "CHEQUE"
+          ? getString(formData, `addedMethod:${clientId}:chequeNumber`) ||
+            undefined
+          : undefined,
+      chequeBank:
+        method === "CHEQUE"
+          ? getString(formData, `addedMethod:${clientId}:chequeBank`) ||
+            undefined
+          : undefined,
+      chequeDate:
+        method === "CHEQUE"
+          ? getOptionalDate(chequeDateValue, "Cheque date")
+          : undefined,
+      bankReference:
+        method === "BANK_TRANSFER"
+          ? getString(formData, `addedMethod:${clientId}:bankReference`) ||
+            undefined
+          : undefined,
+      cardReference:
+        method === "CARD"
+          ? getString(formData, `addedMethod:${clientId}:cardReference`) ||
+            undefined
+          : undefined,
+      allocations,
+    };
+  });
+
+  if (methods.length === 0) {
+    throw new Error("Add at least one payment method before saving");
+  }
+
+  return methods;
+}
+
+function addToDecimalMap(
+  map: Map<string, Prisma.Decimal>,
+  key: string,
+  amount: Prisma.Decimal,
+) {
+  map.set(key, (map.get(key) ?? new Prisma.Decimal(0)).plus(amount));
+}
+
 async function createPayment(formData: FormData) {
   "use server";
 
@@ -151,7 +225,7 @@ async function createPayment(formData: FormData) {
     throw new Error("Payment date must be valid");
   }
 
-  const paymentParts = buildPaymentParts(formData);
+  const paymentParts = buildAddedMethods(formData);
   const allocations = buildAllocations(formData);
   const paymentTotal = sumDecimals(paymentParts.map((part) => part.amount));
   const allocationTotal = sumDecimals(
@@ -164,6 +238,37 @@ async function createPayment(formData: FormData) {
 
   if (!paymentTotal.equals(allocationTotal)) {
     throw new Error("Payment total must equal allocation total");
+  }
+
+  const allocationByInvoice = new Map(
+    allocations.map((allocation) => [allocation.invoiceId, allocation.amount]),
+  );
+  const methodAllocationByInvoice = new Map<string, Prisma.Decimal>();
+
+  for (const part of paymentParts) {
+    for (const allocation of part.allocations) {
+      if (!allocationByInvoice.has(allocation.invoiceId)) {
+        throw new Error("Method allocation must match a selected invoice");
+      }
+
+      addToDecimalMap(
+        methodAllocationByInvoice,
+        allocation.invoiceId,
+        allocation.amount,
+      );
+    }
+  }
+
+  for (const allocation of allocations) {
+    const methodAllocationTotal =
+      methodAllocationByInvoice.get(allocation.invoiceId) ??
+      new Prisma.Decimal(0);
+
+    if (!methodAllocationTotal.equals(allocation.amount)) {
+      throw new Error(
+        "Method allocations for each invoice must equal the overall invoice allocation",
+      );
+    }
   }
 
   await prisma.$transaction(async (tx) => {
@@ -219,26 +324,28 @@ async function createPayment(formData: FormData) {
       },
     });
 
-    await tx.paymentPart.createMany({
-      data: paymentParts.map((part) => ({
-        paymentId: payment.id,
-        method: part.method,
-        amount: part.amount,
-        chequeNumber: part.chequeNumber,
-        chequeBank: part.chequeBank,
-        chequeDate: part.chequeDate,
-        bankReference: part.bankReference,
-        cardReference: part.cardReference,
-      })),
-    });
+    for (const part of paymentParts) {
+      await tx.paymentPart.create({
+        data: {
+          paymentId: payment.id,
+          method: part.method,
+          amount: part.amount,
+          chequeNumber: part.chequeNumber,
+          chequeBank: part.chequeBank,
+          chequeDate: part.chequeDate,
+          bankReference: part.bankReference,
+          cardReference: part.cardReference,
+        },
+      });
 
-    await tx.paymentAllocation.createMany({
-      data: allocations.map((allocation) => ({
-        paymentId: payment.id,
-        invoiceId: allocation.invoiceId,
-        amount: allocation.amount,
-      })),
-    });
+      await tx.paymentAllocation.createMany({
+        data: part.allocations.map((allocation) => ({
+          paymentId: payment.id,
+          invoiceId: allocation.invoiceId,
+          amount: allocation.amount,
+        })),
+      });
+    }
 
     for (const allocation of allocations) {
       const invoice = invoiceById.get(allocation.invoiceId);

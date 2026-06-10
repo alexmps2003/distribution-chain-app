@@ -19,6 +19,11 @@ type AddedMethod = {
   method: PaymentMethod;
   amount: string;
   details: string;
+  chequeNumber?: string;
+  chequeBank?: string;
+  chequeDate?: string;
+  bankReference?: string;
+  cardReference?: string;
   allocations: {
     invoiceId: string;
     invoiceNumber: string;
@@ -290,6 +295,16 @@ export default function PaymentMethodEntry({
           method: selectedMethod,
           referenceNumber,
         }),
+        chequeNumber:
+          selectedMethod === "CHEQUE" ? chequeNumber.trim() : undefined,
+        chequeBank: selectedMethod === "CHEQUE" ? chequeBank.trim() : undefined,
+        chequeDate: selectedMethod === "CHEQUE" ? chequeDate : undefined,
+        bankReference:
+          selectedMethod === "BANK_TRANSFER"
+            ? referenceNumber.trim()
+            : undefined,
+        cardReference:
+          selectedMethod === "CARD" ? referenceNumber.trim() : undefined,
         allocations,
       },
     ]);
@@ -635,6 +650,60 @@ export default function PaymentMethodEntry({
       </div>
 
       <div className="flex flex-col gap-3 border-t border-zinc-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
+        {addedMethods.map((method) => (
+          <div key={method.id} className="hidden">
+            <input type="hidden" name="addedMethodIds" value={method.id} />
+            <input
+              type="hidden"
+              name={`addedMethod:${method.id}:method`}
+              value={method.method}
+            />
+            <input
+              type="hidden"
+              name={`addedMethod:${method.id}:amount`}
+              value={method.amount}
+            />
+            <input
+              type="hidden"
+              name={`addedMethod:${method.id}:chequeNumber`}
+              value={method.chequeNumber ?? ""}
+            />
+            <input
+              type="hidden"
+              name={`addedMethod:${method.id}:chequeBank`}
+              value={method.chequeBank ?? ""}
+            />
+            <input
+              type="hidden"
+              name={`addedMethod:${method.id}:chequeDate`}
+              value={method.chequeDate ?? ""}
+            />
+            <input
+              type="hidden"
+              name={`addedMethod:${method.id}:bankReference`}
+              value={method.bankReference ?? ""}
+            />
+            <input
+              type="hidden"
+              name={`addedMethod:${method.id}:cardReference`}
+              value={method.cardReference ?? ""}
+            />
+            {method.allocations.map((allocation) => (
+              <div key={allocation.invoiceId}>
+                <input
+                  type="hidden"
+                  name={`addedMethod:${method.id}:invoiceIds`}
+                  value={allocation.invoiceId}
+                />
+                <input
+                  type="hidden"
+                  name={`addedMethod:${method.id}:allocation:${allocation.invoiceId}`}
+                  value={allocation.amount}
+                />
+              </div>
+            ))}
+          </div>
+        ))}
         <p
           className={
             finalTotalsMatch
