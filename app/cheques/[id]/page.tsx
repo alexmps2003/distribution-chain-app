@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { Prisma } from "@prisma/client";
+import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
@@ -41,6 +42,128 @@ function getStatusBadgeClass(status: string | null | undefined) {
   }
 
   return "bg-zinc-200 text-zinc-700";
+}
+
+function getString(formData: FormData, name: string) {
+  const value = formData.get(name);
+
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  return value.trim();
+}
+
+function sumDecimals(values: Prisma.Decimal[]) {
+  return values.reduce(
+    (total, value) => total.plus(value),
+    new Prisma.Decimal(0),
+  );
+}
+
+async function reverseCheque(formData: FormData) {
+  "use server";
+
+  const chequeId = getString(formData, "chequeId");
+  const reversalReason = getString(formData, "reversalReason");
+
+  if (!chequeId) {
+    throw new Error("Cheque id is required");
+  }
+
+  if (!reversalReason) {
+    throw new Error("Reversal reason is required");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const cheque = await tx.paymentPart.findUnique({
+      where: {
+        id: chequeId,
+      },
+      include: {
+        allocations: {
+          include: {
+            invoice: {
+              select: {
+                id: true,
+                amount: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!cheque) {
+      throw new Error("Cheque not found");
+    }
+
+    if (cheque.method !== "CHEQUE") {
+      throw new Error("Only cheque payment parts can be reversed here");
+    }
+
+    if (cheque.status !== "ACTIVE") {
+      throw new Error("Only active cheques can be reversed");
+    }
+
+    await tx.paymentPart.update({
+      where: {
+        id: cheque.id,
+      },
+      data: {
+        status: "REVERSED",
+        reversedAt: new Date(),
+        reversalReason,
+      },
+    });
+
+    const affectedInvoices = new Map(
+      cheque.allocations.map((allocation) => [
+        allocation.invoice.id,
+        allocation.invoice,
+      ]),
+    );
+
+    for (const invoice of affectedInvoices.values()) {
+      const activeAllocations = await tx.paymentAllocation.findMany({
+        where: {
+          invoiceId: invoice.id,
+          OR: [
+            {
+              paymentPartId: null,
+            },
+            {
+              paymentPart: {
+                status: "ACTIVE",
+              },
+            },
+          ],
+        },
+        select: {
+          amount: true,
+        },
+      });
+      const activePaidTotal = sumDecimals(
+        activeAllocations.map((allocation) => allocation.amount),
+      );
+      const status = activePaidTotal.gte(invoice.amount)
+        ? "PAID"
+        : activePaidTotal.gt(0)
+          ? "PARTIALLY_PAID"
+          : "UNPAID";
+
+      await tx.invoice.update({
+        where: {
+          id: invoice.id,
+        },
+        data: {
+          status,
+        },
+      });
+    }
+  });
+
+  redirect(`/cheques/${chequeId}`);
 }
 
 function DetailItem({ label, value }: { label: string; value: string }) {
@@ -92,6 +215,9 @@ export default async function ChequeDetailsPage({
     notFound();
   }
 
+  const chequeStatus = normalizePaymentPartStatus(cheque.status);
+  const isReversed = chequeStatus === "REVERSED";
+
   return (
     <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-8">
@@ -127,10 +253,10 @@ export default async function ChequeDetailsPage({
             </div>
             <span
               className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-medium ${getStatusBadgeClass(
-                cheque.status,
+                chequeStatus,
               )}`}
             >
-              {formatStatus(cheque.status)}
+              {formatStatus(chequeStatus)}
             </span>
           </div>
 
@@ -153,7 +279,7 @@ export default async function ChequeDetailsPage({
               label="Payment Date"
               value={formatDate(cheque.payment.paymentDate)}
             />
-            <DetailItem label="Status" value={formatStatus(cheque.status)} />
+            <DetailItem label="Status" value={formatStatus(chequeStatus)} />
           </dl>
         </section>
 
@@ -161,6 +287,12 @@ export default async function ChequeDetailsPage({
           <h2 className="text-lg font-medium tracking-tight">
             Allocations Paid By This Cheque
           </h2>
+          {isReversed && (
+            <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-800">
+              This cheque has been reversed. These allocations no longer count
+              toward invoice payments.
+            </div>
+          )}
 
           {cheque.allocations.length === 0 ? (
             <div className="mt-4 rounded-md border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-600">
@@ -214,28 +346,48 @@ export default async function ChequeDetailsPage({
           <h2 className="text-lg font-medium tracking-tight">
             Cheque Reversal
           </h2>
-          <p className="mt-1 text-sm text-zinc-600">
-            Cheque reversal logic will be added next.
-          </p>
-          <div className="mt-4 grid gap-4">
-            <label className="flex flex-col gap-2 text-sm font-medium text-zinc-800">
-              Reason
-              <textarea
-                disabled
-                placeholder="Reason for reversing this cheque"
-                className="h-24 resize-none rounded-md border border-zinc-300 bg-zinc-100 p-3 text-sm font-normal text-zinc-500 outline-none"
-              />
-            </label>
-            <div>
-              <button
-                type="button"
-                disabled
-                className="inline-flex h-10 cursor-not-allowed items-center justify-center rounded-md bg-zinc-300 px-4 text-sm font-medium text-zinc-600"
+          {isReversed ? (
+            <div className="mt-4 grid gap-4">
+              <span
+                className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-medium ${getStatusBadgeClass(
+                  chequeStatus,
+                )}`}
               >
-                Reverse Cheque
-              </button>
+                Reversed
+              </span>
+              <dl className="grid gap-4 sm:grid-cols-2">
+                <DetailItem
+                  label="Reversed Date"
+                  value={formatDate(cheque.reversedAt)}
+                />
+                <DetailItem
+                  label="Reversal Reason"
+                  value={cheque.reversalReason ?? "-"}
+                />
+              </dl>
             </div>
-          </div>
+          ) : (
+            <form action={reverseCheque} className="mt-4 grid gap-4">
+              <input type="hidden" name="chequeId" value={cheque.id} />
+              <label className="flex flex-col gap-2 text-sm font-medium text-zinc-800">
+                Reason
+                <textarea
+                  name="reversalReason"
+                  required
+                  placeholder="Reason for reversing this cheque"
+                  className="h-24 resize-none rounded-md border border-zinc-300 bg-white p-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
+                />
+              </label>
+              <div>
+                <button
+                  type="submit"
+                  className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
+                >
+                  Reverse Cheque
+                </button>
+              </div>
+            </form>
+          )}
         </section>
       </div>
     </main>
