@@ -9,7 +9,7 @@ const numberFormatter = new Intl.NumberFormat("en-US", {
 });
 
 function formatAmount(value: { toString(): string }) {
-  return numberFormatter.format(Number(value.toString()));
+  return `LKR ${numberFormatter.format(Number(value.toString()))}`;
 }
 
 function formatDate(date: Date | null) {
@@ -67,7 +67,36 @@ function getMethodDetails(part: {
 }
 
 function formatStatus(status: string) {
-  return status.replace("_", " ");
+  return status;
+}
+
+function getPaymentStatus(payment: unknown) {
+  if (
+    payment &&
+    typeof payment === "object" &&
+    "status" in payment &&
+    typeof payment.status === "string"
+  ) {
+    return payment.status;
+  }
+
+  return null;
+}
+
+function getStatusBadgeClass(status: string) {
+  if (status === "PAID" || status === "ACTIVE") {
+    return "bg-emerald-50 text-emerald-700 ring-emerald-600/20";
+  }
+
+  if (status === "PARTIALLY_PAID") {
+    return "bg-amber-50 text-amber-700 ring-amber-600/20";
+  }
+
+  if (status === "REVERSED") {
+    return "bg-red-50 text-red-700 ring-red-600/20";
+  }
+
+  return "bg-zinc-100 text-zinc-700 ring-zinc-500/20";
 }
 
 function buildPaymentMethodRows(
@@ -245,25 +274,41 @@ export default async function PaymentDetailsPage({
   }
 
   const invoiceAllocations = Array.from(allocationsByInvoice.values());
+  const paymentStatus = getPaymentStatus(payment);
 
   return (
     <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-8">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight">
-              Payment Details
-            </h1>
-            <p className="mt-1 text-sm text-zinc-600">
-              {payment.customer.name} ({payment.customer.code})
-            </p>
+        <div className="rounded-md border border-zinc-200 bg-white p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="flex flex-wrap items-center gap-3">
+                <h1 className="text-3xl font-semibold tracking-tight">
+                  Payment Details
+                </h1>
+                {paymentStatus && <StatusBadge status={paymentStatus} />}
+              </div>
+              <p className="mt-2 text-sm font-medium text-zinc-700">
+                {payment.customer.name} ({payment.customer.code})
+              </p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <HeaderMetric
+                  label="Payment Date"
+                  value={formatDate(payment.paymentDate)}
+                />
+                <HeaderMetric
+                  label="Total Amount"
+                  value={formatAmount(payment.amount)}
+                />
+              </div>
+            </div>
+            <Link
+              href="/payments"
+              className="inline-flex h-10 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium hover:bg-zinc-100"
+            >
+              Back to Payments
+            </Link>
           </div>
-          <Link
-            href="/payments"
-            className="inline-flex h-10 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium hover:bg-zinc-100"
-          >
-            Back to Payments
-          </Link>
         </div>
 
         <section className="rounded-md border border-zinc-200 bg-white p-6">
@@ -273,11 +318,17 @@ export default async function PaymentDetailsPage({
           <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <DetailItem label="Customer" value={payment.customer.name} />
             <DetailItem label="Customer Code" value={payment.customer.code} />
-            <DetailItem label="Payment Date" value={formatDate(payment.paymentDate)} />
+            <DetailItem
+              label="Payment Date"
+              value={formatDate(payment.paymentDate)}
+            />
             <DetailItem label="Amount" value={formatAmount(payment.amount)} />
             <DetailItem label="Payment Method" value={payment.paymentMethod} />
             <DetailItem label="Area" value={payment.customer.area ?? "-"} />
-            <DetailItem label="Route" value={payment.customer.routeName ?? "-"} />
+            <DetailItem
+              label="Route"
+              value={payment.customer.routeName ?? "-"}
+            />
             <DetailItem label="Created" value={formatDate(payment.createdAt)} />
           </dl>
           {payment.notes && (
@@ -311,10 +362,10 @@ export default async function PaymentDetailsPage({
                         Amount
                       </th>
                       <th scope="col" className="px-4 py-3">
-                        Reference/details
+                        Reference / Details
                       </th>
                       <th scope="col" className="px-4 py-3">
-                        Allocated invoices
+                        Allocated Invoices
                       </th>
                     </tr>
                   </thead>
@@ -331,16 +382,18 @@ export default async function PaymentDetailsPage({
                           {part.details}
                         </td>
                         <td className="px-4 py-3 text-zinc-600">
-                          {part.allocations.length === 0
-                            ? "-"
-                            : part.allocations
-                                .map(
-                                  (allocation) =>
-                                    `${allocation.invoiceNumber} -> ${formatAmount(
-                                      allocation.amount,
-                                    )}`,
-                                )
-                                .join("; ")}
+                          {part.allocations.length === 0 ? (
+                            "-"
+                          ) : (
+                            <div className="grid gap-1">
+                              {part.allocations.map((allocation) => (
+                                <div key={allocation.invoiceNumber}>
+                                  Invoice {allocation.invoiceNumber} →{" "}
+                                  {formatAmount(allocation.amount)}
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -355,6 +408,10 @@ export default async function PaymentDetailsPage({
           <h2 className="text-lg font-medium tracking-tight">
             Invoice Allocations
           </h2>
+          <div className="mt-4 rounded-md border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
+            Outstanding after payment shows the balance remaining immediately
+            after this payment was recorded.
+          </div>
           {invoiceAllocations.length === 0 ? (
             <div className="mt-4 rounded-md border border-dashed border-zinc-300 bg-zinc-50 p-8 text-center text-sm text-zinc-500">
               No invoice allocations found.
@@ -372,16 +429,16 @@ export default async function PaymentDetailsPage({
                         Invoice Total
                       </th>
                       <th scope="col" className="px-4 py-3 text-right">
-                        Amount paid in this payment
+                        Outstanding Before
                       </th>
                       <th scope="col" className="px-4 py-3 text-right">
-                        Outstanding before
+                        Paid In This Payment
                       </th>
                       <th scope="col" className="px-4 py-3 text-right">
-                        Outstanding after
+                        Outstanding After
                       </th>
                       <th scope="col" className="px-4 py-3">
-                        Status after payment
+                        Status After Payment
                       </th>
                     </tr>
                   </thead>
@@ -395,18 +452,16 @@ export default async function PaymentDetailsPage({
                           {formatAmount(allocation.invoiceTotal)}
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-zinc-600">
-                          {formatAmount(allocation.amountPaid)}
+                          {formatAmount(allocation.outstandingBefore)}
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-zinc-600">
-                          {formatAmount(allocation.outstandingBefore)}
+                          {formatAmount(allocation.amountPaid)}
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-zinc-600">
                           {formatAmount(allocation.outstandingAfter)}
                         </td>
                         <td className="whitespace-nowrap px-4 py-3">
-                          <span className="inline-flex items-center rounded-full bg-zinc-200 px-2 py-1 text-xs font-medium text-zinc-700">
-                            {formatStatus(allocation.statusAfterPayment)}
-                          </span>
+                          <StatusBadge status={allocation.statusAfterPayment} />
                         </td>
                       </tr>
                     ))}
@@ -427,5 +482,26 @@ function DetailItem({ label, value }: { label: string; value: string }) {
       <dt className="text-xs font-semibold uppercase text-zinc-500">{label}</dt>
       <dd className="mt-1 text-sm font-medium text-zinc-950">{value}</dd>
     </div>
+  );
+}
+
+function HeaderMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-zinc-200 bg-zinc-50 px-4 py-3">
+      <p className="text-xs font-semibold uppercase text-zinc-500">{label}</p>
+      <p className="mt-1 text-base font-semibold text-zinc-950">{value}</p>
+    </div>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ring-1 ring-inset ${getStatusBadgeClass(
+        status,
+      )}`}
+    >
+      {formatStatus(status)}
+    </span>
   );
 }
