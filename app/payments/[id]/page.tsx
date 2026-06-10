@@ -96,6 +96,19 @@ function getPaymentNumber(payment: unknown) {
   return null;
 }
 
+function formatPaymentReference(payment: {
+  id: string;
+  paymentDate: Date;
+}) {
+  const datePart = payment.paymentDate
+    .toISOString()
+    .slice(0, 10)
+    .replaceAll("-", "");
+  const idPart = payment.id.slice(-4).toUpperCase();
+
+  return `PAY-${datePart}-${idPart}`;
+}
+
 function getStatusBadgeClass(status: string) {
   if (status === "PAID" || status === "ACTIVE") {
     return "bg-emerald-50 text-emerald-700 ring-emerald-600/20";
@@ -289,6 +302,7 @@ export default async function PaymentDetailsPage({
   const invoiceAllocations = Array.from(allocationsByInvoice.values());
   const paymentStatus = getPaymentStatus(payment) ?? "ACTIVE";
   const paymentNumber = getPaymentNumber(payment);
+  const paymentReference = paymentNumber ?? formatPaymentReference(payment);
 
   return (
     <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
@@ -301,6 +315,9 @@ export default async function PaymentDetailsPage({
                   Payment Details
                 </h1>
                 <StatusBadge status={paymentStatus} />
+                <span className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-1 font-mono text-xs font-medium text-zinc-700 ring-1 ring-inset ring-zinc-500/20">
+                  {paymentReference}
+                </span>
               </div>
               <p className="mt-2 text-sm font-medium text-zinc-700">
                 {payment.customer.name} ({payment.customer.code})
@@ -314,9 +331,7 @@ export default async function PaymentDetailsPage({
             </Link>
           </div>
           <dl className="mt-6 grid gap-4 border-t border-zinc-200 pt-5 sm:grid-cols-2 lg:grid-cols-4">
-            {paymentNumber && (
-              <DetailItem label="Payment Number" value={paymentNumber} />
-            )}
+            <DetailItem label="Payment Number" value={paymentReference} />
             <DetailItem label="Customer Name" value={payment.customer.name} />
             <DetailItem label="Customer Code" value={payment.customer.code} />
             <DetailItem
