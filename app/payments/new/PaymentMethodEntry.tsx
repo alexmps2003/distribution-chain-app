@@ -70,6 +70,7 @@ function getMethodLabel(method: PaymentMethod) {
 export default function PaymentMethodEntry({
   customerId,
   invoices,
+  saveAction,
 }: {
   customerId?: string;
   invoices: AllocationInvoice[];
@@ -113,16 +114,72 @@ export default function PaymentMethodEntry({
     }, 0);
   }, [methodAllocationAmounts, selectedAllocationInvoices]);
 
+  const addedAllocationByInvoice = useMemo(() => {
+    return addedMethods.reduce<Record<string, number>>((totals, method) => {
+      for (const allocation of method.allocations) {
+        totals[allocation.invoiceId] =
+          (totals[allocation.invoiceId] ?? 0) + parseAmount(allocation.amount);
+      }
+
+      return totals;
+    }, {});
+  }, [addedMethods]);
+
+  const remainingAllocationByInvoice = useMemo(() => {
+    return invoices.reduce<Record<string, number>>((remaining, invoice) => {
+      const overallAllocation = selectedInvoices[invoice.id]
+        ? parseAmount(allocationAmounts[invoice.id] ?? "")
+        : 0;
+      const alreadyAdded = addedAllocationByInvoice[invoice.id] ?? 0;
+
+      remaining[invoice.id] = Math.max(overallAllocation - alreadyAdded, 0);
+
+      return remaining;
+    }, {});
+  }, [
+    addedAllocationByInvoice,
+    allocationAmounts,
+    invoices,
+    selectedInvoices,
+  ]);
+
   const addedMethodsTotal = useMemo(() => {
     return addedMethods.reduce((total, method) => {
       return total + parseAmount(method.amount);
     }, 0);
   }, [addedMethods]);
 
+  const hasMethodAllocationOverRemaining = selectedAllocationInvoices.some(
+    (invoice) => {
+      return (
+        toCents(parseAmount(methodAllocationAmounts[invoice.id] ?? "")) >
+        toCents(remainingAllocationByInvoice[invoice.id] ?? 0)
+      );
+    },
+  );
+  const methodAmountMatchesAllocations =
+    toCents(parseAmount(methodAmount)) === toCents(methodAllocationTotal);
+  const canAddMethod =
+    selectedMethod !== "" &&
+    parseAmount(methodAmount) > 0 &&
+    selectedAllocationInvoices.length > 0 &&
+    methodAmountMatchesAllocations &&
+    !hasMethodAllocationOverRemaining;
+  const hasFinalPerInvoiceMismatch = invoices.some((invoice) => {
+    if (!selectedInvoices[invoice.id]) {
+      return false;
+    }
+
+    return (
+      toCents(addedAllocationByInvoice[invoice.id] ?? 0) !==
+      toCents(parseAmount(allocationAmounts[invoice.id] ?? ""))
+    );
+  });
   const finalTotalsMatch =
     totalAllocated > 0 &&
     addedMethods.length > 0 &&
-    toCents(totalAllocated) === toCents(addedMethodsTotal);
+    toCents(totalAllocated) === toCents(addedMethodsTotal) &&
+    !hasFinalPerInvoiceMismatch;
 
   function toggleInvoice(invoiceId: string) {
     setSelectedInvoices((current) => {
@@ -164,9 +221,16 @@ export default function PaymentMethodEntry({
   }
 
   function updateMethodAllocationAmount(invoiceId: string, value: string) {
+    const remainingAllocation = remainingAllocationByInvoice[invoiceId] ?? 0;
+    const requestedAmount = parseAmount(value);
+    const nextValue =
+      value !== "" && requestedAmount > remainingAllocation
+        ? remainingAllocation.toFixed(2)
+        : value;
+
     setMethodAllocationAmounts((current) => ({
       ...current,
-      [invoiceId]: value,
+      [invoiceId]: nextValue,
     }));
   }
 
@@ -190,6 +254,13 @@ export default function PaymentMethodEntry({
 
     if (toCents(amount) !== toCents(methodAllocationTotal)) {
       setMethodMessage("Method allocations must equal the method amount.");
+      return;
+    }
+
+    if (hasMethodAllocationOverRemaining) {
+      setMethodMessage(
+        "Method allocation cannot exceed the remaining allocation for an invoice.",
+      );
       return;
     }
 
@@ -431,27 +502,38 @@ export default function PaymentMethodEntry({
             </p>
           ) : (
             <div className="mt-3 grid gap-3">
-              {selectedAllocationInvoices.map((invoice) => (
-                <label
-                  key={invoice.id}
-                  className="grid gap-2 text-sm font-medium text-zinc-800 sm:grid-cols-[1fr_160px] sm:items-center"
-                >
-                  <span>{invoice.invoiceNumber}</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={methodAllocationAmounts[invoice.id] ?? ""}
-                    onChange={(event) =>
-                      updateMethodAllocationAmount(
-                        invoice.id,
-                        event.target.value,
-                      )
-                    }
-                    className="h-9 rounded-md border border-zinc-300 bg-white px-3 text-right text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
-                  />
-                </label>
-              ))}
+              {selectedAllocationInvoices.map((invoice) => {
+                const remainingAllocation =
+                  remainingAllocationByInvoice[invoice.id] ?? 0;
+
+                return (
+                  <label
+                    key={invoice.id}
+                    className="grid gap-2 text-sm font-medium text-zinc-800 sm:grid-cols-[1fr_160px] sm:items-center"
+                  >
+                    <span>
+                      {invoice.invoiceNumber}{" "}
+                      <span className="font-normal text-zinc-500">
+                        (Remaining: {formatAmount(remainingAllocation)})
+                      </span>
+                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      max={remainingAllocation}
+                      step="0.01"
+                      value={methodAllocationAmounts[invoice.id] ?? ""}
+                      onChange={(event) =>
+                        updateMethodAllocationAmount(
+                          invoice.id,
+                          event.target.value,
+                        )
+                      }
+                      className="h-9 rounded-md border border-zinc-300 bg-white px-3 text-right text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
+                    />
+                  </label>
+                );
+              })}
             </div>
           )}
           <div className="mt-4 flex items-center justify-between border-t border-zinc-200 pt-3">
@@ -471,7 +553,12 @@ export default function PaymentMethodEntry({
             <button
               type="button"
               onClick={addMethod}
-              className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
+              disabled={!canAddMethod}
+              className={
+                canAddMethod
+                  ? "inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
+                  : "inline-flex h-10 cursor-not-allowed items-center justify-center rounded-md bg-zinc-300 px-4 text-sm font-medium text-zinc-600"
+              }
             >
               Add Method
             </button>
@@ -557,7 +644,7 @@ export default function PaymentMethodEntry({
         >
           {finalTotalsMatch
             ? "Ready to save payment."
-            : "Overall invoice allocation total must equal total of added methods."}
+            : "Added methods must match overall invoice allocations before saving."}
         </p>
         <div className="flex justify-end gap-3">
           <Link
@@ -567,7 +654,8 @@ export default function PaymentMethodEntry({
             Cancel
           </Link>
           <button
-            type="button"
+            type="submit"
+            formAction={saveAction}
             disabled={!finalTotalsMatch}
             className={
               finalTotalsMatch
