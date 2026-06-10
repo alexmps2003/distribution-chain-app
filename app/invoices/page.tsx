@@ -157,7 +157,12 @@ export default async function InvoicesPage() {
                   {invoiceRows.map((invoice) => (
                     <tr key={invoice.id}>
                       <td className="whitespace-nowrap px-4 py-3 font-medium">
-                        {invoice.invoiceNumber}
+                        <Link
+                          href={`/invoices/${invoice.id}`}
+                          className="font-semibold text-zinc-950 underline-offset-4 hover:underline"
+                        >
+                          {invoice.invoiceNumber}
+                        </Link>
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
                         {invoice.customer.name} ({invoice.customer.code})
