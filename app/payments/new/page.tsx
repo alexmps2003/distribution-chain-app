@@ -11,6 +11,11 @@ type OutstandingInvoice = Prisma.InvoiceGetPayload<{
     payments: {
       select: {
         amount: true;
+        paymentPart: {
+          select: {
+            status: true;
+          };
+        };
       };
     };
   };
@@ -283,6 +288,11 @@ async function createPayment(formData: FormData) {
         payments: {
           select: {
             amount: true,
+            paymentPart: {
+              select: {
+                status: true,
+              },
+            },
           },
         },
       },
@@ -404,6 +414,11 @@ export default async function NewPaymentPage(props: {
         payments: {
           select: {
             amount: true,
+            paymentPart: {
+              select: {
+                status: true,
+              },
+            },
           },
         },
       },
@@ -413,11 +428,17 @@ export default async function NewPaymentPage(props: {
 
   const allocationInvoices = outstandingInvoices
     .map((invoice) => {
-      const previousAllocated = invoice.payments.reduce((total, allocation) => {
-        return total + Number(allocation.amount.toString());
-      }, 0);
-      const outstandingAmount =
-        Number(invoice.amount.toString()) - previousAllocated;
+      const activeAllocated = sumDecimals(
+        invoice.payments
+          .filter((allocation) => {
+            return (
+              allocation.paymentPart === null ||
+              allocation.paymentPart.status === "ACTIVE"
+            );
+          })
+          .map((allocation) => allocation.amount),
+      );
+      const outstandingAmount = invoice.amount.minus(activeAllocated);
 
       return {
         id: invoice.id,
