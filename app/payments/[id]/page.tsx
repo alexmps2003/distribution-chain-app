@@ -148,6 +148,12 @@ function buildPaymentMethodRows(
     cardReference: string | null;
     createdAt: Date;
     paymentId: string;
+    allocations: {
+      amount: Prisma.Decimal;
+      invoice: {
+        invoiceNumber: string;
+      };
+    }[];
   }[],
   methodAllocationSource: {
     invoiceNumber: string;
@@ -160,37 +166,41 @@ function buildPaymentMethodRows(
 
   return parts.map((part) => {
     let partRemaining = part.amount;
-    const allocations: {
-      invoiceNumber: string;
-      amount: Prisma.Decimal;
-    }[] = [];
+    let allocations = part.allocations.map((allocation) => ({
+      invoiceNumber: allocation.invoice.invoiceNumber,
+      amount: allocation.amount,
+    }));
 
-    while (
-      partRemaining.gt(0) &&
-      allocationIndex < methodAllocationSource.length
-    ) {
-      const allocation = methodAllocationSource[allocationIndex];
-      const allocatedAmount = minDecimal(
-        partRemaining,
-        currentAllocationRemaining,
-      );
+    if (allocations.length === 0) {
+      allocations = [];
 
-      if (allocatedAmount.gt(0)) {
-        allocations.push({
-          invoiceNumber: allocation.invoiceNumber,
-          amount: allocatedAmount,
-        });
-      }
+      while (
+        partRemaining.gt(0) &&
+        allocationIndex < methodAllocationSource.length
+      ) {
+        const allocation = methodAllocationSource[allocationIndex];
+        const allocatedAmount = minDecimal(
+          partRemaining,
+          currentAllocationRemaining,
+        );
 
-      partRemaining = partRemaining.minus(allocatedAmount);
-      currentAllocationRemaining =
-        currentAllocationRemaining.minus(allocatedAmount);
+        if (allocatedAmount.gt(0)) {
+          allocations.push({
+            invoiceNumber: allocation.invoiceNumber,
+            amount: allocatedAmount,
+          });
+        }
 
-      if (currentAllocationRemaining.equals(0)) {
-        allocationIndex += 1;
+        partRemaining = partRemaining.minus(allocatedAmount);
         currentAllocationRemaining =
-          methodAllocationSource[allocationIndex]?.amount ??
-          new Prisma.Decimal(0);
+          currentAllocationRemaining.minus(allocatedAmount);
+
+        if (currentAllocationRemaining.equals(0)) {
+          allocationIndex += 1;
+          currentAllocationRemaining =
+            methodAllocationSource[allocationIndex]?.amount ??
+            new Prisma.Decimal(0);
+        }
       }
     }
 
@@ -221,6 +231,20 @@ export default async function PaymentDetailsPage({
         },
       },
       parts: {
+        include: {
+          allocations: {
+            include: {
+              invoice: {
+                select: {
+                  invoiceNumber: true,
+                },
+              },
+            },
+            orderBy: {
+              id: "asc",
+            },
+          },
+        },
         orderBy: { createdAt: "asc" },
       },
       allocations: {

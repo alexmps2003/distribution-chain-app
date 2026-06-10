@@ -325,7 +325,7 @@ async function createPayment(formData: FormData) {
     });
 
     for (const part of paymentParts) {
-      await tx.paymentPart.create({
+      const paymentPart = await tx.paymentPart.create({
         data: {
           paymentId: payment.id,
           method: part.method,
@@ -338,13 +338,16 @@ async function createPayment(formData: FormData) {
         },
       });
 
-      await tx.paymentAllocation.createMany({
-        data: part.allocations.map((allocation) => ({
-          paymentId: payment.id,
-          invoiceId: allocation.invoiceId,
-          amount: allocation.amount,
-        })),
-      });
+      for (const allocation of part.allocations) {
+        await tx.paymentAllocation.create({
+          data: {
+            paymentId: payment.id,
+            invoiceId: allocation.invoiceId,
+            amount: allocation.amount,
+            paymentPartId: paymentPart.id,
+          },
+        });
+      }
     }
 
     for (const allocation of allocations) {
