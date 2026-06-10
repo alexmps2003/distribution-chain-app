@@ -69,6 +69,40 @@ body {
     color: #18181b !important;
   }
 
+  .receipt-allocations-table {
+    table-layout: fixed;
+    width: 100% !important;
+  }
+
+  .receipt-allocations-table th,
+  .receipt-allocations-table td {
+    font-size: 9px !important;
+    padding-left: 4px !important;
+    padding-right: 4px !important;
+  }
+
+  .receipt-allocations-table th:nth-child(1),
+  .receipt-allocations-table td:nth-child(1) {
+    width: 8%;
+  }
+
+  .receipt-allocations-table th:nth-child(2),
+  .receipt-allocations-table td:nth-child(2),
+  .receipt-allocations-table th:nth-child(3),
+  .receipt-allocations-table td:nth-child(3),
+  .receipt-allocations-table th:nth-child(4),
+  .receipt-allocations-table td:nth-child(4),
+  .receipt-allocations-table th:nth-child(5),
+  .receipt-allocations-table td:nth-child(5) {
+    width: 18%;
+  }
+
+  .receipt-allocations-table th:last-child,
+  .receipt-allocations-table td:last-child {
+    width: 92px;
+    white-space: nowrap;
+  }
+
   td,
   dt,
   dd,

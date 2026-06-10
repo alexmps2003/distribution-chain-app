@@ -71,6 +71,14 @@ function formatStatus(status: string) {
   return status;
 }
 
+function formatPrintStatus(status: string) {
+  if (status === "PARTIALLY_PAID") {
+    return "PARTIAL";
+  }
+
+  return status;
+}
+
 function getPaymentStatus(payment: unknown) {
   if (
     payment &&
@@ -456,26 +464,40 @@ export default async function PaymentDetailsPage({
           ) : (
             <div className="mt-4 overflow-hidden rounded-md border border-zinc-200">
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-zinc-200 text-sm">
+                <table className="receipt-allocations-table min-w-full divide-y divide-zinc-200 text-sm">
                   <thead className="bg-zinc-100 text-left text-xs font-semibold uppercase text-zinc-600">
                     <tr>
                       <th scope="col" className="px-4 py-3">
-                        Invoice Number
+                        <span className="print:hidden">Invoice Number</span>
+                        <span className="hidden print:inline">Inv</span>
                       </th>
                       <th scope="col" className="px-4 py-3 text-right">
-                        Invoice Total
+                        <span className="print:hidden">Invoice Total</span>
+                        <span className="hidden print:inline">Total</span>
                       </th>
                       <th scope="col" className="px-4 py-3 text-right">
-                        Outstanding Before
+                        <span className="print:hidden">
+                          Outstanding Before
+                        </span>
+                        <span className="hidden print:inline">Before</span>
                       </th>
                       <th scope="col" className="px-4 py-3 text-right">
-                        Paid In This Payment
+                        <span className="print:hidden">
+                          Paid In This Payment
+                        </span>
+                        <span className="hidden print:inline">Paid</span>
                       </th>
                       <th scope="col" className="px-4 py-3 text-right">
-                        Outstanding After
+                        <span className="print:hidden">
+                          Outstanding After
+                        </span>
+                        <span className="hidden print:inline">After</span>
                       </th>
                       <th scope="col" className="px-4 py-3">
-                        Status After Payment
+                        <span className="print:hidden">
+                          Status After Payment
+                        </span>
+                        <span className="hidden print:inline">Status</span>
                       </th>
                     </tr>
                   </thead>
@@ -498,7 +520,12 @@ export default async function PaymentDetailsPage({
                           {formatAmount(allocation.outstandingAfter)}
                         </td>
                         <td className="whitespace-nowrap px-4 py-3">
-                          <StatusBadge status={allocation.statusAfterPayment} />
+                          <StatusBadge
+                            status={allocation.statusAfterPayment}
+                            printLabel={formatPrintStatus(
+                              allocation.statusAfterPayment,
+                            )}
+                          />
                         </td>
                       </tr>
                     ))}
@@ -533,14 +560,23 @@ function DetailItem({ label, value }: { label: string; value: string }) {
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({
+  printLabel,
+  status,
+}: {
+  printLabel?: string;
+  status: string;
+}) {
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ring-1 ring-inset ${getStatusBadgeClass(
+      className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ring-1 ring-inset print:whitespace-nowrap print:px-1.5 print:py-0.5 print:text-[10px] ${getStatusBadgeClass(
         status,
       )}`}
     >
-      {formatStatus(status)}
+      <span className={printLabel ? "print:hidden" : ""}>
+        {formatStatus(status)}
+      </span>
+      {printLabel && <span className="hidden print:inline">{printLabel}</span>}
     </span>
   );
 }
