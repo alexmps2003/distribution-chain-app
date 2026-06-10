@@ -1,4 +1,4 @@
-# Business Rules
+## Business Rules
 
 - App is for Sri Lankan distribution cash collection.
 - Collector app must be extremely simple.
