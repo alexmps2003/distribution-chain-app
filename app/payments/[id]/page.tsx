@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import PrintReceiptButton from "./PrintReceiptButton";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
@@ -323,12 +324,15 @@ export default async function PaymentDetailsPage({
                 {payment.customer.name} ({payment.customer.code})
               </p>
             </div>
-            <Link
-              href="/payments"
-              className="inline-flex h-10 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium hover:bg-zinc-100"
-            >
-              Back to Payments
-            </Link>
+            <div className="flex flex-col gap-3 print:hidden sm:flex-row">
+              <PrintReceiptButton />
+              <Link
+                href="/payments"
+                className="inline-flex h-10 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium hover:bg-zinc-100"
+              >
+                Back to Payments
+              </Link>
+            </div>
           </div>
           <dl className="mt-6 grid gap-4 border-t border-zinc-200 pt-5 sm:grid-cols-2 lg:grid-cols-4">
             <DetailItem label="Payment Number" value={paymentReference} />
@@ -350,6 +354,14 @@ export default async function PaymentDetailsPage({
             />
             <DetailItem label="Created" value={formatDate(payment.createdAt)} />
           </dl>
+          {payment.notes && (
+            <div className="mt-5 rounded-md border border-zinc-200 bg-zinc-50 p-4">
+              <p className="text-xs font-semibold uppercase text-zinc-500">
+                Notes
+              </p>
+              <p className="mt-1 text-sm text-zinc-700">{payment.notes}</p>
+            </div>
+          )}
         </section>
 
         <section className="rounded-md border border-zinc-200 bg-white p-6">
