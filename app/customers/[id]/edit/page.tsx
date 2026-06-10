@@ -83,7 +83,6 @@ export default async function EditCustomerPage({
         assignedSalesRep: getOptionalString(formData, "assignedSalesRep"),
         assignedCollector: getOptionalString(formData, "assignedCollector"),
         creditLimit: getDecimalString(formData, "creditLimit"),
-        openingOutstanding: getDecimalString(formData, "openingOutstanding"),
         paymentTermsDays: getInt(formData, "paymentTermsDays"),
         isActive: getBoolean(formData, "isActive"),
       },
@@ -188,15 +187,6 @@ export default async function EditCustomerPage({
               min="0"
               placeholder="0.00"
               defaultValue={customer.creditLimit.toString()}
-            />
-            <Field
-              label="Opening Outstanding"
-              name="openingOutstanding"
-              type="number"
-              step="0.01"
-              min="0"
-              placeholder="0.00"
-              defaultValue={customer.openingOutstanding.toString()}
             />
             <Field
               label="Payment Terms Days"

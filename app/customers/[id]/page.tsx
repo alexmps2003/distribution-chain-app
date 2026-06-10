@@ -102,8 +102,6 @@ export default async function CustomerDetailPage({
     customer.invoices.map((invoice) => getActivePaidAmount(invoice.payments)),
   );
   const invoiceOutstanding = totalInvoiced.minus(totalCollected);
-  const legacyBalance = customer.openingOutstanding;
-  const totalOutstanding = invoiceOutstanding.plus(legacyBalance);
 
   return (
     <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
@@ -129,7 +127,7 @@ export default async function CustomerDetailPage({
           <h2 className="mb-6 text-lg font-semibold text-zinc-950">
             Financial Summary
           </h2>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid gap-6 sm:grid-cols-3">
             <div>
               <label className="text-xs font-medium uppercase text-zinc-600">
                 Total Invoiced
@@ -152,25 +150,6 @@ export default async function CustomerDetailPage({
               </label>
               <p className="mt-1 text-2xl font-semibold tracking-tight text-zinc-950">
                 {formatAmount(invoiceOutstanding)}
-              </p>
-            </div>
-            <div>
-              <label className="text-xs font-medium uppercase text-zinc-600">
-                Legacy Balance
-              </label>
-              <p className="mt-1 text-2xl font-semibold tracking-tight text-zinc-950">
-                {formatAmount(legacyBalance)}
-              </p>
-              <p className="mt-1 text-xs text-zinc-500">
-                Carried forward before this system started.
-              </p>
-            </div>
-            <div>
-              <label className="text-xs font-medium uppercase text-zinc-600">
-                Total Outstanding
-              </label>
-              <p className="mt-1 text-2xl font-semibold tracking-tight text-zinc-950">
-                {formatAmount(totalOutstanding)}
               </p>
             </div>
           </div>
@@ -342,14 +321,6 @@ export default async function CustomerDetailPage({
                 </label>
                 <p className="text-sm font-medium text-zinc-950">
                   {formatAmount(customer.creditLimit)}
-                </p>
-              </div>
-              <div>
-                <label className="text-xs font-medium uppercase text-zinc-600">
-                  Legacy Balance
-                </label>
-                <p className="text-sm font-medium text-zinc-950">
-                  {formatAmount(customer.openingOutstanding)}
                 </p>
               </div>
               <div>

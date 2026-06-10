@@ -60,7 +60,6 @@ export default async function CustomersPage() {
       area: true,
       routeName: true,
       assignedCollector: true,
-      openingOutstanding: true,
       isActive: true,
       invoices: {
         select: {
@@ -90,8 +89,6 @@ export default async function CustomersPage() {
       customer.invoices.map((invoice) => getActivePaidAmount(invoice.payments)),
     );
     const invoiceOutstanding = totalInvoiced.minus(totalPaid);
-    const legacyBalance = customer.openingOutstanding;
-    const totalOutstanding = invoiceOutstanding.plus(legacyBalance);
     const openInvoiceCount = customer.invoices.filter((invoice) => {
       const paidAmount = getActivePaidAmount(invoice.payments);
 
@@ -101,10 +98,8 @@ export default async function CustomersPage() {
     return {
       ...customer,
       invoiceOutstanding,
-      legacyBalance,
       openInvoiceCount,
       totalInvoiced,
-      totalOutstanding,
       totalPaid,
     };
   });
@@ -112,10 +107,7 @@ export default async function CustomersPage() {
     customerRows.map((customer) => customer.totalInvoiced),
   );
   const totalPaid = sumDecimals(customerRows.map((customer) => customer.totalPaid));
-  const totalLegacyBalance = sumDecimals(
-    customerRows.map((customer) => customer.legacyBalance),
-  );
-  const totalOutstanding = totalInvoiced.minus(totalPaid).plus(totalLegacyBalance);
+  const totalOutstanding = totalInvoiced.minus(totalPaid);
 
   return (
     <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
@@ -135,7 +127,7 @@ export default async function CustomersPage() {
           <SummaryCard label="Total Invoiced" value={formatAmount(totalInvoiced)} />
           <SummaryCard label="Total Paid" value={formatAmount(totalPaid)} />
           <SummaryCard
-            label="Total Outstanding / Exposure"
+            label="Total Outstanding"
             value={formatAmount(totalOutstanding)}
           />
         </section>
@@ -177,12 +169,6 @@ export default async function CustomersPage() {
                     <th scope="col" className="px-4 py-3 text-right">
                       Unpaid/Partial Invoices
                     </th>
-                    <th scope="col" className="px-4 py-3 text-right">
-                      Legacy Balance
-                    </th>
-                    <th scope="col" className="px-4 py-3 text-right">
-                      Total Outstanding
-                    </th>
                     <th scope="col" className="px-4 py-3">
                       Status
                     </th>
@@ -220,12 +206,6 @@ export default async function CustomersPage() {
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-right text-zinc-600">
                         {customer.openInvoiceCount}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-right text-zinc-600">
-                        {formatAmount(customer.legacyBalance)}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-zinc-950">
-                        {formatAmount(customer.totalOutstanding)}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
                         <span
