@@ -146,7 +146,7 @@ export default async function CustomerDetailPage({
             </div>
             <div>
               <label className="text-xs font-medium uppercase text-zinc-600">
-                Invoice Outstanding
+                Total Outstanding
               </label>
               <p className="mt-1 text-2xl font-semibold tracking-tight text-zinc-950">
                 {formatAmount(invoiceOutstanding)}

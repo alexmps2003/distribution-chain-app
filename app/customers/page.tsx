@@ -164,7 +164,7 @@ export default async function CustomersPage() {
                       Total Paid
                     </th>
                     <th scope="col" className="px-4 py-3 text-right">
-                      Invoice Outstanding
+                      Total Outstanding
                     </th>
                     <th scope="col" className="px-4 py-3 text-right">
                       Unpaid/Partial Invoices
