@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
@@ -19,6 +20,41 @@ function formatDate(date: Date | null) {
   });
 }
 
+function sumDecimals(values: Prisma.Decimal[]) {
+  return values.reduce(
+    (total, value) => total.plus(value),
+    new Prisma.Decimal(0),
+  );
+}
+
+function getDisplayStatus(invoiceTotal: Prisma.Decimal, paidAmount: Prisma.Decimal) {
+  if (paidAmount.gte(invoiceTotal)) {
+    return "PAID";
+  }
+
+  if (paidAmount.gt(0)) {
+    return "PARTIALLY_PAID";
+  }
+
+  return "UNPAID";
+}
+
+function getStatusBadgeClass(status: string) {
+  if (status === "PAID") {
+    return "bg-emerald-100 text-emerald-800";
+  }
+
+  if (status === "UNPAID") {
+    return "bg-rose-100 text-rose-800";
+  }
+
+  if (status === "PARTIALLY_PAID") {
+    return "bg-amber-100 text-amber-800";
+  }
+
+  return "bg-zinc-200 text-zinc-800";
+}
+
 export default async function InvoicesPage() {
   const invoices = await prisma.invoice.findMany({
     include: {
@@ -28,10 +64,41 @@ export default async function InvoicesPage() {
           code: true,
         },
       },
+      payments: {
+        select: {
+          amount: true,
+          paymentPart: {
+            select: {
+              status: true,
+            },
+          },
+        },
+      },
     },
     orderBy: {
       createdAt: "desc",
     },
+  });
+  const invoiceRows = invoices.map((invoice) => {
+    const paidAmount = sumDecimals(
+      invoice.payments
+        .filter((allocation) => {
+          return (
+            allocation.paymentPart === null ||
+            allocation.paymentPart.status === "ACTIVE"
+          );
+        })
+        .map((allocation) => allocation.amount),
+    );
+    const outstandingAmount = invoice.amount.minus(paidAmount);
+    const displayStatus = getDisplayStatus(invoice.amount, paidAmount);
+
+    return {
+      ...invoice,
+      displayStatus,
+      outstandingAmount,
+      paidAmount,
+    };
   });
 
   return (
@@ -47,7 +114,7 @@ export default async function InvoicesPage() {
           </Link>
         </div>
 
-        {invoices.length === 0 ? (
+        {invoiceRows.length === 0 ? (
           <div className="rounded-md border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-600">
             No invoices found.
           </div>
@@ -70,7 +137,13 @@ export default async function InvoicesPage() {
                       Due Date
                     </th>
                     <th scope="col" className="px-4 py-3 text-right">
-                      Amount
+                      Invoice Total
+                    </th>
+                    <th scope="col" className="px-4 py-3 text-right">
+                      Paid Amount
+                    </th>
+                    <th scope="col" className="px-4 py-3 text-right">
+                      Outstanding Amount
                     </th>
                     <th scope="col" className="px-4 py-3">
                       Status
@@ -81,7 +154,7 @@ export default async function InvoicesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200">
-                  {invoices.map((invoice) => (
+                  {invoiceRows.map((invoice) => (
                     <tr key={invoice.id}>
                       <td className="whitespace-nowrap px-4 py-3 font-medium">
                         {invoice.invoiceNumber}
@@ -98,19 +171,19 @@ export default async function InvoicesPage() {
                       <td className="whitespace-nowrap px-4 py-3 text-right text-zinc-600 font-medium">
                         {formatAmount(invoice.amount)}
                       </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right text-zinc-600 font-medium">
+                        {formatAmount(invoice.paidAmount)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right text-zinc-600 font-medium">
+                        {formatAmount(invoice.outstandingAmount)}
+                      </td>
                       <td className="whitespace-nowrap px-4 py-3">
                         <span
-                          className={`inline-flex rounded-full px-2.5 py-1 text-[10px] uppercase font-bold tracking-wider ${
-                            invoice.status === "PAID"
-                              ? "bg-emerald-100 text-emerald-800"
-                              : invoice.status === "UNPAID"
-                                ? "bg-rose-100 text-rose-800"
-                                : invoice.status === "PARTIALLY_PAID"
-                                  ? "bg-amber-100 text-amber-800"
-                                  : "bg-zinc-200 text-zinc-800"
-                          }`}
+                          className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${getStatusBadgeClass(
+                            invoice.displayStatus,
+                          )}`}
                         >
-                          {invoice.status.replace("_", " ")}
+                          {invoice.displayStatus.replace("_", " ")}
                         </span>
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-zinc-600 text-xs">
