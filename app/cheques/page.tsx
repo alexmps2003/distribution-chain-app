@@ -195,7 +195,7 @@ export default async function ChequesPage({
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-right">
                         <Link
-                          href={`/payments/${cheque.payment.id}`}
+                          href={`/payments/${cheque.payment.id}?returnTo=/cheques`}
                           className="inline-flex h-8 items-center justify-center rounded-md border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
                         >
                           Receipt

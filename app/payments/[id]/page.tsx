@@ -214,10 +214,21 @@ function buildPaymentMethodRows(
 
 export default async function PaymentDetailsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ returnTo?: string | string[] }>;
 }) {
   const { id } = await params;
+  const { returnTo } = await searchParams;
+  const backHref =
+    typeof returnTo === "string" &&
+    (returnTo === "/cheques" || returnTo.startsWith("/cheques/"))
+      ? returnTo
+      : "/payments";
+  const backLabel = backHref.startsWith("/cheques")
+    ? "Back to Cheques"
+    : "Back to Payments";
   const payment = await prisma.payment.findUnique({
     where: { id },
     include: {
@@ -368,10 +379,10 @@ export default async function PaymentDetailsPage({
             <div className="flex flex-col gap-3 print:hidden sm:flex-row">
               <PrintReceiptButton />
               <Link
-                href="/payments"
+                href={backHref}
                 className="inline-flex h-10 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium hover:bg-zinc-100"
               >
-                Back to Payments
+                {backLabel}
               </Link>
             </div>
           </div>
