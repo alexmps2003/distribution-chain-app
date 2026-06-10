@@ -26,6 +26,10 @@ body {
 }
 
 @media print {
+  @page {
+    margin: 16mm;
+  }
+
   html,
   body {
     background: #ffffff !important;
@@ -37,8 +41,50 @@ body {
     padding: 0 !important;
   }
 
-  section {
+  .receipt-summary-card,
+  .receipt-methods-section,
+  .receipt-allocations-section,
+  .receipt-signatures {
     break-inside: avoid;
+    page-break-inside: avoid;
     background: #ffffff !important;
+    border-color: #d4d4d8 !important;
+    box-shadow: none !important;
+  }
+
+  table,
+  thead,
+  tbody,
+  tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  th {
+    background: #f4f4f5 !important;
+    color: #18181b !important;
+  }
+
+  td,
+  dt,
+  dd,
+  p,
+  span,
+  h1,
+  h2 {
+    color: #000000 !important;
+  }
+
+  .receipt-signatures {
+    margin-top: 24px;
+  }
+
+  * {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
 }

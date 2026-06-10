@@ -304,22 +304,31 @@ export default async function PaymentDetailsPage({
   const paymentStatus = getPaymentStatus(payment) ?? "ACTIVE";
   const paymentNumber = getPaymentNumber(payment);
   const paymentReference = paymentNumber ?? formatPaymentReference(payment);
+  const totalOutstandingAfter = sumDecimals(
+    invoiceAllocations.map((allocation) => allocation.outstandingAfter),
+  );
 
   return (
-    <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
+    <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950 print:bg-white">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-8">
-        <section className="rounded-md border border-zinc-200 bg-white p-6">
+        <section className="receipt-summary-card rounded-md border border-zinc-200 bg-white p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <div className="flex flex-wrap items-center gap-3">
-                <h1 className="text-3xl font-semibold tracking-tight">
+                <h1 className="text-3xl font-semibold tracking-tight print:hidden">
                   Payment Details
+                </h1>
+                <h1 className="hidden text-2xl font-semibold tracking-tight print:block">
+                  Customer Payment Receipt
                 </h1>
                 <StatusBadge status={paymentStatus} />
                 <span className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-1 font-mono text-xs font-medium text-zinc-700 ring-1 ring-inset ring-zinc-500/20">
                   {paymentReference}
                 </span>
               </div>
+              <p className="mt-2 hidden font-mono text-sm font-semibold text-zinc-950 print:block">
+                Receipt No: {paymentReference}
+              </p>
               <p className="mt-2 text-sm font-medium text-zinc-700">
                 {payment.customer.name} ({payment.customer.code})
               </p>
@@ -362,9 +371,17 @@ export default async function PaymentDetailsPage({
               <p className="mt-1 text-sm text-zinc-700">{payment.notes}</p>
             </div>
           )}
+          <div className="mt-5 hidden rounded-md border border-zinc-300 bg-white p-4 print:block">
+            <p className="text-xs font-semibold uppercase text-zinc-500">
+              Total Outstanding After This Payment
+            </p>
+            <p className="mt-1 text-lg font-semibold text-zinc-950">
+              {formatAmount(totalOutstandingAfter)}
+            </p>
+          </div>
         </section>
 
-        <section className="rounded-md border border-zinc-200 bg-white p-6">
+        <section className="receipt-methods-section rounded-md border border-zinc-200 bg-white p-6">
           <h2 className="text-lg font-medium tracking-tight">
             Payment Methods
           </h2>
@@ -427,7 +444,7 @@ export default async function PaymentDetailsPage({
           )}
         </section>
 
-        <section className="rounded-md border border-zinc-200 bg-white p-6">
+        <section className="receipt-allocations-section rounded-md border border-zinc-200 bg-white p-6">
           <h2 className="text-lg font-medium tracking-tight">
             Invoice Allocations
           </h2>
@@ -493,6 +510,17 @@ export default async function PaymentDetailsPage({
               </div>
             </div>
           )}
+        </section>
+
+        <section className="receipt-signatures hidden rounded-md border border-zinc-200 bg-white p-6 print:block">
+          <div className="grid gap-8 sm:grid-cols-2">
+            <p className="text-sm font-medium text-zinc-950">
+              Collector Signature: ____________________
+            </p>
+            <p className="text-sm font-medium text-zinc-950">
+              Customer Signature: ____________________
+            </p>
+          </div>
         </section>
       </div>
     </main>
