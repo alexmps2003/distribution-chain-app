@@ -75,6 +75,7 @@ model PaymentPart {
 
   method PaymentMethod
   amount Decimal       @db.Decimal(12, 2)
+  status PaymentStatus @default(ACTIVE)
 
   chequeNumber String?
   chequeBank   String?
@@ -83,7 +84,9 @@ model PaymentPart {
   bankReference String?
   cardReference String?
 
-  createdAt DateTime @default(now())
+  reversedAt     DateTime?
+  reversalReason String?
+  createdAt      DateTime  @default(now())
 
   allocations PaymentAllocation[]
 }
