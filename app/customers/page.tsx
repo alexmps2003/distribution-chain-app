@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
@@ -8,6 +9,46 @@ const numberFormatter = new Intl.NumberFormat("en-US", {
 
 function formatAmount(value: { toString(): string }) {
   return numberFormatter.format(Number(value.toString()));
+}
+
+function sumDecimals(values: Prisma.Decimal[]) {
+  return values.reduce(
+    (total, value) => total.plus(value),
+    new Prisma.Decimal(0),
+  );
+}
+
+function getActivePaidAmount(payments: {
+  amount: Prisma.Decimal;
+  paymentPart: { status: string } | null;
+}[]) {
+  return sumDecimals(
+    payments
+      .filter((allocation) => {
+        return (
+          allocation.paymentPart === null ||
+          allocation.paymentPart.status === "ACTIVE"
+        );
+      })
+      .map((allocation) => allocation.amount),
+  );
+}
+
+function SummaryCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | number;
+}) {
+  return (
+    <div className="rounded-md border border-zinc-200 bg-white p-5">
+      <p className="text-xs font-semibold uppercase text-zinc-500">{label}</p>
+      <p className="mt-2 text-2xl font-semibold tracking-tight text-zinc-950">
+        {value}
+      </p>
+    </div>
+  );
 }
 
 export default async function CustomersPage() {
@@ -21,11 +62,53 @@ export default async function CustomersPage() {
       assignedCollector: true,
       openingOutstanding: true,
       isActive: true,
+      invoices: {
+        select: {
+          amount: true,
+          payments: {
+            select: {
+              amount: true,
+              paymentPart: {
+                select: {
+                  status: true,
+                },
+              },
+            },
+          },
+        },
+      },
     },
     orderBy: {
       createdAt: "desc",
     },
   });
+  const customerRows = customers.map((customer) => {
+    const totalInvoiced = sumDecimals(
+      customer.invoices.map((invoice) => invoice.amount),
+    );
+    const totalPaid = sumDecimals(
+      customer.invoices.map((invoice) => getActivePaidAmount(invoice.payments)),
+    );
+    const outstandingBalance = totalInvoiced.minus(totalPaid);
+    const openInvoiceCount = customer.invoices.filter((invoice) => {
+      const paidAmount = getActivePaidAmount(invoice.payments);
+
+      return paidAmount.lt(invoice.amount);
+    }).length;
+
+    return {
+      ...customer,
+      openInvoiceCount,
+      outstandingBalance,
+      totalInvoiced,
+      totalPaid,
+    };
+  });
+  const totalInvoiced = sumDecimals(
+    customerRows.map((customer) => customer.totalInvoiced),
+  );
+  const totalPaid = sumDecimals(customerRows.map((customer) => customer.totalPaid));
+  const totalOutstanding = totalInvoiced.minus(totalPaid);
 
   return (
     <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
@@ -40,7 +123,17 @@ export default async function CustomersPage() {
           </Link>
         </div>
 
-        {customers.length === 0 ? (
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <SummaryCard label="Total Customers" value={customers.length} />
+          <SummaryCard label="Total Invoiced" value={formatAmount(totalInvoiced)} />
+          <SummaryCard label="Total Paid" value={formatAmount(totalPaid)} />
+          <SummaryCard
+            label="Total Outstanding"
+            value={formatAmount(totalOutstanding)}
+          />
+        </section>
+
+        {customerRows.length === 0 ? (
           <div className="rounded-md border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-600">
             No customers found.
           </div>
@@ -66,6 +159,18 @@ export default async function CustomersPage() {
                       Assigned Collector
                     </th>
                     <th scope="col" className="px-4 py-3 text-right">
+                      Total Invoiced
+                    </th>
+                    <th scope="col" className="px-4 py-3 text-right">
+                      Total Paid
+                    </th>
+                    <th scope="col" className="px-4 py-3 text-right">
+                      Outstanding Balance
+                    </th>
+                    <th scope="col" className="px-4 py-3 text-right">
+                      Unpaid/Partial Invoices
+                    </th>
+                    <th scope="col" className="px-4 py-3 text-right">
                       Opening Outstanding
                     </th>
                     <th scope="col" className="px-4 py-3">
@@ -77,7 +182,7 @@ export default async function CustomersPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200">
-                  {customers.map((customer) => (
+                  {customerRows.map((customer) => (
                     <tr key={customer.id}>
                       <td className="whitespace-nowrap px-4 py-3 font-medium">
                         {customer.code}
@@ -93,6 +198,18 @@ export default async function CustomersPage() {
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
                         {customer.assignedCollector ?? "-"}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-zinc-600">
+                        {formatAmount(customer.totalInvoiced)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-zinc-600">
+                        {formatAmount(customer.totalPaid)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-zinc-600">
+                        {formatAmount(customer.outstandingBalance)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right text-zinc-600">
+                        {customer.openInvoiceCount}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-right text-zinc-600">
                         {formatAmount(customer.openingOutstanding)}

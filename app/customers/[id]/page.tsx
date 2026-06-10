@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
@@ -19,6 +20,29 @@ function formatDate(date: Date | null) {
   });
 }
 
+function sumDecimals(values: Prisma.Decimal[]) {
+  return values.reduce(
+    (total, value) => total.plus(value),
+    new Prisma.Decimal(0),
+  );
+}
+
+function getActivePaidAmount(payments: {
+  amount: Prisma.Decimal;
+  paymentPart: { status: string } | null;
+}[]) {
+  return sumDecimals(
+    payments
+      .filter((allocation) => {
+        return (
+          allocation.paymentPart === null ||
+          allocation.paymentPart.status === "ACTIVE"
+        );
+      })
+      .map((allocation) => allocation.amount),
+  );
+}
+
 interface CustomerDetailPageProps {
   params: Promise<{
     id: string;
@@ -34,6 +58,18 @@ export default async function CustomerDetailPage({
     where: { id },
     include: {
       invoices: {
+        include: {
+          payments: {
+            select: {
+              amount: true,
+              paymentPart: {
+                select: {
+                  status: true,
+                },
+              },
+            },
+          },
+        },
         orderBy: { invoiceDate: "desc" },
       },
     },
@@ -59,19 +95,13 @@ export default async function CustomerDetailPage({
     );
   }
 
-  const invoicesAggr = await prisma.invoice.aggregate({
-    where: { customerId: id },
-    _sum: { amount: true },
-  });
-
-  const allocationsAggr = await prisma.paymentAllocation.aggregate({
-    where: { invoice: { customerId: id } },
-    _sum: { amount: true },
-  });
-
-  const totalInvoiced = Number(invoicesAggr._sum.amount ?? 0);
-  const totalCollected = Number(allocationsAggr._sum.amount ?? 0);
-  const outstandingBalance = totalInvoiced - totalCollected;
+  const totalInvoiced = sumDecimals(
+    customer.invoices.map((invoice) => invoice.amount),
+  );
+  const totalCollected = sumDecimals(
+    customer.invoices.map((invoice) => getActivePaidAmount(invoice.payments)),
+  );
+  const outstandingBalance = totalInvoiced.minus(totalCollected);
 
   return (
     <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
@@ -108,7 +138,7 @@ export default async function CustomerDetailPage({
             </div>
             <div>
               <label className="text-xs font-medium uppercase text-zinc-600">
-                Total Collected
+                Total Paid
               </label>
               <p className="mt-1 text-2xl font-semibold tracking-tight text-zinc-950">
                 {formatAmount(totalCollected)}
