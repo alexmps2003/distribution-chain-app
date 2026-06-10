@@ -304,6 +304,7 @@ export default async function PaymentDetailsPage({
   const paymentStatus = getPaymentStatus(payment) ?? "ACTIVE";
   const paymentNumber = getPaymentNumber(payment);
   const paymentReference = paymentNumber ?? formatPaymentReference(payment);
+  const paymentNotes = payment.notes?.trim();
   const totalOutstandingAfter = sumDecimals(
     invoiceAllocations.map((allocation) => allocation.outstandingAfter),
   );
@@ -322,11 +323,8 @@ export default async function PaymentDetailsPage({
                   Customer Payment Receipt
                 </h1>
                 <StatusBadge status={paymentStatus} />
-                <span className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-1 font-mono text-xs font-medium text-zinc-700 ring-1 ring-inset ring-zinc-500/20">
-                  {paymentReference}
-                </span>
               </div>
-              <p className="mt-2 hidden font-mono text-sm font-semibold text-zinc-950 print:block">
+              <p className="mt-2 font-mono text-sm font-semibold text-zinc-950">
                 Receipt No: {paymentReference}
               </p>
               <p className="mt-2 text-sm font-medium text-zinc-700">
@@ -344,7 +342,6 @@ export default async function PaymentDetailsPage({
             </div>
           </div>
           <dl className="mt-6 grid gap-4 border-t border-zinc-200 pt-5 sm:grid-cols-2 lg:grid-cols-4">
-            <DetailItem label="Payment Number" value={paymentReference} />
             <DetailItem label="Customer Name" value={payment.customer.name} />
             <DetailItem label="Customer Code" value={payment.customer.code} />
             <DetailItem
@@ -363,12 +360,12 @@ export default async function PaymentDetailsPage({
             />
             <DetailItem label="Created" value={formatDate(payment.createdAt)} />
           </dl>
-          {payment.notes && (
+          {paymentNotes && (
             <div className="mt-5 rounded-md border border-zinc-200 bg-zinc-50 p-4">
               <p className="text-xs font-semibold uppercase text-zinc-500">
                 Notes
               </p>
-              <p className="mt-1 text-sm text-zinc-700">{payment.notes}</p>
+              <p className="mt-1 text-sm text-zinc-700">{paymentNotes}</p>
             </div>
           )}
           <div className="mt-5 hidden rounded-md border border-zinc-300 bg-white p-4 print:block">
