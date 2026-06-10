@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-type PaymentMethod = "cash" | "cheque" | "bankTransfer" | "card";
+type PaymentMethod = "CASH" | "CHEQUE" | "BANK_TRANSFER" | "CARD";
 
 type AllocationInvoice = {
   id: string;
@@ -14,19 +14,23 @@ type AllocationInvoice = {
   status: string;
 };
 
-const paymentMethods: {
-  id: PaymentMethod;
-  label: string;
-  amountField: string;
-}[] = [
-  { id: "cash", label: "Cash", amountField: "cashAmount" },
-  { id: "cheque", label: "Cheque", amountField: "chequeAmount" },
-  {
-    id: "bankTransfer",
-    label: "Bank Transfer",
-    amountField: "bankTransferAmount",
-  },
-  { id: "card", label: "Card", amountField: "cardAmount" },
+type AddedMethod = {
+  id: string;
+  method: PaymentMethod;
+  amount: string;
+  details: string;
+  allocations: {
+    invoiceId: string;
+    invoiceNumber: string;
+    amount: string;
+  }[];
+};
+
+const paymentMethods: { id: PaymentMethod; label: string }[] = [
+  { id: "CASH", label: "Cash" },
+  { id: "CHEQUE", label: "Cheque" },
+  { id: "BANK_TRANSFER", label: "Bank Transfer" },
+  { id: "CARD", label: "Card" },
 ];
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
@@ -59,10 +63,13 @@ function formatDate(value: string | null) {
   });
 }
 
+function getMethodLabel(method: PaymentMethod) {
+  return paymentMethods.find((item) => item.id === method)?.label ?? method;
+}
+
 export default function PaymentMethodEntry({
   customerId,
   invoices,
-  saveAction,
 }: {
   customerId?: string;
   invoices: AllocationInvoice[];
@@ -74,20 +81,21 @@ export default function PaymentMethodEntry({
   const [allocationAmounts, setAllocationAmounts] = useState<
     Record<string, string>
   >({});
-  const [selectedMethods, setSelectedMethods] = useState<
-    Record<PaymentMethod, boolean>
-  >({
-    cash: false,
-    cheque: false,
-    bankTransfer: false,
-    card: false,
-  });
-  const [paymentAmounts, setPaymentAmounts] = useState<Record<string, string>>({
-    cashAmount: "",
-    chequeAmount: "",
-    bankTransferAmount: "",
-    cardAmount: "",
-  });
+  const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | "">("");
+  const [methodAmount, setMethodAmount] = useState("");
+  const [chequeNumber, setChequeNumber] = useState("");
+  const [chequeBank, setChequeBank] = useState("");
+  const [chequeDate, setChequeDate] = useState("");
+  const [referenceNumber, setReferenceNumber] = useState("");
+  const [methodAllocationAmounts, setMethodAllocationAmounts] = useState<
+    Record<string, string>
+  >({});
+  const [addedMethods, setAddedMethods] = useState<AddedMethod[]>([]);
+  const [methodMessage, setMethodMessage] = useState("");
+
+  const selectedAllocationInvoices = useMemo(() => {
+    return invoices.filter((invoice) => selectedInvoices[invoice.id]);
+  }, [invoices, selectedInvoices]);
 
   const totalAllocated = useMemo(() => {
     return invoices.reduce((total, invoice) => {
@@ -99,46 +107,22 @@ export default function PaymentMethodEntry({
     }, 0);
   }, [allocationAmounts, invoices, selectedInvoices]);
 
-  const paymentTotal = useMemo(() => {
-    return paymentMethods.reduce((total, method) => {
-      if (!selectedMethods[method.id]) {
-        return total;
-      }
-
-      return total + parseAmount(paymentAmounts[method.amountField] ?? "");
+  const methodAllocationTotal = useMemo(() => {
+    return selectedAllocationInvoices.reduce((total, invoice) => {
+      return total + parseAmount(methodAllocationAmounts[invoice.id] ?? "");
     }, 0);
-  }, [paymentAmounts, selectedMethods]);
+  }, [methodAllocationAmounts, selectedAllocationInvoices]);
 
-  const selectedInvoiceCount = invoices.filter(
-    (invoice) => selectedInvoices[invoice.id],
-  ).length;
-  const selectedMethodCount = paymentMethods.filter(
-    (method) => selectedMethods[method.id],
-  ).length;
-  const hasAllocationOverOutstanding = invoices.some((invoice) => {
-    if (!selectedInvoices[invoice.id]) {
-      return false;
-    }
+  const addedMethodsTotal = useMemo(() => {
+    return addedMethods.reduce((total, method) => {
+      return total + parseAmount(method.amount);
+    }, 0);
+  }, [addedMethods]);
 
-    return (
-      toCents(parseAmount(allocationAmounts[invoice.id] ?? "")) >
-      toCents(parseAmount(invoice.outstandingAmount))
-    );
-  });
-  const totalsMatch = toCents(paymentTotal) === toCents(totalAllocated);
-  const isBalanced = paymentTotal > 0 && totalAllocated > 0 && totalsMatch;
-  const isValid =
-    isBalanced &&
-    selectedInvoiceCount > 0 &&
-    selectedMethodCount > 0 &&
-    !hasAllocationOverOutstanding;
-  const validationMessage = getValidationMessage({
-    hasAllocationOverOutstanding,
-    paymentTotal,
-    selectedInvoiceCount,
-    selectedMethodCount,
-    totalsMatch,
-  });
+  const finalTotalsMatch =
+    totalAllocated > 0 &&
+    addedMethods.length > 0 &&
+    toCents(totalAllocated) === toCents(addedMethodsTotal);
 
   function toggleInvoice(invoiceId: string) {
     setSelectedInvoices((current) => {
@@ -146,6 +130,10 @@ export default function PaymentMethodEntry({
 
       if (!nextSelected) {
         setAllocationAmounts((amounts) => ({
+          ...amounts,
+          [invoiceId]: "",
+        }));
+        setMethodAllocationAmounts((amounts) => ({
           ...amounts,
           [invoiceId]: "",
         }));
@@ -175,34 +163,73 @@ export default function PaymentMethodEntry({
     }));
   }
 
-  function toggleMethod(method: PaymentMethod) {
-    setSelectedMethods((current) => {
-      const nextSelected = !current[method];
-
-      if (!nextSelected) {
-        const amountField = paymentMethods.find((item) => item.id === method)
-          ?.amountField;
-
-        if (amountField) {
-          setPaymentAmounts((amounts) => ({
-            ...amounts,
-            [amountField]: "",
-          }));
-        }
-      }
-
-      return {
-        ...current,
-        [method]: nextSelected,
-      };
-    });
+  function updateMethodAllocationAmount(invoiceId: string, value: string) {
+    setMethodAllocationAmounts((current) => ({
+      ...current,
+      [invoiceId]: value,
+    }));
   }
 
-  function updatePaymentAmount(name: string, value: string) {
-    setPaymentAmounts((current) => ({
+  function addMethod() {
+    const amount = parseAmount(methodAmount);
+
+    if (!selectedMethod) {
+      setMethodMessage("Select a payment method before adding.");
+      return;
+    }
+
+    if (amount <= 0) {
+      setMethodMessage("Method amount must be greater than 0.");
+      return;
+    }
+
+    if (selectedAllocationInvoices.length === 0) {
+      setMethodMessage("Select at least one invoice before adding a method.");
+      return;
+    }
+
+    if (toCents(amount) !== toCents(methodAllocationTotal)) {
+      setMethodMessage("Method allocations must equal the method amount.");
+      return;
+    }
+
+    const allocations = selectedAllocationInvoices
+      .map((invoice) => ({
+        invoiceId: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        amount: methodAllocationAmounts[invoice.id] ?? "",
+      }))
+      .filter((allocation) => parseAmount(allocation.amount) > 0);
+
+    if (allocations.length === 0) {
+      setMethodMessage("Add at least one method allocation amount.");
+      return;
+    }
+
+    setAddedMethods((current) => [
       ...current,
-      [name]: value,
-    }));
+      {
+        id: crypto.randomUUID(),
+        method: selectedMethod,
+        amount: amount.toFixed(2),
+        details: getMethodDetails({
+          chequeBank,
+          chequeDate,
+          chequeNumber,
+          method: selectedMethod,
+          referenceNumber,
+        }),
+        allocations,
+      },
+    ]);
+    setSelectedMethod("");
+    setMethodAmount("");
+    setChequeNumber("");
+    setChequeBank("");
+    setChequeDate("");
+    setReferenceNumber("");
+    setMethodAllocationAmounts({});
+    setMethodMessage("");
   }
 
   return (
@@ -313,7 +340,9 @@ export default function PaymentMethodEntry({
             Allocation Summary
           </h3>
           <div className="mt-3 flex items-center justify-between border-t border-zinc-200 pt-3">
-            <span className="text-sm text-zinc-600">Total Allocated:</span>
+            <span className="text-sm text-zinc-600">
+              Overall Invoice Allocation Total:
+            </span>
             <span className="text-lg font-semibold text-zinc-950">
               {formatAmount(totalAllocated)}
             </span>
@@ -322,7 +351,7 @@ export default function PaymentMethodEntry({
       </div>
 
       <div className="flex flex-col gap-4 border-t border-zinc-200 pt-6">
-        <h2 className="text-lg font-medium tracking-tight">Payment Methods</h2>
+        <h2 className="text-lg font-medium tracking-tight">Payment Method</h2>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           {paymentMethods.map((method) => (
             <label
@@ -330,11 +359,10 @@ export default function PaymentMethodEntry({
               className="flex cursor-pointer items-center justify-center rounded-md border border-zinc-300 bg-white p-4 text-sm font-medium text-zinc-800 transition-colors hover:bg-zinc-50 has-checked:border-zinc-950 has-checked:bg-zinc-50 has-checked:ring-1 has-checked:ring-zinc-950"
             >
               <input
-                type="checkbox"
-                name="paymentMethods"
-                value={method.label}
-                checked={selectedMethods[method.id]}
-                onChange={() => toggleMethod(method.id)}
+                type="radio"
+                name="methodDraft"
+                checked={selectedMethod === method.id}
+                onChange={() => setSelectedMethod(method.id)}
                 className="sr-only"
               />
               {method.label}
@@ -342,113 +370,178 @@ export default function PaymentMethodEntry({
           ))}
         </div>
 
-        <div className="grid gap-4">
-          {selectedMethods.cash && (
-            <div className="rounded-md border border-zinc-200 bg-zinc-50 p-4">
-              <h3 className="mb-4 text-sm font-semibold text-zinc-950">
-                Cash
-              </h3>
+        <div className="grid gap-4 rounded-md border border-zinc-200 bg-zinc-50 p-4 sm:grid-cols-2">
+          <Field
+            label="Amount"
+            name="methodAmountDraft"
+            type="number"
+            min="0"
+            step="0.01"
+            value={methodAmount}
+            onChange={setMethodAmount}
+          />
+          {selectedMethod === "CHEQUE" && (
+            <>
               <Field
-                label="Cash Amount"
-                name="cashAmount"
-                type="number"
-                min="0"
-                step="0.01"
-                value={paymentAmounts.cashAmount}
-                onChange={(value) => updatePaymentAmount("cashAmount", value)}
+                label="Cheque Number"
+                name="chequeNumberDraft"
+                value={chequeNumber}
+                onChange={setChequeNumber}
               />
-            </div>
+              <Field
+                label="Bank"
+                name="chequeBankDraft"
+                value={chequeBank}
+                onChange={setChequeBank}
+              />
+              <Field
+                label="Cheque Date"
+                name="chequeDateDraft"
+                type="date"
+                value={chequeDate}
+                onChange={setChequeDate}
+              />
+            </>
           )}
-
-          {selectedMethods.cheque && (
-            <div className="rounded-md border border-zinc-200 bg-zinc-50 p-4">
-              <h3 className="mb-4 text-sm font-semibold text-zinc-950">
-                Cheque
-              </h3>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Cheque Number" name="chequeNumber" />
-                <Field label="Bank Name" name="chequeBankName" />
-                <Field label="Cheque Date" name="chequeDate" type="date" />
-                <Field
-                  label="Cheque Amount"
-                  name="chequeAmount"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={paymentAmounts.chequeAmount}
-                  onChange={(value) =>
-                    updatePaymentAmount("chequeAmount", value)
-                  }
-                />
-              </div>
-            </div>
+          {selectedMethod === "BANK_TRANSFER" && (
+            <Field
+              label="Reference Number"
+              name="bankReferenceDraft"
+              value={referenceNumber}
+              onChange={setReferenceNumber}
+            />
           )}
-
-          {selectedMethods.bankTransfer && (
-            <div className="rounded-md border border-zinc-200 bg-zinc-50 p-4">
-              <h3 className="mb-4 text-sm font-semibold text-zinc-950">
-                Bank Transfer
-              </h3>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field
-                  label="Reference Number"
-                  name="bankTransferReferenceNumber"
-                />
-                <Field
-                  label="Transfer Amount"
-                  name="bankTransferAmount"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={paymentAmounts.bankTransferAmount}
-                  onChange={(value) =>
-                    updatePaymentAmount("bankTransferAmount", value)
-                  }
-                />
-              </div>
-            </div>
-          )}
-
-          {selectedMethods.card && (
-            <div className="rounded-md border border-zinc-200 bg-zinc-50 p-4">
-              <h3 className="mb-4 text-sm font-semibold text-zinc-950">Card</h3>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Reference Number" name="cardReferenceNumber" />
-                <Field
-                  label="Card Amount"
-                  name="cardAmount"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={paymentAmounts.cardAmount}
-                  onChange={(value) => updatePaymentAmount("cardAmount", value)}
-                />
-              </div>
-            </div>
+          {selectedMethod === "CARD" && (
+            <Field
+              label="Reference Number"
+              name="cardReferenceDraft"
+              value={referenceNumber}
+              onChange={setReferenceNumber}
+            />
           )}
         </div>
 
         <div className="rounded-md border border-zinc-200 bg-white p-4">
           <h3 className="text-sm font-semibold text-zinc-950">
-            Payment Summary
+            Method Allocations
           </h3>
-          <div className="mt-3 flex items-center justify-between border-t border-zinc-200 pt-3">
-            <span className="text-sm text-zinc-600">Payment Total:</span>
-            <span className="text-lg font-semibold text-zinc-950">
-              {formatAmount(paymentTotal)}
+          {selectedAllocationInvoices.length === 0 ? (
+            <p className="mt-3 text-sm text-zinc-500">
+              Select invoices above to allocate this method.
+            </p>
+          ) : (
+            <div className="mt-3 grid gap-3">
+              {selectedAllocationInvoices.map((invoice) => (
+                <label
+                  key={invoice.id}
+                  className="grid gap-2 text-sm font-medium text-zinc-800 sm:grid-cols-[1fr_160px] sm:items-center"
+                >
+                  <span>{invoice.invoiceNumber}</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={methodAllocationAmounts[invoice.id] ?? ""}
+                    onChange={(event) =>
+                      updateMethodAllocationAmount(
+                        invoice.id,
+                        event.target.value,
+                      )
+                    }
+                    className="h-9 rounded-md border border-zinc-300 bg-white px-3 text-right text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
+                  />
+                </label>
+              ))}
+            </div>
+          )}
+          <div className="mt-4 flex items-center justify-between border-t border-zinc-200 pt-3">
+            <span className="text-sm text-zinc-600">
+              Method Allocation Total:
+            </span>
+            <span className="text-sm font-semibold text-zinc-950">
+              {formatAmount(methodAllocationTotal)}
             </span>
           </div>
-          <div className="mt-3 border-t border-zinc-200 pt-3">
-            <span
-              className={
-                isBalanced
-                  ? "inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700"
-                  : "inline-flex rounded-full bg-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-700"
-              }
+          {methodMessage && (
+            <p className="mt-3 text-sm font-medium text-amber-700">
+              {methodMessage}
+            </p>
+          )}
+          <div className="mt-4 flex justify-end">
+            <button
+              type="button"
+              onClick={addMethod}
+              className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
             >
-              {isBalanced
-                ? "Balanced"
-                : "Totals must match before saving"}
+              Add Method
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-4 border-t border-zinc-200 pt-6">
+        <h2 className="text-lg font-medium tracking-tight">Methods Added</h2>
+        {addedMethods.length === 0 ? (
+          <div className="rounded-md border border-dashed border-zinc-300 bg-zinc-50 p-8 text-center text-sm text-zinc-500">
+            No methods added yet.
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-md border border-zinc-200 bg-white">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-zinc-200 text-sm">
+                <thead className="bg-zinc-100 text-left text-xs font-semibold uppercase text-zinc-600">
+                  <tr>
+                    <th scope="col" className="px-4 py-3">
+                      Method
+                    </th>
+                    <th scope="col" className="px-4 py-3 text-right">
+                      Amount
+                    </th>
+                    <th scope="col" className="px-4 py-3">
+                      Details
+                    </th>
+                    <th scope="col" className="px-4 py-3">
+                      Allocations
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-200">
+                  {addedMethods.map((method) => (
+                    <tr key={method.id}>
+                      <td className="whitespace-nowrap px-4 py-3 font-medium text-zinc-950">
+                        {getMethodLabel(method.method)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-zinc-600">
+                        {formatAmount(method.amount)}
+                      </td>
+                      <td className="px-4 py-3 text-zinc-600">
+                        {method.details || "-"}
+                      </td>
+                      <td className="px-4 py-3 text-zinc-600">
+                        {method.allocations
+                          .map(
+                            (allocation) =>
+                              `${allocation.invoiceNumber}: ${formatAmount(
+                                allocation.amount,
+                              )}`,
+                          )
+                          .join(", ")}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        <div className="rounded-md border border-zinc-200 bg-white p-4">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-zinc-600">
+              Total of Added Methods:
+            </span>
+            <span className="text-lg font-semibold text-zinc-950">
+              {formatAmount(addedMethodsTotal)}
             </span>
           </div>
         </div>
@@ -457,12 +550,14 @@ export default function PaymentMethodEntry({
       <div className="flex flex-col gap-3 border-t border-zinc-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
         <p
           className={
-            isValid
+            finalTotalsMatch
               ? "text-sm font-medium text-emerald-700"
               : "text-sm font-medium text-zinc-600"
           }
         >
-          {validationMessage}
+          {finalTotalsMatch
+            ? "Ready to save payment."
+            : "Overall invoice allocation total must equal total of added methods."}
         </p>
         <div className="flex justify-end gap-3">
           <Link
@@ -472,16 +567,15 @@ export default function PaymentMethodEntry({
             Cancel
           </Link>
           <button
-            type="submit"
-            formAction={saveAction}
-            disabled={!isValid}
+            type="button"
+            disabled={!finalTotalsMatch}
             className={
-              isValid
+              finalTotalsMatch
                 ? "inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
                 : "inline-flex h-10 cursor-not-allowed items-center justify-center rounded-md bg-zinc-300 px-4 text-sm font-medium text-zinc-600"
             }
           >
-            Record Payment
+            Save Payment
           </button>
         </div>
       </div>
@@ -489,40 +583,34 @@ export default function PaymentMethodEntry({
   );
 }
 
-function getValidationMessage({
-  hasAllocationOverOutstanding,
-  paymentTotal,
-  selectedInvoiceCount,
-  selectedMethodCount,
-  totalsMatch,
+function getMethodDetails({
+  chequeBank,
+  chequeDate,
+  chequeNumber,
+  method,
+  referenceNumber,
 }: {
-  hasAllocationOverOutstanding: boolean;
-  paymentTotal: number;
-  selectedInvoiceCount: number;
-  selectedMethodCount: number;
-  totalsMatch: boolean;
+  chequeBank: string;
+  chequeDate: string;
+  chequeNumber: string;
+  method: PaymentMethod;
+  referenceNumber: string;
 }) {
-  if (selectedInvoiceCount === 0) {
-    return "Select at least one invoice before saving.";
+  if (method === "CHEQUE") {
+    return [
+      chequeNumber ? `Cheque ${chequeNumber}` : "",
+      chequeBank,
+      chequeDate,
+    ]
+      .filter(Boolean)
+      .join(" - ");
   }
 
-  if (selectedMethodCount === 0) {
-    return "Select at least one payment method before saving.";
+  if (method === "BANK_TRANSFER" || method === "CARD") {
+    return referenceNumber ? `Ref ${referenceNumber}` : "";
   }
 
-  if (paymentTotal <= 0) {
-    return "Payment total must be greater than 0.";
-  }
-
-  if (hasAllocationOverOutstanding) {
-    return "Allocation amount cannot exceed the invoice outstanding amount.";
-  }
-
-  if (!totalsMatch) {
-    return "Payment Total must equal Total Allocated.";
-  }
-
-  return "Ready to record payment.";
+  return "";
 }
 
 function Field({
