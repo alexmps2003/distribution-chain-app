@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
@@ -23,6 +24,116 @@ function formatDate(date: Date | null) {
 
 function formatMethod(method: string) {
   return method.replace("_", " ");
+}
+
+function sumDecimals(values: Prisma.Decimal[]) {
+  return values.reduce(
+    (total, value) => total.plus(value),
+    new Prisma.Decimal(0),
+  );
+}
+
+function minDecimal(left: Prisma.Decimal, right: Prisma.Decimal) {
+  return left.lte(right) ? left : right;
+}
+
+function getMethodDetails(part: {
+  method: string;
+  chequeNumber: string | null;
+  chequeBank: string | null;
+  chequeDate: Date | null;
+  bankReference: string | null;
+  cardReference: string | null;
+}) {
+  if (part.method === "CHEQUE") {
+    return [
+      part.chequeNumber ? `No: ${part.chequeNumber}` : "",
+      part.chequeBank ? `Bank: ${part.chequeBank}` : "",
+      part.chequeDate ? `Date: ${formatDate(part.chequeDate)}` : "",
+    ]
+      .filter(Boolean)
+      .join(", ");
+  }
+
+  if (part.method === "BANK_TRANSFER") {
+    return part.bankReference ? `Ref: ${part.bankReference}` : "-";
+  }
+
+  if (part.method === "CARD") {
+    return part.cardReference ? `Ref: ${part.cardReference}` : "-";
+  }
+
+  return "-";
+}
+
+function formatStatus(status: string) {
+  return status.replace("_", " ");
+}
+
+function buildPaymentMethodRows(
+  parts: {
+    id: string;
+    method: string;
+    amount: Prisma.Decimal;
+    chequeNumber: string | null;
+    chequeBank: string | null;
+    chequeDate: Date | null;
+    bankReference: string | null;
+    cardReference: string | null;
+    createdAt: Date;
+    paymentId: string;
+  }[],
+  methodAllocationSource: {
+    invoiceNumber: string;
+    amount: Prisma.Decimal;
+  }[],
+) {
+  let allocationIndex = 0;
+  let currentAllocationRemaining =
+    methodAllocationSource[allocationIndex]?.amount ?? new Prisma.Decimal(0);
+
+  return parts.map((part) => {
+    let partRemaining = part.amount;
+    const allocations: {
+      invoiceNumber: string;
+      amount: Prisma.Decimal;
+    }[] = [];
+
+    while (
+      partRemaining.gt(0) &&
+      allocationIndex < methodAllocationSource.length
+    ) {
+      const allocation = methodAllocationSource[allocationIndex];
+      const allocatedAmount = minDecimal(
+        partRemaining,
+        currentAllocationRemaining,
+      );
+
+      if (allocatedAmount.gt(0)) {
+        allocations.push({
+          invoiceNumber: allocation.invoiceNumber,
+          amount: allocatedAmount,
+        });
+      }
+
+      partRemaining = partRemaining.minus(allocatedAmount);
+      currentAllocationRemaining =
+        currentAllocationRemaining.minus(allocatedAmount);
+
+      if (currentAllocationRemaining.equals(0)) {
+        allocationIndex += 1;
+        currentAllocationRemaining =
+          methodAllocationSource[allocationIndex]?.amount ??
+          new Prisma.Decimal(0);
+      }
+    }
+
+    return {
+      ...part,
+      details: getMethodDetails(part),
+      allocations,
+    };
+  });
 }
 
 export default async function PaymentDetailsPage({
@@ -50,11 +161,23 @@ export default async function PaymentDetailsPage({
         include: {
           invoice: {
             select: {
+              id: true,
               invoiceNumber: true,
               amount: true,
               invoiceDate: true,
               dueDate: true,
               status: true,
+              payments: {
+                select: {
+                  paymentId: true,
+                  amount: true,
+                  payment: {
+                    select: {
+                      createdAt: true,
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -66,6 +189,62 @@ export default async function PaymentDetailsPage({
   if (!payment) {
     notFound();
   }
+
+  const methodAllocationSource = payment.allocations.map((allocation) => ({
+    invoiceNumber: allocation.invoice.invoiceNumber,
+    amount: allocation.amount,
+  }));
+  const paymentMethods = buildPaymentMethodRows(
+    payment.parts,
+    methodAllocationSource,
+  );
+
+  const allocationsByInvoice = new Map<
+    string,
+    {
+      invoiceNumber: string;
+      invoiceTotal: Prisma.Decimal;
+      amountPaid: Prisma.Decimal;
+      outstandingBefore: Prisma.Decimal;
+      outstandingAfter: Prisma.Decimal;
+      statusAfterPayment: string;
+    }
+  >();
+
+  for (const allocation of payment.allocations) {
+    const existing = allocationsByInvoice.get(allocation.invoice.id);
+    const amountPaid = (existing?.amountPaid ?? new Prisma.Decimal(0)).plus(
+      allocation.amount,
+    );
+    const previousAllocations = allocation.invoice.payments
+      .filter((invoiceAllocation) => {
+        return (
+          invoiceAllocation.paymentId !== payment.id &&
+          invoiceAllocation.payment.createdAt < payment.createdAt
+        );
+      })
+      .map((invoiceAllocation) => invoiceAllocation.amount);
+    const outstandingBefore = allocation.invoice.amount.minus(
+      sumDecimals(previousAllocations),
+    );
+    const outstandingAfter = outstandingBefore.minus(amountPaid);
+    const statusAfterPayment = outstandingAfter.lte(0)
+      ? "PAID"
+      : outstandingAfter.lt(allocation.invoice.amount)
+        ? "PARTIALLY_PAID"
+        : "UNPAID";
+
+    allocationsByInvoice.set(allocation.invoice.id, {
+      invoiceNumber: allocation.invoice.invoiceNumber,
+      invoiceTotal: allocation.invoice.amount,
+      amountPaid,
+      outstandingBefore,
+      outstandingAfter,
+      statusAfterPayment,
+    });
+  }
+
+  const invoiceAllocations = Array.from(allocationsByInvoice.values());
 
   return (
     <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
@@ -115,7 +294,7 @@ export default async function PaymentDetailsPage({
           <h2 className="text-lg font-medium tracking-tight">
             Payment Methods
           </h2>
-          {payment.parts.length === 0 ? (
+          {paymentMethods.length === 0 ? (
             <div className="mt-4 rounded-md border border-dashed border-zinc-300 bg-zinc-50 p-8 text-center text-sm text-zinc-500">
               No payment method details found.
             </div>
@@ -132,15 +311,15 @@ export default async function PaymentDetailsPage({
                         Amount
                       </th>
                       <th scope="col" className="px-4 py-3">
-                        Reference
+                        Reference/details
                       </th>
                       <th scope="col" className="px-4 py-3">
-                        Cheque Date
+                        Allocated invoices
                       </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-200">
-                    {payment.parts.map((part) => (
+                    {paymentMethods.map((part) => (
                       <tr key={part.id}>
                         <td className="whitespace-nowrap px-4 py-3 font-medium text-zinc-950">
                           {formatMethod(part.method)}
@@ -149,14 +328,19 @@ export default async function PaymentDetailsPage({
                           {formatAmount(part.amount)}
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
-                          {part.chequeNumber ??
-                            part.bankReference ??
-                            part.cardReference ??
-                            "-"}
-                          {part.chequeBank ? ` (${part.chequeBank})` : ""}
+                          {part.details}
                         </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
-                          {formatDate(part.chequeDate)}
+                        <td className="px-4 py-3 text-zinc-600">
+                          {part.allocations.length === 0
+                            ? "-"
+                            : part.allocations
+                                .map(
+                                  (allocation) =>
+                                    `${allocation.invoiceNumber} -> ${formatAmount(
+                                      allocation.amount,
+                                    )}`,
+                                )
+                                .join("; ")}
                         </td>
                       </tr>
                     ))}
@@ -171,7 +355,7 @@ export default async function PaymentDetailsPage({
           <h2 className="text-lg font-medium tracking-tight">
             Invoice Allocations
           </h2>
-          {payment.allocations.length === 0 ? (
+          {invoiceAllocations.length === 0 ? (
             <div className="mt-4 rounded-md border border-dashed border-zinc-300 bg-zinc-50 p-8 text-center text-sm text-zinc-500">
               No invoice allocations found.
             </div>
@@ -182,46 +366,46 @@ export default async function PaymentDetailsPage({
                   <thead className="bg-zinc-100 text-left text-xs font-semibold uppercase text-zinc-600">
                     <tr>
                       <th scope="col" className="px-4 py-3">
-                        Invoice
-                      </th>
-                      <th scope="col" className="px-4 py-3">
-                        Invoice Date
-                      </th>
-                      <th scope="col" className="px-4 py-3">
-                        Due Date
+                        Invoice Number
                       </th>
                       <th scope="col" className="px-4 py-3 text-right">
                         Invoice Total
                       </th>
                       <th scope="col" className="px-4 py-3 text-right">
-                        Allocated
+                        Amount paid in this payment
+                      </th>
+                      <th scope="col" className="px-4 py-3 text-right">
+                        Outstanding before
+                      </th>
+                      <th scope="col" className="px-4 py-3 text-right">
+                        Outstanding after
                       </th>
                       <th scope="col" className="px-4 py-3">
-                        Status
+                        Status after payment
                       </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-200">
-                    {payment.allocations.map((allocation) => (
-                      <tr key={allocation.id}>
+                    {invoiceAllocations.map((allocation) => (
+                      <tr key={allocation.invoiceNumber}>
                         <td className="whitespace-nowrap px-4 py-3 font-medium text-zinc-950">
-                          {allocation.invoice.invoiceNumber}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
-                          {formatDate(allocation.invoice.invoiceDate)}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
-                          {formatDate(allocation.invoice.dueDate)}
+                          {allocation.invoiceNumber}
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-zinc-600">
-                          {formatAmount(allocation.invoice.amount)}
+                          {formatAmount(allocation.invoiceTotal)}
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-zinc-600">
-                          {formatAmount(allocation.amount)}
+                          {formatAmount(allocation.amountPaid)}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-zinc-600">
+                          {formatAmount(allocation.outstandingBefore)}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-zinc-600">
+                          {formatAmount(allocation.outstandingAfter)}
                         </td>
                         <td className="whitespace-nowrap px-4 py-3">
                           <span className="inline-flex items-center rounded-full bg-zinc-200 px-2 py-1 text-xs font-medium text-zinc-700">
-                            {allocation.invoice.status.replace("_", " ")}
+                            {formatStatus(allocation.statusAfterPayment)}
                           </span>
                         </td>
                       </tr>
