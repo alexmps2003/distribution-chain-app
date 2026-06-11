@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { BANK_OPTIONS } from "@/lib/bank-options";
 
 type PaymentMethod = "CASH" | "CHEQUE" | "BANK_TRANSFER" | "CARD";
 
@@ -167,6 +168,7 @@ export default function PaymentMethodEntry({
   const canAddMethod =
     selectedMethod !== "" &&
     parseAmount(methodAmount) > 0 &&
+    (selectedMethod !== "CHEQUE" || chequeBank !== "") &&
     selectedAllocationInvoices.length > 0 &&
     methodAmountMatchesAllocations &&
     !hasMethodAllocationOverRemaining;
@@ -254,6 +256,11 @@ export default function PaymentMethodEntry({
 
     if (selectedAllocationInvoices.length === 0) {
       setMethodMessage("Select at least one invoice before adding a method.");
+      return;
+    }
+
+    if (selectedMethod === "CHEQUE" && !chequeBank) {
+      setMethodMessage("Select a bank before adding a cheque payment.");
       return;
     }
 
@@ -474,12 +481,7 @@ export default function PaymentMethodEntry({
                 value={chequeNumber}
                 onChange={setChequeNumber}
               />
-              <Field
-                label="Bank"
-                name="chequeBankDraft"
-                value={chequeBank}
-                onChange={setChequeBank}
-              />
+              <BankSelect value={chequeBank} onChange={setChequeBank} />
               <Field
                 label="Cheque Date"
                 name="chequeDateDraft"
@@ -670,7 +672,7 @@ export default function PaymentMethodEntry({
             />
             <input
               type="hidden"
-              name={`addedMethod:${method.id}:chequeBank`}
+              name={`addedMethod:${method.id}:chequeBankName`}
               value={method.chequeBank ?? ""}
             />
             <input
@@ -768,6 +770,34 @@ function getMethodDetails({
   }
 
   return "";
+}
+
+function BankSelect({
+  onChange,
+  value,
+}: {
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  return (
+    <label className="flex flex-col gap-2 text-sm font-medium text-zinc-800">
+      Bank
+      <select
+        name="chequeBankName"
+        required
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
+      >
+        <option value="">Select bank</option>
+        {BANK_OPTIONS.map((bank) => (
+          <option key={bank} value={bank}>
+            {bank}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
 }
 
 function Field({

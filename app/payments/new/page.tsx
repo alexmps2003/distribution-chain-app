@@ -178,7 +178,8 @@ function buildAddedMethods(formData: FormData): AddedMethodInput[] {
           : undefined,
       chequeBank:
         method === "CHEQUE"
-          ? getString(formData, `addedMethod:${clientId}:chequeBank`) ||
+          ? getString(formData, `addedMethod:${clientId}:chequeBankName`) ||
+            getString(formData, `addedMethod:${clientId}:chequeBank`) ||
             undefined
           : undefined,
       chequeDate:

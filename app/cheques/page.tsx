@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { BANK_OPTIONS } from "@/lib/bank-options";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
@@ -50,14 +51,28 @@ function getStatusBadgeClass(status: string | null | undefined) {
 export default async function ChequesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{
+    bank?: string;
+    q?: string;
+    search?: string;
+    status?: string;
+  }>;
 }) {
-  const { q } = await searchParams;
-  const query = q?.trim() ?? "";
+  const { bank, q, search, status } = await searchParams;
+  const query = (search ?? q)?.trim() ?? "";
+  const selectedBank = BANK_OPTIONS.includes(
+    bank as (typeof BANK_OPTIONS)[number],
+  )
+    ? bank
+    : "";
+  const selectedStatus =
+    status === "ACTIVE" || status === "REVERSED" ? status : "";
 
   const cheques = await prisma.paymentPart.findMany({
     where: {
       method: "CHEQUE",
+      ...(selectedStatus ? { status: selectedStatus } : {}),
+      ...(selectedBank ? { chequeBank: selectedBank } : {}),
       ...(query
         ? {
             chequeNumber: {
@@ -101,26 +116,59 @@ export default async function ChequesPage({
 
         <form
           action="/cheques"
-          className="rounded-md border border-zinc-200 bg-white p-4"
+          className="grid gap-4 rounded-md border border-zinc-200 bg-white p-4"
         >
-          <label className="flex flex-col gap-2 text-sm font-medium text-zinc-800">
-            Search cheque number
-            <div className="flex flex-col gap-3 sm:flex-row">
+          <div className="grid gap-4 lg:grid-cols-[1fr_1fr_180px_auto_auto] lg:items-end">
+            <label className="flex flex-col gap-2 text-sm font-medium text-zinc-800">
+              Search cheque number
               <input
                 type="search"
-                name="q"
+                name="search"
                 defaultValue={query}
                 placeholder="Enter cheque number"
-                className="h-10 flex-1 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
+                className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
               />
-              <button
-                type="submit"
-                className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-medium text-zinc-800">
+              Bank
+              <select
+                name="bank"
+                defaultValue={selectedBank}
+                className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
               >
-                Search
-              </button>
-            </div>
-          </label>
+                <option value="">All banks</option>
+                {BANK_OPTIONS.map((bankOption) => (
+                  <option key={bankOption} value={bankOption}>
+                    {bankOption}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-medium text-zinc-800">
+              Status
+              <select
+                name="status"
+                defaultValue={selectedStatus}
+                className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
+              >
+                <option value="">All</option>
+                <option value="ACTIVE">ACTIVE</option>
+                <option value="REVERSED">REVERSED</option>
+              </select>
+            </label>
+            <button
+              type="submit"
+              className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
+            >
+              Search
+            </button>
+            <Link
+              href="/cheques"
+              className="inline-flex h-10 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium hover:bg-zinc-100"
+            >
+              Clear Filters
+            </Link>
+          </div>
         </form>
 
         {cheques.length === 0 ? (
