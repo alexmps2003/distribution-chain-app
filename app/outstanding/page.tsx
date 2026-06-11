@@ -277,7 +277,9 @@ export default async function OutstandingPage({
                 </thead>
                 <tbody className="divide-y divide-zinc-200">
                   {customer.outstandingInvoices.map((invoice) => {
-                    const invoiceHref = `/invoices/${invoice.id}?customerId=${customer.id}`;
+                    const invoiceHref = `/invoices/${invoice.id}?returnTo=${encodeURIComponent(
+  `/outstanding?customerId=${customer.id}`,
+)}`;
 
                     return (
                       <tr key={invoice.id} className="hover:bg-zinc-50">

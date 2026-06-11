@@ -116,17 +116,26 @@ export default async function InvoiceDetailsPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ customerId?: string | string[] }>;
+  searchParams: Promise<{
+    customerId?: string | string[];
+    returnTo?: string | string[];
+  }>;
 }) {
   const { id } = await params;
-  const { customerId } = await searchParams;
+  const { customerId, returnTo } = await searchParams;
+  const selectedReturnTo = Array.isArray(returnTo) ? returnTo[0] : returnTo;
   const selectedCustomerId = Array.isArray(customerId)
     ? customerId[0]
     : customerId;
 
-  const backHref = selectedCustomerId
-    ? `/invoices?customerId=${encodeURIComponent(selectedCustomerId)}`
-    : "/invoices";
+  const backHref =
+    selectedReturnTo &&
+    selectedReturnTo.startsWith("/") &&
+    !selectedReturnTo.startsWith("//")
+      ? selectedReturnTo
+      : selectedCustomerId
+        ? `/invoices?customerId=${encodeURIComponent(selectedCustomerId)}`
+        : "/invoices";
   const invoice = await prisma.invoice.findUnique({
     where: {
       id,
