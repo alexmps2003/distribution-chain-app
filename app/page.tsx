@@ -44,14 +44,25 @@ function getActivePaidAmount(payments: {
   );
 }
 
-function KpiCard({ label, value }: { label: string; value: string | number }) {
+function KpiCard({
+  href,
+  label,
+  value,
+}: {
+  href: string;
+  label: string;
+  value: string | number;
+}) {
   return (
-    <div className="rounded-md border border-zinc-200 bg-white p-5">
+    <Link
+      href={href}
+      className="rounded-md border border-zinc-200 bg-white p-5 transition-colors hover:border-zinc-300 hover:bg-zinc-50"
+    >
       <p className="text-xs font-semibold uppercase text-zinc-500">{label}</p>
       <p className="mt-2 text-2xl font-semibold tracking-tight text-zinc-950">
         {value}
       </p>
-    </div>
+    </Link>
   );
 }
 
@@ -213,15 +224,36 @@ export default async function Home() {
         </div>
 
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-          <KpiCard label="Total Customers" value={customerCount} />
           <KpiCard
+            href="/customers"
+            label="Total Customers"
+            value={customerCount}
+          />
+          <KpiCard
+            href="/outstanding"
             label="Total Outstanding"
             value={formatAmount(totalOutstanding)}
           />
-          <KpiCard label="Active Cheques" value={activeCheques} />
-          <KpiCard label="Reversed Cheques" value={reversedCheques} />
-          <KpiCard label="Total Invoiced" value={formatAmount(totalInvoiced)} />
-          <KpiCard label="Total Paid" value={formatAmount(totalPaid)} />
+          <KpiCard
+            href="/cheques?status=ACTIVE"
+            label="Active Cheques"
+            value={activeCheques}
+          />
+          <KpiCard
+            href="/cheques?status=REVERSED"
+            label="Reversed Cheques"
+            value={reversedCheques}
+          />
+          <KpiCard
+            href="/invoices"
+            label="Total Invoiced"
+            value={formatAmount(totalInvoiced)}
+          />
+          <KpiCard
+            href="/payments"
+            label="Total Paid"
+            value={formatAmount(totalPaid)}
+          />
         </section>
 
         <section>
