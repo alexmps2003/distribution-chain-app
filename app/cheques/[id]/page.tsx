@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Prisma } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import ReverseChequeButton from "./ReverseChequeButton";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
@@ -373,12 +374,7 @@ export default async function ChequeDetailsPage({
                 />
               </label>
               <div>
-                <button
-                  type="submit"
-                  className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
-                >
-                  Reverse Cheque
-                </button>
+                <ReverseChequeButton />
               </div>
             </form>
           )}
