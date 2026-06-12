@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
@@ -19,8 +20,93 @@ function formatDate(date: Date | null) {
   });
 }
 
-export default async function PaymentsPage() {
+const methodOptions = [
+  { label: "All", value: "" },
+  { label: "Cash", value: "CASH" },
+  { label: "Cheque", value: "CHEQUE" },
+  { label: "Bank Transfer", value: "BANK_TRANSFER" },
+  { label: "Card", value: "CARD" },
+  { label: "Mixed", value: "MIXED" },
+] as const;
+
+function getSelectedMethod(method: string | undefined) {
+  if (
+    method === "CASH" ||
+    method === "CHEQUE" ||
+    method === "BANK_TRANSFER" ||
+    method === "CARD" ||
+    method === "MIXED"
+  ) {
+    return method;
+  }
+
+  return "";
+}
+
+function getDateFromParam(value: string | undefined, endOfDay = false) {
+  if (!value) return undefined;
+
+  const date = new Date(`${value}T00:00:00`);
+
+  if (Number.isNaN(date.getTime())) {
+    return undefined;
+  }
+
+  if (endOfDay) {
+    date.setHours(23, 59, 59, 999);
+  }
+
+  return date;
+}
+
+export default async function PaymentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    from?: string;
+    method?: string;
+    search?: string;
+    to?: string;
+  }>;
+}) {
+  const { from, method, search, to } = await searchParams;
+  const selectedMethod = getSelectedMethod(method);
+  const searchQuery = search?.trim() ?? "";
+  const fromDate = getDateFromParam(from);
+  const toDate = getDateFromParam(to, true);
+  const where: Prisma.PaymentWhereInput = {
+    ...(selectedMethod ? { paymentMethod: selectedMethod } : {}),
+    ...(searchQuery
+      ? {
+          customer: {
+            OR: [
+              {
+                name: {
+                  contains: searchQuery,
+                  mode: "insensitive",
+                },
+              },
+              {
+                code: {
+                  contains: searchQuery,
+                  mode: "insensitive",
+                },
+              },
+            ],
+          },
+        }
+      : {}),
+    ...(fromDate || toDate
+      ? {
+          paymentDate: {
+            ...(fromDate ? { gte: fromDate } : {}),
+            ...(toDate ? { lte: toDate } : {}),
+          },
+        }
+      : {}),
+  };
   const payments = await prisma.payment.findMany({
+    where,
     include: {
       customer: {
         select: {
@@ -46,6 +132,68 @@ export default async function PaymentsPage() {
             New Payment
           </Link>
         </div>
+
+        <form
+          action="/payments"
+          className="grid gap-4 rounded-md border border-zinc-200 bg-white p-4"
+        >
+          <div className="grid gap-4 lg:grid-cols-[1fr_220px_170px_170px_auto_auto] lg:items-end">
+            <label className="flex flex-col gap-2 text-sm font-medium text-zinc-800">
+              Search customer
+              <input
+                type="search"
+                name="search"
+                defaultValue={searchQuery}
+                placeholder="Name or code"
+                className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
+              />
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-medium text-zinc-800">
+              Payment Method
+              <select
+                name="method"
+                defaultValue={selectedMethod}
+                className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
+              >
+                {methodOptions.map((option) => (
+                  <option key={option.value || "ALL"} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-medium text-zinc-800">
+              From Date
+              <input
+                type="date"
+                name="from"
+                defaultValue={from ?? ""}
+                className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
+              />
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-medium text-zinc-800">
+              To Date
+              <input
+                type="date"
+                name="to"
+                defaultValue={to ?? ""}
+                className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
+              />
+            </label>
+            <button
+              type="submit"
+              className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
+            >
+              Filter
+            </button>
+            <Link
+              href="/payments"
+              className="inline-flex h-10 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium hover:bg-zinc-100"
+            >
+              Clear Filters
+            </Link>
+          </div>
+        </form>
 
         {payments.length === 0 ? (
           <div className="rounded-md border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-600">
