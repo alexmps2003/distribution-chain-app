@@ -1,7 +1,9 @@
 import Link from "next/link";
-import { Prisma } from "@prisma/client";
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import {
+  getOutstandingReport,
+  sumDecimals,
+} from "@/lib/outstanding-report";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
@@ -22,44 +24,6 @@ function formatDate(date: Date | null) {
   });
 }
 
-function sumDecimals(values: Prisma.Decimal[]) {
-  return values.reduce(
-    (total, value) => total.plus(value),
-    new Prisma.Decimal(0),
-  );
-}
-
-function getActivePaidAmount(payments: {
-  amount: Prisma.Decimal;
-  paymentPart: { status: string } | null;
-}[]) {
-  return sumDecimals(
-    payments
-      .filter((allocation) => {
-        return (
-          allocation.paymentPart === null ||
-          allocation.paymentPart.status === "ACTIVE"
-        );
-      })
-      .map((allocation) => allocation.amount),
-  );
-}
-
-function getDisplayStatus(
-  paidAmount: Prisma.Decimal,
-  outstandingAmount: Prisma.Decimal,
-) {
-  if (outstandingAmount.lte(0)) {
-    return "PAID";
-  }
-
-  if (paidAmount.gt(0)) {
-    return "PARTIALLY_PAID";
-  }
-
-  return "UNPAID";
-}
-
 function getStatusBadgeClass(status: string) {
   if (status === "PAID") {
     return "bg-emerald-100 text-emerald-800";
@@ -74,15 +38,6 @@ function getStatusBadgeClass(status: string) {
   }
 
   return "bg-zinc-200 text-zinc-800";
-}
-
-function getOldestDueDate(invoices: { dueDate: Date | null }[]) {
-  const dueDates = invoices
-    .map((invoice) => invoice.dueDate)
-    .filter((date): date is Date => date !== null)
-    .sort((left, right) => left.getTime() - right.getTime());
-
-  return dueDates[0] ?? null;
 }
 
 function SummaryCard({
@@ -108,72 +63,10 @@ export default async function OutstandingPage({
   searchParams: Promise<{ customerId?: string }>;
 }) {
   const { customerId } = await searchParams;
-  const customers = await prisma.customer.findMany({
-    select: {
-      id: true,
-      code: true,
-      name: true,
-      area: true,
-      routeName: true,
-      invoices: {
-        select: {
-          id: true,
-          invoiceNumber: true,
-          amount: true,
-          invoiceDate: true,
-          dueDate: true,
-          payments: {
-            select: {
-              amount: true,
-              paymentPart: {
-                select: {
-                  status: true,
-                },
-              },
-            },
-          },
-        },
-        orderBy: {
-          dueDate: "asc",
-        },
-      },
-    },
-    orderBy: {
-      name: "asc",
-    },
-  });
+  const { customerRows, customers } = await getOutstandingReport();
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-
-  const customerRows = customers
-    .map((customer) => {
-      const outstandingInvoices = customer.invoices
-        .map((invoice) => {
-          const paidAmount = getActivePaidAmount(invoice.payments);
-          const outstandingAmount = invoice.amount.minus(paidAmount);
-          const displayStatus = getDisplayStatus(paidAmount, outstandingAmount);
-
-          return {
-            ...invoice,
-            displayStatus,
-            outstandingAmount,
-            paidAmount,
-          };
-        })
-        .filter((invoice) => invoice.outstandingAmount.gt(0));
-      const totalOutstanding = sumDecimals(
-        outstandingInvoices.map((invoice) => invoice.outstandingAmount),
-      );
-
-      return {
-        ...customer,
-        oldestDueDate: getOldestDueDate(outstandingInvoices),
-        outstandingInvoices,
-        totalOutstanding,
-      };
-    })
-    .filter((customer) => customer.totalOutstanding.gt(0));
 
   const totalOutstanding = sumDecimals(
     customerRows.map((customer) => customer.totalOutstanding),
@@ -212,12 +105,20 @@ export default async function OutstandingPage({
                   Customer code: {existingCustomer.code}
                 </p>
               </div>
-              <Link
-                href="/outstanding"
-                className="inline-flex h-10 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium hover:bg-zinc-100"
-              >
-                Back to Outstanding
-              </Link>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Link
+                  href={`/outstanding/export?customerId=${existingCustomer.id}`}
+                  className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
+                >
+                  Export CSV
+                </Link>
+                <Link
+                  href="/outstanding"
+                  className="inline-flex h-10 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium hover:bg-zinc-100"
+                >
+                  Back to Outstanding
+                </Link>
+              </div>
             </div>
             <div className="rounded-md border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-600">
               No outstanding invoices found for this customer.
@@ -239,12 +140,20 @@ export default async function OutstandingPage({
                 Customer code: {customer.code}
               </p>
             </div>
-            <Link
-              href="/outstanding"
-              className="inline-flex h-10 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium hover:bg-zinc-100"
-            >
-              Back to Outstanding
-            </Link>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Link
+                href={`/outstanding/export?customerId=${customer.id}`}
+                className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
+              >
+                Export CSV
+              </Link>
+              <Link
+                href="/outstanding"
+                className="inline-flex h-10 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium hover:bg-zinc-100"
+              >
+                Back to Outstanding
+              </Link>
+            </div>
           </div>
 
           <div className="overflow-hidden rounded-md border border-zinc-200 bg-white">
@@ -342,13 +251,21 @@ export default async function OutstandingPage({
   return (
     <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">
-            Customer Outstanding
-          </h1>
-          <p className="mt-1 text-sm text-zinc-600">
-            Customers with invoice balances still due.
-          </p>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight">
+              Customer Outstanding
+            </h1>
+            <p className="mt-1 text-sm text-zinc-600">
+              Customers with invoice balances still due.
+            </p>
+          </div>
+          <Link
+            href="/outstanding/export"
+            className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
+          >
+            Export CSV
+          </Link>
         </div>
 
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
