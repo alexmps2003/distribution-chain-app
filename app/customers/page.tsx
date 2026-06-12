@@ -51,7 +51,31 @@ function SummaryCard({
   );
 }
 
-export default async function CustomersPage() {
+function getUniqueOptions(values: (string | null)[]) {
+  return Array.from(
+    new Set(
+      values
+        .map((value) => value?.trim())
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ).sort((left, right) => left.localeCompare(right));
+}
+
+export default async function CustomersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    area?: string;
+    outstanding?: string;
+    route?: string;
+    search?: string;
+  }>;
+}) {
+  const { area, outstanding, route, search } = await searchParams;
+  const searchQuery = search?.trim().toLowerCase() ?? "";
+  const selectedArea = area?.trim() ?? "";
+  const selectedRoute = route?.trim() ?? "";
+  const outstandingOnly = outstanding === "true";
   const customers = await prisma.customer.findMany({
     select: {
       id: true,
@@ -81,6 +105,10 @@ export default async function CustomersPage() {
       createdAt: "desc",
     },
   });
+  const areaOptions = getUniqueOptions(customers.map((customer) => customer.area));
+  const routeOptions = getUniqueOptions(
+    customers.map((customer) => customer.routeName),
+  );
   const customerRows = customers.map((customer) => {
     const totalInvoiced = sumDecimals(
       customer.invoices.map((invoice) => invoice.amount),
@@ -103,10 +131,24 @@ export default async function CustomersPage() {
       totalPaid,
     };
   });
+  const filteredCustomerRows = customerRows.filter((customer) => {
+    const matchesSearch =
+      !searchQuery ||
+      customer.name.toLowerCase().includes(searchQuery) ||
+      customer.code.toLowerCase().includes(searchQuery);
+    const matchesArea = !selectedArea || customer.area === selectedArea;
+    const matchesRoute = !selectedRoute || customer.routeName === selectedRoute;
+    const matchesOutstanding =
+      !outstandingOnly || customer.invoiceOutstanding.gt(0);
+
+    return matchesSearch && matchesArea && matchesRoute && matchesOutstanding;
+  });
   const totalInvoiced = sumDecimals(
-    customerRows.map((customer) => customer.totalInvoiced),
+    filteredCustomerRows.map((customer) => customer.totalInvoiced),
   );
-  const totalPaid = sumDecimals(customerRows.map((customer) => customer.totalPaid));
+  const totalPaid = sumDecimals(
+    filteredCustomerRows.map((customer) => customer.totalPaid),
+  );
   const totalOutstanding = totalInvoiced.minus(totalPaid);
 
   return (
@@ -122,8 +164,83 @@ export default async function CustomersPage() {
           </Link>
         </div>
 
+        <form
+          action="/customers"
+          className="grid gap-4 rounded-md border border-zinc-200 bg-white p-4"
+        >
+          <div className="grid gap-4 lg:grid-cols-[1fr_220px_220px_auto_auto] lg:items-end">
+            <label className="flex flex-col gap-2 text-sm font-medium text-zinc-800">
+              Search customer
+              <input
+                type="search"
+                name="search"
+                defaultValue={search ?? ""}
+                placeholder="Name or code"
+                className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
+              />
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-medium text-zinc-800">
+              Area
+              <select
+                name="area"
+                defaultValue={selectedArea}
+                className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
+              >
+                <option value="">All areas</option>
+                {areaOptions.map((areaOption) => (
+                  <option key={areaOption} value={areaOption}>
+                    {areaOption}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-medium text-zinc-800">
+              Route
+              <select
+                name="route"
+                defaultValue={selectedRoute}
+                className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
+              >
+                <option value="">All routes</option>
+                {routeOptions.map((routeOption) => (
+                  <option key={routeOption} value={routeOption}>
+                    {routeOption}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex h-10 items-center gap-2 rounded-md border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-800">
+              <input
+                type="checkbox"
+                name="outstanding"
+                value="true"
+                defaultChecked={outstandingOnly}
+                className="h-4 w-4 rounded border-zinc-300 text-zinc-950 focus:ring-zinc-950"
+              />
+              Outstanding Only
+            </label>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <button
+                type="submit"
+                className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
+              >
+                Filter
+              </button>
+              <Link
+                href="/customers"
+                className="inline-flex h-10 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium hover:bg-zinc-100"
+              >
+                Clear Filters
+              </Link>
+            </div>
+          </div>
+        </form>
+
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <SummaryCard label="Total Customers" value={customers.length} />
+          <SummaryCard
+            label="Total Customers"
+            value={filteredCustomerRows.length}
+          />
           <SummaryCard label="Total Invoiced" value={formatAmount(totalInvoiced)} />
           <SummaryCard label="Total Paid" value={formatAmount(totalPaid)} />
           <SummaryCard
@@ -132,7 +249,7 @@ export default async function CustomersPage() {
           />
         </section>
 
-        {customerRows.length === 0 ? (
+        {filteredCustomerRows.length === 0 ? (
           <div className="rounded-md border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-600">
             No customers found.
           </div>
@@ -178,7 +295,7 @@ export default async function CustomersPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200">
-                  {customerRows.map((customer) => (
+                  {filteredCustomerRows.map((customer) => (
                     <tr key={customer.id}>
                       <td className="whitespace-nowrap px-4 py-3 font-medium">
                         {customer.code}
