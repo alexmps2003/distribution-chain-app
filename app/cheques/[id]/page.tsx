@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import ReverseChequeButton from "./ReverseChequeButton";
+import UndoChequeReversalButton from "./UndoChequeReversalButton";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
@@ -115,6 +116,106 @@ async function reverseCheque(formData: FormData) {
         status: "REVERSED",
         reversedAt: new Date(),
         reversalReason,
+      },
+    });
+
+    const affectedInvoices = new Map(
+      cheque.allocations.map((allocation) => [
+        allocation.invoice.id,
+        allocation.invoice,
+      ]),
+    );
+
+    for (const invoice of affectedInvoices.values()) {
+      const activeAllocations = await tx.paymentAllocation.findMany({
+        where: {
+          invoiceId: invoice.id,
+          OR: [
+            {
+              paymentPartId: null,
+            },
+            {
+              paymentPart: {
+                status: "ACTIVE",
+              },
+            },
+          ],
+        },
+        select: {
+          amount: true,
+        },
+      });
+      const activePaidTotal = sumDecimals(
+        activeAllocations.map((allocation) => allocation.amount),
+      );
+      const status = activePaidTotal.gte(invoice.amount)
+        ? "PAID"
+        : activePaidTotal.gt(0)
+          ? "PARTIALLY_PAID"
+          : "UNPAID";
+
+      await tx.invoice.update({
+        where: {
+          id: invoice.id,
+        },
+        data: {
+          status,
+        },
+      });
+    }
+  });
+
+  redirect(`/cheques/${chequeId}`);
+}
+
+async function undoChequeReversal(formData: FormData) {
+  "use server";
+
+  const chequeId = getString(formData, "chequeId");
+
+  if (!chequeId) {
+    throw new Error("Cheque id is required");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const cheque = await tx.paymentPart.findUnique({
+      where: {
+        id: chequeId,
+      },
+      include: {
+        allocations: {
+          include: {
+            invoice: {
+              select: {
+                id: true,
+                amount: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!cheque) {
+      throw new Error("Cheque not found");
+    }
+
+    if (cheque.method !== "CHEQUE") {
+      throw new Error("Only cheque payment parts can be restored here");
+    }
+
+    if (cheque.status !== "REVERSED") {
+      throw new Error("Only reversed cheques can be restored");
+    }
+
+    await tx.paymentPart.update({
+      where: {
+        id: cheque.id,
+      },
+      data: {
+        status: "ACTIVE",
+        reversedAt: null,
+        reversalReason: null,
       },
     });
 
@@ -360,6 +461,10 @@ export default async function ChequeDetailsPage({
                   value={cheque.reversalReason ?? "-"}
                 />
               </dl>
+              <form action={undoChequeReversal}>
+                <input type="hidden" name="chequeId" value={cheque.id} />
+                <UndoChequeReversalButton />
+              </form>
             </div>
           ) : (
             <form action={reverseCheque} className="mt-4 grid gap-4">
