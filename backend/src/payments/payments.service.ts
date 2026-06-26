@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import * as crypto from 'node:crypto';
 import { DatabaseService } from '../database/database.service';
-import { paymentParts, payments } from '../db/schema';
+import { paymentAllocations, paymentParts, payments } from '../db/schema';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 
 @Injectable()
@@ -23,6 +23,7 @@ export class PaymentsService {
       .returning();
 
     const parts: (typeof paymentParts.$inferSelect)[] = [];
+    const allocations: (typeof paymentAllocations.$inferSelect)[] = [];
 
     for (const method of dto.methods) {
       const [part] = await this.databaseService.db
@@ -41,11 +42,27 @@ export class PaymentsService {
         .returning();
 
       parts.push(part);
+
+      for (const allocation of method.allocations ?? []) {
+        const [createdAllocation] = await this.databaseService.db
+          .insert(paymentAllocations)
+          .values({
+            id: `alloc_${crypto.randomUUID()}`,
+            paymentId: payment.id,
+            paymentPartId: part.id,
+            invoiceId: allocation.invoiceId,
+            amount: allocation.amount,
+          })
+          .returning();
+
+        allocations.push(createdAllocation);
+      }
     }
 
     return {
       payment,
       parts,
+      allocations,
     };
   }
 }

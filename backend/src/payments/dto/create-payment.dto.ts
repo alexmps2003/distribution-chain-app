@@ -12,6 +12,10 @@ export class CreatePaymentDto {
     chequeDate?: string;
     bankReference?: string;
     cardReference?: string;
+    allocations?: {
+      invoiceId: string;
+      amount: string;
+    }[];
   }[];
   allocations?: unknown[];
 }
