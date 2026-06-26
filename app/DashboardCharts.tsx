@@ -129,7 +129,7 @@ function ChartCard({
 }: {
   action?: React.ReactNode;
   children: React.ReactNode;
-  description: string;
+  description?: string;
   footer?: React.ReactNode;
   heightClassName?: string;
   title: string;
@@ -141,7 +141,11 @@ function ChartCard({
           <h3 className="text-base font-medium tracking-tight text-zinc-950">
             {title}
           </h3>
-          <p className="mt-1 text-sm leading-5 text-zinc-600">{description}</p>
+          {description ? (
+            <p className="mt-1 text-sm leading-5 text-zinc-600">
+              {description}
+            </p>
+          ) : null}
         </div>
         {action}
       </div>
@@ -301,10 +305,6 @@ export default function DashboardCharts({
       />
     </ChartFilterGroup>
   );
-  const outstandingLimitLabel =
-    selectedOutstandingLimit === "all"
-      ? "all matching customers"
-      : `top ${selectedOutstandingLimit} customers`;
   const invoiceStatusItems = [
     {
       count: invoiceStatus.paid,
@@ -343,7 +343,6 @@ export default function DashboardCharts({
         {hasCustomerOutstanding ? (
           <ChartCard
             title="Outstanding by Customer"
-            description={`Showing ${outstandingLimitLabel} by outstanding balance.`}
             heightClassName="h-[300px]"
             action={outstandingFilterControls}
           >
