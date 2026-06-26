@@ -73,9 +73,42 @@ function getSearchParamValue(value: string | string[] | undefined) {
 
 function getOutstandingLimit(value: string | string[] | undefined) {
   const selectedValue = getSearchParamValue(value);
+
+  if (selectedValue === "all") {
+    return "all";
+  }
+
   const limit = Number(selectedValue);
 
   return limit === 20 || limit === 50 ? limit : 10;
+}
+
+function getOutstandingMin(value: string | string[] | undefined) {
+  const selectedValue = getSearchParamValue(value);
+  const minimum = Number(selectedValue);
+
+  return minimum === 10000 ||
+    minimum === 25000 ||
+    minimum === 50000 ||
+    minimum === 100000
+    ? minimum
+    : 0;
+}
+
+function getOutstandingTextFilter(value: string | string[] | undefined) {
+  const selectedValue = getSearchParamValue(value);
+
+  return selectedValue && selectedValue.trim() !== "" ? selectedValue : "all";
+}
+
+function getOutstandingStatus(value: string | string[] | undefined) {
+  const selectedValue = getSearchParamValue(value);
+
+  if (selectedValue === "ACTIVE" || selectedValue === "INACTIVE") {
+    return selectedValue;
+  }
+
+  return "all";
 }
 
 type InvoiceStatusRange =
@@ -203,6 +236,10 @@ function isDateInRange(
   return (!range.start || date >= range.start) && (!range.end || date < range.end);
 }
 
+function isOverdue(dueDate: Date | null, today: Date) {
+  return dueDate !== null && dueDate < today;
+}
+
 function KpiCard({
   href,
   label,
@@ -290,29 +327,60 @@ export default async function Home({
   searchParams: Promise<{
     collectionsRange?: string | string[];
     invoiceStatusRange?: string | string[];
+    outstandingArea?: string | string[];
     outstandingLimit?: string | string[];
+    outstandingMin?: string | string[];
+    outstandingRoute?: string | string[];
+    outstandingStatus?: string | string[];
   }>;
 }) {
   const {
     collectionsRange: collectionsRangeParam,
     invoiceStatusRange: invoiceStatusRangeParam,
+    outstandingArea: outstandingAreaParam,
     outstandingLimit: outstandingLimitParam,
+    outstandingMin: outstandingMinParam,
+    outstandingRoute: outstandingRouteParam,
+    outstandingStatus: outstandingStatusParam,
   } = await searchParams;
   const outstandingLimit = getOutstandingLimit(outstandingLimitParam);
+  const outstandingMin = getOutstandingMin(outstandingMinParam);
+  const outstandingArea = getOutstandingTextFilter(outstandingAreaParam);
+  const outstandingRoute = getOutstandingTextFilter(outstandingRouteParam);
+  const outstandingStatus = getOutstandingStatus(outstandingStatusParam);
   const invoiceStatusRange = getInvoiceStatusRange(invoiceStatusRangeParam);
   const collectionsRange = getCollectionsRange(collectionsRangeParam);
-  const [customerCount, invoices, latestPayments, activeCheques, reversedCheques] =
-    await Promise.all([
+  const [
+    customerCount,
+    customerFilterOptions,
+    invoices,
+    latestPayments,
+    activeCheques,
+    reversedCheques,
+  ] = await Promise.all([
       prisma.customer.count(),
+      prisma.customer.findMany({
+        select: {
+          area: true,
+          routeName: true,
+        },
+        orderBy: {
+          name: "asc",
+        },
+      }),
       prisma.invoice.findMany({
         select: {
           amount: true,
+          dueDate: true,
           invoiceDate: true,
           customer: {
             select: {
+              area: true,
               id: true,
+              isActive: true,
               code: true,
               name: true,
+              routeName: true,
             },
           },
           payments: {
@@ -320,6 +388,7 @@ export default async function Home({
               amount: true,
               payment: {
                 select: {
+                  id: true,
                   paymentDate: true,
                 },
               },
@@ -360,6 +429,28 @@ export default async function Home({
       }),
     ]);
 
+  const routeOptions = Array.from(
+    new Set(
+      customerFilterOptions
+        .map((customer) => customer.routeName?.trim())
+        .filter((route): route is string => Boolean(route)),
+    ),
+  ).sort((left, right) => left.localeCompare(right));
+  const areaOptions = Array.from(
+    new Set(
+      customerFilterOptions
+        .map((customer) => customer.area?.trim())
+        .filter((area): area is string => Boolean(area)),
+    ),
+  ).sort((left, right) => left.localeCompare(right));
+  const selectedOutstandingRoute = routeOptions.includes(outstandingRoute)
+    ? outstandingRoute
+    : "all";
+  const selectedOutstandingArea = areaOptions.includes(outstandingArea)
+    ? outstandingArea
+    : "all";
+  const today = new Date();
+
   const totalInvoiced = sumDecimals(invoices.map((invoice) => invoice.amount));
   const totalPaid = sumDecimals(
     invoices.map((invoice) => getActivePaidAmount(invoice.payments)),
@@ -369,9 +460,14 @@ export default async function Home({
     string,
     {
       code: string;
+      area: string | null;
       id: string;
+      isActive: boolean;
       name: string;
       outstanding: Prisma.Decimal;
+      invoiceCount: number;
+      overdueOutstanding: Prisma.Decimal;
+      routeName: string | null;
     }
   >();
 
@@ -386,26 +482,63 @@ export default async function Home({
     const existing = outstandingByCustomer.get(invoice.customer.id);
 
     outstandingByCustomer.set(invoice.customer.id, {
+      area: invoice.customer.area?.trim() || null,
       code: invoice.customer.code,
       id: invoice.customer.id,
+      isActive: invoice.customer.isActive,
       name: invoice.customer.name,
       outstanding: (existing?.outstanding ?? new Prisma.Decimal(0)).plus(
         outstandingAmount,
       ),
+      invoiceCount: (existing?.invoiceCount ?? 0) + 1,
+      overdueOutstanding: (
+        existing?.overdueOutstanding ?? new Prisma.Decimal(0)
+      ).plus(isOverdue(invoice.dueDate, today) ? outstandingAmount : 0),
+      routeName: invoice.customer.routeName?.trim() || null,
     });
   }
 
   const highOutstandingCustomers = Array.from(outstandingByCustomer.values())
     .sort((left, right) => right.outstanding.comparedTo(left.outstanding))
     .slice(0, 5);
-  const topOutstandingCustomers = Array.from(outstandingByCustomer.values())
-    .sort((left, right) => right.outstanding.comparedTo(left.outstanding))
-    .slice(0, outstandingLimit)
+  const filteredOutstandingCustomers = Array.from(outstandingByCustomer.values())
+    .filter((customer) => customer.outstanding.gte(outstandingMin))
+    .filter((customer) => {
+      return (
+        selectedOutstandingArea === "all" ||
+        customer.area === selectedOutstandingArea
+      );
+    })
+    .filter((customer) => {
+      return (
+        selectedOutstandingRoute === "all" ||
+        customer.routeName === selectedOutstandingRoute
+      );
+    })
+    .filter((customer) => {
+      if (outstandingStatus === "ACTIVE") {
+        return customer.isActive;
+      }
+
+      if (outstandingStatus === "INACTIVE") {
+        return !customer.isActive;
+      }
+
+      return true;
+    })
+    .sort((left, right) => right.outstanding.comparedTo(left.outstanding));
+  const topOutstandingCustomers = (
+    outstandingLimit === "all"
+      ? filteredOutstandingCustomers
+      : filteredOutstandingCustomers.slice(0, outstandingLimit)
+  )
     .map((customer) => ({
       customer: customer.name,
+      customerId: customer.id,
+      invoiceCount: customer.invoiceCount,
       outstanding: Number(customer.outstanding.toString()),
+      overdueOutstanding: Number(customer.overdueOutstanding.toString()),
     }));
-  const today = new Date();
   const invoiceStatusDateRange = getInvoiceStatusDateRange(
     invoiceStatusRange,
     today,
@@ -433,7 +566,12 @@ export default async function Home({
   );
   const monthlyCollectionsByKey = new Map<
     string,
-    { amount: Prisma.Decimal; date: Date; month: string }
+    {
+      amount: Prisma.Decimal;
+      date: Date;
+      month: string;
+      receiptIds: Set<string>;
+    }
   >();
 
   for (const invoice of invoices) {
@@ -460,6 +598,10 @@ export default async function Home({
         ),
         date: existing?.date ?? paymentDate,
         month: existing?.month ?? getMonthLabel(paymentDate),
+        receiptIds: new Set([
+          ...(existing?.receiptIds ?? []),
+          allocation.payment.id,
+        ]),
       });
     }
   }
@@ -469,6 +611,10 @@ export default async function Home({
     .map((month) => ({
       amount: Number(month.amount.toString()),
       month: month.month,
+      monthKey: `${month.date.getFullYear()}-${String(
+        month.date.getMonth() + 1,
+      ).padStart(2, "0")}`,
+      receiptCount: month.receiptIds.size,
     }));
 
   return (
@@ -519,10 +665,16 @@ export default async function Home({
 
         <DashboardCharts
           customerOutstanding={topOutstandingCustomers}
+          customerOutstandingAreaOptions={areaOptions}
+          customerOutstandingRouteOptions={routeOptions}
           invoiceStatus={invoiceStatusCounts}
           selectedCollectionsRange={collectionsRange}
           selectedInvoiceStatusRange={invoiceStatusRange}
+          selectedOutstandingArea={selectedOutstandingArea}
           selectedOutstandingLimit={outstandingLimit}
+          selectedOutstandingMin={outstandingMin}
+          selectedOutstandingRoute={selectedOutstandingRoute}
+          selectedOutstandingStatus={outstandingStatus}
           monthlyCollections={monthlyCollections}
         />
 

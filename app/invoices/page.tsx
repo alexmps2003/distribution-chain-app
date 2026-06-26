@@ -83,6 +83,18 @@ const statusFilters = [
 ] as const;
 
 function getSelectedStatus(status: string | undefined) {
+  if (status === "paid") {
+    return "PAID";
+  }
+
+  if (status === "partial") {
+    return "PARTIALLY_PAID";
+  }
+
+  if (status === "unpaid") {
+    return "UNPAID";
+  }
+
   if (status === "PAID" || status === "PARTIALLY_PAID" || status === "UNPAID") {
     return status;
   }

@@ -59,21 +59,53 @@ function getDateFromParam(value: string | undefined, endOfDay = false) {
   return date;
 }
 
+function getMonthRangeFromParam(value: string | undefined) {
+  if (!value || !/^\d{4}-\d{2}$/.test(value)) {
+    return undefined;
+  }
+
+  const [yearValue, monthValue] = value.split("-");
+  const year = Number(yearValue);
+  const month = Number(monthValue);
+
+  if (month < 1 || month > 12) {
+    return undefined;
+  }
+
+  return {
+    end: new Date(year, month, 1),
+    start: new Date(year, month - 1, 1),
+  };
+}
+
 export default async function PaymentsPage({
   searchParams,
 }: {
   searchParams: Promise<{
     from?: string;
     method?: string;
+    month?: string;
     search?: string;
     to?: string;
   }>;
 }) {
-  const { from, method, search, to } = await searchParams;
+  const { from, method, month, search, to } = await searchParams;
   const selectedMethod = getSelectedMethod(method);
   const searchQuery = search?.trim() ?? "";
   const fromDate = getDateFromParam(from);
   const toDate = getDateFromParam(to, true);
+  const monthRange = getMonthRangeFromParam(month);
+  const paymentDateFilter = monthRange
+    ? {
+        gte: monthRange.start,
+        lt: monthRange.end,
+      }
+    : fromDate || toDate
+      ? {
+          ...(fromDate ? { gte: fromDate } : {}),
+          ...(toDate ? { lte: toDate } : {}),
+        }
+      : undefined;
   const where: Prisma.PaymentWhereInput = {
     ...(selectedMethod ? { paymentMethod: selectedMethod } : {}),
     ...(searchQuery
@@ -96,12 +128,9 @@ export default async function PaymentsPage({
           },
         }
       : {}),
-    ...(fromDate || toDate
+    ...(paymentDateFilter
       ? {
-          paymentDate: {
-            ...(fromDate ? { gte: fromDate } : {}),
-            ...(toDate ? { lte: toDate } : {}),
-          },
+          paymentDate: paymentDateFilter,
         }
       : {}),
   };

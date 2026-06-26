@@ -1,9 +1,11 @@
 "use client";
 
 import {
+  type ActiveElement,
   ArcElement,
   BarElement,
   CategoryScale,
+  type ChartEvent,
   Chart as ChartJS,
   Legend,
   LinearScale,
@@ -23,7 +25,10 @@ ChartJS.register(
 
 type CustomerOutstandingChartRow = {
   customer: string;
+  customerId: string;
+  invoiceCount: number;
   outstanding: number;
+  overdueOutstanding: number;
 };
 
 type InvoiceStatusChartData = {
@@ -35,18 +40,20 @@ type InvoiceStatusChartData = {
 type MonthlyCollectionChartRow = {
   amount: number;
   month: string;
+  monthKey: string;
+  receiptCount: number;
 };
 
 const calmPalette = [
-  "rgba(16, 185, 129, 0.84)",
   "rgba(59, 130, 246, 0.84)",
-  "rgba(245, 158, 11, 0.84)",
+  "rgba(16, 185, 129, 0.84)",
+  "rgba(249, 115, 22, 0.84)",
   "rgba(139, 92, 246, 0.84)",
-  "rgba(244, 63, 94, 0.84)",
   "rgba(6, 182, 212, 0.84)",
+  "rgba(244, 63, 94, 0.84)",
   "rgba(99, 102, 241, 0.84)",
   "rgba(132, 204, 22, 0.84)",
-  "rgba(249, 115, 22, 0.84)",
+  "rgba(245, 158, 11, 0.84)",
   "rgba(100, 116, 139, 0.84)",
 ];
 
@@ -54,6 +61,21 @@ const outstandingLimitOptions = [
   { label: "Top 10", value: "10" },
   { label: "Top 20", value: "20" },
   { label: "Top 50", value: "50" },
+  { label: "All", value: "all" },
+];
+
+const outstandingMinOptions = [
+  { label: "All", value: "0" },
+  { label: "10,000+", value: "10000" },
+  { label: "25,000+", value: "25000" },
+  { label: "50,000+", value: "50000" },
+  { label: "100,000+", value: "100000" },
+];
+
+const outstandingStatusOptions = [
+  { label: "All", value: "all" },
+  { label: "Active", value: "ACTIVE" },
+  { label: "Inactive", value: "INACTIVE" },
 ];
 
 const invoiceStatusRangeOptions = [
@@ -136,6 +158,18 @@ function formatChartValue(value: number | null) {
   });
 }
 
+function formatCurrency(value: number | null) {
+  return `Rs. ${formatChartValue(value)}`;
+}
+
+function setChartCursor(event: ChartEvent, elements: ActiveElement[]) {
+  const target = event.native?.target;
+
+  if (target instanceof HTMLElement) {
+    target.style.cursor = elements.length > 0 ? "pointer" : "default";
+  }
+}
+
 function ChartFilterSelect({
   label,
   options,
@@ -177,21 +211,42 @@ function ChartFilterSelect({
   );
 }
 
+function ChartFilterGroup({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+      {children}
+    </div>
+  );
+}
+
 export default function DashboardCharts({
   customerOutstanding,
+  customerOutstandingAreaOptions,
+  customerOutstandingRouteOptions,
   invoiceStatus,
   monthlyCollections,
   selectedCollectionsRange,
   selectedInvoiceStatusRange,
+  selectedOutstandingArea,
   selectedOutstandingLimit,
+  selectedOutstandingMin,
+  selectedOutstandingRoute,
+  selectedOutstandingStatus,
 }: {
   customerOutstanding: CustomerOutstandingChartRow[];
+  customerOutstandingAreaOptions: string[];
+  customerOutstandingRouteOptions: string[];
   invoiceStatus: InvoiceStatusChartData;
   monthlyCollections: MonthlyCollectionChartRow[];
   selectedCollectionsRange: string;
   selectedInvoiceStatusRange: string;
-  selectedOutstandingLimit: number;
+  selectedOutstandingArea: string;
+  selectedOutstandingLimit: number | "all";
+  selectedOutstandingMin: number;
+  selectedOutstandingRoute: string;
+  selectedOutstandingStatus: string;
 }) {
+  const router = useRouter();
   const hasCustomerOutstanding = customerOutstanding.some(
     (row) => row.outstanding > 0,
   );
@@ -199,6 +254,77 @@ export default function DashboardCharts({
     invoiceStatus.paid + invoiceStatus.partiallyPaid + invoiceStatus.unpaid > 0;
   const hasMonthlyCollections = monthlyCollections.some(
     (row) => row.amount > 0,
+  );
+  const outstandingFilterControls = (
+    <ChartFilterGroup>
+      <ChartFilterSelect
+        label="Show"
+        options={outstandingLimitOptions}
+        paramName="outstandingLimit"
+        value={String(selectedOutstandingLimit)}
+      />
+      <ChartFilterSelect
+        label="Min"
+        options={outstandingMinOptions}
+        paramName="outstandingMin"
+        value={String(selectedOutstandingMin)}
+      />
+      <ChartFilterSelect
+        label="Route"
+        options={[
+          { label: "All Routes", value: "all" },
+          ...customerOutstandingRouteOptions.map((route) => ({
+            label: route,
+            value: route,
+          })),
+        ]}
+        paramName="outstandingRoute"
+        value={selectedOutstandingRoute}
+      />
+      <ChartFilterSelect
+        label="Area"
+        options={[
+          { label: "All Areas", value: "all" },
+          ...customerOutstandingAreaOptions.map((area) => ({
+            label: area,
+            value: area,
+          })),
+        ]}
+        paramName="outstandingArea"
+        value={selectedOutstandingArea}
+      />
+      <ChartFilterSelect
+        label="Status"
+        options={outstandingStatusOptions}
+        paramName="outstandingStatus"
+        value={selectedOutstandingStatus}
+      />
+    </ChartFilterGroup>
+  );
+  const outstandingLimitLabel =
+    selectedOutstandingLimit === "all"
+      ? "all matching customers"
+      : `top ${selectedOutstandingLimit} customers`;
+  const invoiceStatusItems = [
+    {
+      count: invoiceStatus.paid,
+      href: "/invoices?status=paid",
+      label: "Paid",
+    },
+    {
+      count: invoiceStatus.partiallyPaid,
+      href: "/invoices?status=partial",
+      label: "Partially Paid",
+    },
+    {
+      count: invoiceStatus.unpaid,
+      href: "/invoices?status=unpaid",
+      label: "Unpaid",
+    },
+  ];
+  const invoiceStatusTotal = invoiceStatusItems.reduce(
+    (total, item) => total + item.count,
+    0,
   );
 
   return (
@@ -217,16 +343,9 @@ export default function DashboardCharts({
         {hasCustomerOutstanding ? (
           <ChartCard
             title="Outstanding by Customer"
-            description={`Top ${selectedOutstandingLimit} customers by outstanding balance.`}
+            description={`Showing ${outstandingLimitLabel} by outstanding balance.`}
             heightClassName="h-[300px]"
-            action={
-              <ChartFilterSelect
-                label="Show"
-                options={outstandingLimitOptions}
-                paramName="outstandingLimit"
-                value={String(selectedOutstandingLimit)}
-              />
-            }
+            action={outstandingFilterControls}
           >
             <Bar
               data={{
@@ -239,23 +358,48 @@ export default function DashboardCharts({
                     ),
                     borderRadius: 7,
                     borderSkipped: false,
-                    barPercentage: 0.72,
-                    categoryPercentage: 0.72,
+                    barPercentage: 0.7,
+                    categoryPercentage: 0.6,
                     label: "Outstanding",
+                    maxBarThickness: 32,
                   },
                 ],
               }}
               options={{
                 indexAxis: "y",
                 maintainAspectRatio: false,
+                onClick: (_event: ChartEvent, elements: ActiveElement[]) => {
+                  const index = elements[0]?.index;
+                  const row =
+                    typeof index === "number"
+                      ? customerOutstanding[index]
+                      : undefined;
+
+                  if (row) {
+                    router.push(`/customers/${row.customerId}`);
+                  }
+                },
+                onHover: setChartCursor,
                 plugins: {
                   legend: {
                     display: false,
                   },
                   tooltip: {
                     callbacks: {
-                      label: (context) =>
-                        `Outstanding: ${formatChartValue(context.parsed.x)}`,
+                      afterLabel: (context) => {
+                        const row = customerOutstanding[context.dataIndex];
+
+                        if (!row) {
+                          return [];
+                        }
+
+                        return [
+                          formatCurrency(row.outstanding),
+                          `Invoices: ${row.invoiceCount}`,
+                          `Overdue: ${formatCurrency(row.overdueOutstanding)}`,
+                        ];
+                      },
+                      label: () => "Outstanding",
                     },
                   },
                 },
@@ -282,14 +426,7 @@ export default function DashboardCharts({
           <EmptyChartCard
             title="Outstanding by Customer"
             message="No outstanding customer balances to chart."
-            action={
-              <ChartFilterSelect
-                label="Show"
-                options={outstandingLimitOptions}
-                paramName="outstandingLimit"
-                value={String(selectedOutstandingLimit)}
-              />
-            }
+            action={outstandingFilterControls}
           />
         )}
 
@@ -333,14 +470,10 @@ export default function DashboardCharts({
           >
             <Doughnut
               data={{
-                labels: ["Paid", "Partially Paid", "Unpaid"],
+                labels: invoiceStatusItems.map((item) => item.label),
                 datasets: [
                   {
-                    data: [
-                      invoiceStatus.paid,
-                      invoiceStatus.partiallyPaid,
-                      invoiceStatus.unpaid,
-                    ],
+                    data: invoiceStatusItems.map((item) => item.count),
                     backgroundColor: ["#10b981", "#f59e0b", "#ef4444"],
                     borderColor: "#ffffff",
                     borderWidth: 4,
@@ -351,6 +484,18 @@ export default function DashboardCharts({
               options={{
                 cutout: "68%",
                 maintainAspectRatio: false,
+                onClick: (_event: ChartEvent, elements: ActiveElement[]) => {
+                  const index = elements[0]?.index;
+                  const item =
+                    typeof index === "number"
+                      ? invoiceStatusItems[index]
+                      : undefined;
+
+                  if (item) {
+                    router.push(item.href);
+                  }
+                },
+                onHover: setChartCursor,
                 plugins: {
                   legend: {
                     labels: {
@@ -361,6 +506,20 @@ export default function DashboardCharts({
                       usePointStyle: true,
                     },
                     position: "bottom",
+                  },
+                  tooltip: {
+                    callbacks: {
+                      label: (context) => {
+                        const item = invoiceStatusItems[context.dataIndex];
+                        const count = item?.count ?? 0;
+                        const percentage =
+                          invoiceStatusTotal > 0
+                            ? Math.round((count / invoiceStatusTotal) * 100)
+                            : 0;
+
+                        return `${context.label}: ${count} invoices (${percentage}%)`;
+                      },
+                    },
                   },
                 },
               }}
@@ -407,21 +566,46 @@ export default function DashboardCharts({
                       ),
                       borderRadius: 8,
                       borderSkipped: false,
-                      categoryPercentage: 0.62,
+                      barPercentage: 0.75,
+                      categoryPercentage: 0.65,
                       label: "Collections",
+                      maxBarThickness: 48,
                     },
                   ],
                 }}
                 options={{
                   maintainAspectRatio: false,
+                  onClick: (_event: ChartEvent, elements: ActiveElement[]) => {
+                    const index = elements[0]?.index;
+                    const row =
+                      typeof index === "number"
+                        ? monthlyCollections[index]
+                        : undefined;
+
+                    if (row) {
+                      router.push(`/payments?month=${row.monthKey}`);
+                    }
+                  },
+                  onHover: setChartCursor,
                   plugins: {
                     legend: {
                       display: false,
                     },
                     tooltip: {
                       callbacks: {
-                        label: (context) =>
-                          `Collections: ${formatChartValue(context.parsed.y)}`,
+                        afterLabel: (context) => {
+                          const row = monthlyCollections[context.dataIndex];
+
+                          if (!row) {
+                            return [];
+                          }
+
+                          return [
+                            formatCurrency(row.amount),
+                            `Receipts: ${row.receiptCount}`,
+                          ];
+                        },
+                        label: () => "Collections",
                       },
                     },
                   },
