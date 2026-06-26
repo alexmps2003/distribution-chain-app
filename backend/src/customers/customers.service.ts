@@ -4,6 +4,7 @@ import * as crypto from 'node:crypto';
 import { DatabaseService } from '../database/database.service';
 import { customers } from '../db/schema';
 import { CreateCustomerDto } from './dto/create-customer.dto';
+import { UpdateCustomerDto } from './dto/update-customer.dto';
 
 @Injectable()
 export class CustomersService {
@@ -46,6 +47,16 @@ export class CustomersService {
       .select()
       .from(customers)
       .where(eq(customers.id, id));
+
+    return customer ?? null;
+  }
+
+  async update(id: string, dto: UpdateCustomerDto) {
+    const [customer] = await this.databaseService.db
+      .update(customers)
+      .set(dto)
+      .where(eq(customers.id, id))
+      .returning();
 
     return customer ?? null;
   }
