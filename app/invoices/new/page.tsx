@@ -1,8 +1,27 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { getValidationErrorMessage } from "@/lib/validation/errors";
+import { parseInvoiceFormData } from "@/lib/validation/invoice";
 
-export default async function NewInvoicePage() {
+function ErrorMessage({ message }: { message?: string }) {
+  if (!message) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+      {message}
+    </div>
+  );
+}
+
+export default async function NewInvoicePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const { error } = await searchParams;
   const customers = await prisma.customer.findMany({
     where: { isActive: true },
     select: { id: true, name: true, code: true },
@@ -12,27 +31,25 @@ export default async function NewInvoicePage() {
   async function createInvoice(formData: FormData) {
     "use server";
 
-    const customerId = formData.get("customerId") as string;
-    const invoiceNumber = formData.get("invoiceNumber") as string;
-    const invoiceDateStr = formData.get("invoiceDate") as string;
-    const dueDateStr = formData.get("dueDate") as string;
-    const amountStr = formData.get("amount") as string;
+    let invoice;
 
-    if (!customerId || !invoiceNumber || !invoiceDateStr || !amountStr) {
-      throw new Error("Missing required fields");
+    try {
+      invoice = parseInvoiceFormData(formData);
+    } catch (validationError) {
+      redirect(
+        `/invoices/new?error=${encodeURIComponent(
+          getValidationErrorMessage(validationError),
+        )}`,
+      );
     }
-
-    const amount = Number(amountStr);
-    const invoiceDate = new Date(invoiceDateStr);
-    const dueDate = dueDateStr ? new Date(dueDateStr) : undefined;
 
     await prisma.invoice.create({
       data: {
-        customerId,
-        invoiceNumber,
-        amount,
-        invoiceDate,
-        dueDate,
+        customerId: invoice.customerId,
+        invoiceNumber: invoice.invoiceNumber,
+        amount: invoice.amount,
+        invoiceDate: invoice.invoiceDate,
+        dueDate: invoice.dueDate,
         status: "UNPAID",
       },
     });
@@ -64,6 +81,7 @@ export default async function NewInvoicePage() {
           action={createInvoice}
           className="grid gap-6 rounded-md border border-zinc-200 bg-white p-6"
         >
+          <ErrorMessage message={error} />
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="flex flex-col gap-2 text-sm font-medium text-zinc-800">
               Customer <span className="text-red-500">*</span>

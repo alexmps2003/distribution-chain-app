@@ -1,50 +1,36 @@
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-
-function getString(formData: FormData, name: string) {
-  const value = formData.get(name);
-
-  if (typeof value !== "string") {
-    return "";
-  }
-
-  return value.trim();
-}
-
-function getOptionalString(formData: FormData, name: string) {
-  const value = getString(formData, name);
-
-  return value === "" ? undefined : value;
-}
-
-function getDecimalString(formData: FormData, name: string) {
-  const value = getString(formData, name);
-
-  return value === "" ? "0" : value;
-}
-
-function getInt(formData: FormData, name: string) {
-  const value = getString(formData, name);
-
-  return value === "" ? 0 : Number.parseInt(value, 10);
-}
-
-function getBoolean(formData: FormData, name: string) {
-  const value = formData.get(name);
-  return value === "true";
-}
+import { getValidationErrorMessage } from "@/lib/validation/errors";
+import { parseCustomerFormData } from "@/lib/validation/customer";
 
 interface EditCustomerPageProps {
   params: Promise<{
     id: string;
   }>;
+  searchParams: Promise<{
+    error?: string;
+  }>;
+}
+
+function ErrorMessage({ message }: { message?: string }) {
+  if (!message) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+      {message}
+    </div>
+  );
 }
 
 export default async function EditCustomerPage({
   params,
+  searchParams,
 }: EditCustomerPageProps) {
   const { id } = await params;
+  const { error } = await searchParams;
   const customer = await prisma.customer.findUnique({
     where: { id },
   });
@@ -56,35 +42,36 @@ export default async function EditCustomerPage({
   async function updateCustomer(formData: FormData) {
     "use server";
 
-    const code = getString(formData, "code");
-    const name = getString(formData, "name");
+    let customerInput;
 
-    if (!code) {
-      throw new Error("Customer code is required");
-    }
-
-    if (!name) {
-      throw new Error("Customer name is required");
+    try {
+      customerInput = parseCustomerFormData(formData);
+    } catch (validationError) {
+      redirect(
+        `/customers/${id}/edit?error=${encodeURIComponent(
+          getValidationErrorMessage(validationError),
+        )}`,
+      );
     }
 
     await prisma.customer.update({
       where: { id },
       data: {
-        code,
-        name,
-        ownerName: getOptionalString(formData, "ownerName"),
-        contactPerson: getOptionalString(formData, "contactPerson"),
-        phone: getOptionalString(formData, "phone"),
-        whatsappNumber: getOptionalString(formData, "whatsappNumber"),
-        email: getOptionalString(formData, "email"),
-        address: getOptionalString(formData, "address"),
-        area: getOptionalString(formData, "area"),
-        routeName: getOptionalString(formData, "routeName"),
-        assignedSalesRep: getOptionalString(formData, "assignedSalesRep"),
-        assignedCollector: getOptionalString(formData, "assignedCollector"),
-        creditLimit: getDecimalString(formData, "creditLimit"),
-        paymentTermsDays: getInt(formData, "paymentTermsDays"),
-        isActive: getBoolean(formData, "isActive"),
+        code: customerInput.code,
+        name: customerInput.name,
+        ownerName: customerInput.ownerName,
+        contactPerson: customerInput.contactPerson,
+        phone: customerInput.phone,
+        whatsappNumber: customerInput.whatsappNumber,
+        email: customerInput.email,
+        address: customerInput.address,
+        area: customerInput.area,
+        routeName: customerInput.routeName,
+        assignedSalesRep: customerInput.assignedSalesRep,
+        assignedCollector: customerInput.assignedCollector,
+        creditLimit: customerInput.creditLimit,
+        paymentTermsDays: customerInput.paymentTermsDays,
+        isActive: customerInput.isActive === "true",
       },
     });
 
@@ -115,6 +102,7 @@ export default async function EditCustomerPage({
           action={updateCustomer}
           className="grid gap-6 rounded-md border border-zinc-200 bg-white p-6"
         >
+          <ErrorMessage message={error} />
           <div className="grid gap-4 sm:grid-cols-2">
             <Field
               label="Code"

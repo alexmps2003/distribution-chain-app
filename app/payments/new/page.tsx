@@ -2,6 +2,8 @@ import Link from "next/link";
 import { Prisma } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { getValidationErrorMessage } from "@/lib/validation/errors";
+import { parsePaymentFormData } from "@/lib/validation/payment";
 
 import CustomerSelect from "./CustomerSelect";
 import PaymentMethodEntry from "./PaymentMethodEntry";
@@ -22,24 +24,6 @@ type OutstandingInvoice = Prisma.InvoiceGetPayload<{
   };
 }>;
 
-type PaymentPartInput = {
-  method: "CASH" | "CHEQUE" | "BANK_TRANSFER" | "CARD";
-  amount: Prisma.Decimal;
-  chequeNumber?: string;
-  chequeBank?: string;
-  chequeDate?: Date;
-  bankReference?: string;
-  cardReference?: string;
-};
-
-type AddedMethodInput = PaymentPartInput & {
-  clientId: string;
-  allocations: {
-    invoiceId: string;
-    amount: Prisma.Decimal;
-  }[];
-};
-
 function getString(formData: FormData, name: string) {
   const value = formData.get(name);
 
@@ -50,24 +34,16 @@ function getString(formData: FormData, name: string) {
   return value.trim();
 }
 
-function getDecimal(formData: FormData, name: string) {
-  const value = getString(formData, name);
+function redirectPaymentError(message: string, customerId?: string): never {
+  const params = new URLSearchParams({
+    error: message,
+  });
 
-  if (!value) {
-    return new Prisma.Decimal(0);
+  if (customerId) {
+    params.set("customerId", customerId);
   }
 
-  try {
-    const amount = new Prisma.Decimal(value);
-
-    if (amount.isNegative()) {
-      throw new Error(`${name} cannot be negative`);
-    }
-
-    return amount;
-  } catch {
-    throw new Error(`${name} must be a valid amount`);
-  }
+  redirect(`/payments/new?${params.toString()}`);
 }
 
 function sumDecimals(values: Prisma.Decimal[]) {
@@ -75,136 +51,6 @@ function sumDecimals(values: Prisma.Decimal[]) {
     (total, value) => total.plus(value),
     new Prisma.Decimal(0),
   );
-}
-
-function buildAllocations(formData: FormData) {
-  const invoiceIds = formData
-    .getAll("invoiceIds")
-    .filter((value): value is string => typeof value === "string");
-
-  return invoiceIds.map((invoiceId) => {
-    const amount = getDecimal(formData, `allocationAmount:${invoiceId}`);
-
-    if (!amount.gt(0)) {
-      throw new Error("Selected invoice allocation amounts must be greater than 0");
-    }
-
-    return {
-      invoiceId,
-      amount,
-    };
-  });
-}
-
-function getPaymentMethod(value: string): PaymentPartInput["method"] {
-  if (
-    value === "CASH" ||
-    value === "CHEQUE" ||
-    value === "BANK_TRANSFER" ||
-    value === "CARD"
-  ) {
-    return value;
-  }
-
-  throw new Error("Payment method must be valid");
-}
-
-function getOptionalDate(value: string, fieldName: string) {
-  if (!value) {
-    return undefined;
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    throw new Error(`${fieldName} must be valid`);
-  }
-
-  return date;
-}
-
-function buildAddedMethods(formData: FormData): AddedMethodInput[] {
-  const methodIds = formData
-    .getAll("addedMethodIds")
-    .filter((value): value is string => typeof value === "string");
-
-  const methods = methodIds.map((clientId) => {
-    const method = getPaymentMethod(
-      getString(formData, `addedMethod:${clientId}:method`),
-    );
-    const amount = getDecimal(formData, `addedMethod:${clientId}:amount`);
-    const chequeDateValue = getString(
-      formData,
-      `addedMethod:${clientId}:chequeDate`,
-    );
-    const invoiceIds = formData
-      .getAll(`addedMethod:${clientId}:invoiceIds`)
-      .filter((value): value is string => typeof value === "string");
-    const allocations = invoiceIds.map((invoiceId) => {
-      const allocationAmount = getDecimal(
-        formData,
-        `addedMethod:${clientId}:allocation:${invoiceId}`,
-      );
-
-      if (!allocationAmount.gt(0)) {
-        throw new Error("Method allocation amounts must be greater than 0");
-      }
-
-      return {
-        invoiceId,
-        amount: allocationAmount,
-      };
-    });
-    const allocationTotal = sumDecimals(
-      allocations.map((allocation) => allocation.amount),
-    );
-
-    if (!amount.gt(0)) {
-      throw new Error("Added method amounts must be greater than 0");
-    }
-
-    if (!amount.equals(allocationTotal)) {
-      throw new Error("Each method amount must equal its method allocations");
-    }
-
-    return {
-      clientId,
-      method,
-      amount,
-      chequeNumber:
-        method === "CHEQUE"
-          ? getString(formData, `addedMethod:${clientId}:chequeNumber`) ||
-            undefined
-          : undefined,
-      chequeBank:
-        method === "CHEQUE"
-          ? getString(formData, `addedMethod:${clientId}:chequeBankName`) ||
-            getString(formData, `addedMethod:${clientId}:chequeBank`) ||
-            undefined
-          : undefined,
-      chequeDate:
-        method === "CHEQUE"
-          ? getOptionalDate(chequeDateValue, "Cheque date")
-          : undefined,
-      bankReference:
-        method === "BANK_TRANSFER"
-          ? getString(formData, `addedMethod:${clientId}:bankReference`) ||
-            undefined
-          : undefined,
-      cardReference:
-        method === "CARD"
-          ? getString(formData, `addedMethod:${clientId}:cardReference`) ||
-            undefined
-          : undefined,
-      allocations,
-    };
-  });
-
-  if (methods.length === 0) {
-    throw new Error("Add at least one payment method before saving");
-  }
-
-  return methods;
 }
 
 function addToDecimalMap(
@@ -218,22 +64,23 @@ function addToDecimalMap(
 async function createPayment(formData: FormData) {
   "use server";
 
-  const customerId = getString(formData, "customerId");
-  const paymentDateValue = getString(formData, "paymentDate");
-  const notes = getString(formData, "notes") || undefined;
+  let paymentInput;
+  const submittedCustomerId = getString(formData, "customerId");
 
-  if (!customerId || !paymentDateValue) {
-    throw new Error("Missing required payment fields");
+  try {
+    paymentInput = parsePaymentFormData(formData);
+  } catch (validationError) {
+    redirectPaymentError(
+      getValidationErrorMessage(validationError),
+      submittedCustomerId || undefined,
+    );
   }
 
-  const paymentDate = new Date(paymentDateValue);
-
-  if (Number.isNaN(paymentDate.getTime())) {
-    throw new Error("Payment date must be valid");
-  }
-
-  const paymentParts = buildAddedMethods(formData);
-  const allocations = buildAllocations(formData);
+  const customerId = paymentInput.customerId;
+  const paymentDate = paymentInput.paymentDate;
+  const notes = paymentInput.notes;
+  const paymentParts = paymentInput.methods;
+  const allocations = paymentInput.allocations;
   const paymentTotal = sumDecimals(paymentParts.map((part) => part.amount));
   const allocationTotal = sumDecimals(
     allocations.map((allocation) => allocation.amount),
@@ -394,10 +241,11 @@ async function createPayment(formData: FormData) {
 }
 
 export default async function NewPaymentPage(props: {
-  searchParams: Promise<{ customerId?: string }>;
+  searchParams: Promise<{ customerId?: string; error?: string }>;
 }) {
   const searchParams = await props.searchParams;
   const customerId = searchParams?.customerId;
+  const error = searchParams?.error;
 
   const customers = await prisma.customer.findMany({
     where: { isActive: true },
@@ -474,6 +322,11 @@ export default async function NewPaymentPage(props: {
         </div>
 
         <form className="grid gap-6 rounded-md border border-zinc-200 bg-white p-6">
+          {error ? (
+            <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+              {error}
+            </div>
+          ) : null}
           <div className="flex flex-col gap-4">
             <h2 className="text-lg font-medium tracking-tight">
               Payment Details

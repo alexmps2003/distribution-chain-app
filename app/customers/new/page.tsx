@@ -1,66 +1,59 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { getValidationErrorMessage } from "@/lib/validation/errors";
+import { parseCustomerFormData } from "@/lib/validation/customer";
 
-function getString(formData: FormData, name: string) {
-  const value = formData.get(name);
-
-  if (typeof value !== "string") {
-    return "";
+function ErrorMessage({ message }: { message?: string }) {
+  if (!message) {
+    return null;
   }
 
-  return value.trim();
+  return (
+    <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+      {message}
+    </div>
+  );
 }
 
-function getOptionalString(formData: FormData, name: string) {
-  const value = getString(formData, name);
+export default async function NewCustomerPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const { error } = await searchParams;
 
-  return value === "" ? undefined : value;
-}
-
-function getDecimalString(formData: FormData, name: string) {
-  const value = getString(formData, name);
-
-  return value === "" ? "0" : value;
-}
-
-function getInt(formData: FormData, name: string) {
-  const value = getString(formData, name);
-
-  return value === "" ? 0 : Number.parseInt(value, 10);
-}
-
-export default function NewCustomerPage() {
   async function createCustomer(formData: FormData) {
     "use server";
 
-    const code = getString(formData, "code");
-    const name = getString(formData, "name");
+    let customer;
 
-    if (!code) {
-      throw new Error("Customer code is required");
-    }
-
-    if (!name) {
-      throw new Error("Customer name is required");
+    try {
+      customer = parseCustomerFormData(formData);
+    } catch (validationError) {
+      redirect(
+        `/customers/new?error=${encodeURIComponent(
+          getValidationErrorMessage(validationError),
+        )}`,
+      );
     }
 
     await prisma.customer.create({
       data: {
-        code,
-        name,
-        ownerName: getOptionalString(formData, "ownerName"),
-        contactPerson: getOptionalString(formData, "contactPerson"),
-        phone: getOptionalString(formData, "phone"),
-        whatsappNumber: getOptionalString(formData, "whatsappNumber"),
-        email: getOptionalString(formData, "email"),
-        address: getOptionalString(formData, "address"),
-        area: getOptionalString(formData, "area"),
-        routeName: getOptionalString(formData, "routeName"),
-        assignedSalesRep: getOptionalString(formData, "assignedSalesRep"),
-        assignedCollector: getOptionalString(formData, "assignedCollector"),
-        creditLimit: getDecimalString(formData, "creditLimit"),
-        paymentTermsDays: getInt(formData, "paymentTermsDays"),
+        code: customer.code,
+        name: customer.name,
+        ownerName: customer.ownerName,
+        contactPerson: customer.contactPerson,
+        phone: customer.phone,
+        whatsappNumber: customer.whatsappNumber,
+        email: customer.email,
+        address: customer.address,
+        area: customer.area,
+        routeName: customer.routeName,
+        assignedSalesRep: customer.assignedSalesRep,
+        assignedCollector: customer.assignedCollector,
+        creditLimit: customer.creditLimit,
+        paymentTermsDays: customer.paymentTermsDays,
       },
     });
 
@@ -91,6 +84,7 @@ export default function NewCustomerPage() {
           action={createCustomer}
           className="grid gap-6 rounded-md border border-zinc-200 bg-white p-6"
         >
+          <ErrorMessage message={error} />
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Code" name="code" required />
             <Field label="Name" name="name" required />
