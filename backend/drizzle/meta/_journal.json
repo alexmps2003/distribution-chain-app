@@ -15,6 +15,13 @@
       "when": 1782495937881,
       "tag": "0001_deep_obadiah_stane",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782497361427,
+      "tag": "0002_awesome_forgotten_one",
+      "breakpoints": true
     }
   ]
 }

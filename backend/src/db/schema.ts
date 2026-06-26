@@ -59,3 +59,34 @@ export const invoices = pgTable('Invoice', {
   customerId: text('customerId').notNull(),
   createdAt: timestamp('createdAt').notNull(),
 });
+
+export const payments = pgTable('Payment', {
+  id: text('id').primaryKey(),
+  customerId: text('customerId').notNull(),
+  paymentDate: timestamp('paymentDate').notNull(),
+  amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
+  paymentMethod: text('paymentMethod').notNull(),
+  notes: text('notes'),
+  createdAt: timestamp('createdAt').notNull(),
+});
+
+export const paymentParts = pgTable('PaymentPart', {
+  id: text('id').primaryKey(),
+  paymentId: text('paymentId').notNull(),
+  method: paymentMethod('method').notNull(),
+  amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
+  status: paymentStatus('status').default('ACTIVE'),
+  chequeNumber: text('chequeNumber'),
+  chequeBank: text('chequeBank'),
+  chequeDate: timestamp('chequeDate'),
+  bankReference: text('bankReference'),
+  cardReference: text('cardReference'),
+});
+
+export const paymentAllocations = pgTable('PaymentAllocation', {
+  id: text('id').primaryKey(),
+  paymentId: text('paymentId').notNull(),
+  invoiceId: text('invoiceId').notNull(),
+  paymentPartId: text('paymentPartId'),
+  amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
+});
