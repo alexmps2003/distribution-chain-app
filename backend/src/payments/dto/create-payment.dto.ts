@@ -4,6 +4,14 @@ export class CreatePaymentDto {
   notes?: string;
   amount: string;
   paymentMethod: string;
-  methods?: unknown[];
+  methods: {
+    method: 'CASH' | 'CHEQUE' | 'BANK_TRANSFER' | 'CARD';
+    amount: string;
+    chequeNumber?: string;
+    chequeBank?: string;
+    chequeDate?: string;
+    bankReference?: string;
+    cardReference?: string;
+  }[];
   allocations?: unknown[];
 }
