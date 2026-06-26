@@ -71,6 +71,21 @@ export class PaymentsService {
         parts.push(part);
 
         for (const allocation of method.allocations ?? []) {
+          const [invoice] = await tx
+            .select()
+            .from(invoices)
+            .where(eq(invoices.id, allocation.invoiceId));
+
+          if (!invoice) {
+            throw new BadRequestException('Selected invoice could not be found');
+          }
+
+          if (invoice.customerId !== dto.customerId) {
+            throw new BadRequestException(
+              'Selected invoice does not belong to customer',
+            );
+          }
+
           const [createdAllocation] = await tx
             .insert(paymentAllocations)
             .values({
