@@ -86,6 +86,24 @@ export class PaymentsService {
             );
           }
 
+          const existingAllocations = await tx
+            .select()
+            .from(paymentAllocations)
+            .where(eq(paymentAllocations.invoiceId, allocation.invoiceId));
+
+          const allocatedTotal = existingAllocations.reduce(
+            (sum, existingAllocation) =>
+              sum + Number(existingAllocation.amount),
+            0,
+          );
+          const outstanding = Number(invoice.amount) - allocatedTotal;
+
+          if (Number(allocation.amount) > outstanding) {
+            throw new BadRequestException(
+              'Allocation exceeds invoice outstanding balance',
+            );
+          }
+
           const [createdAllocation] = await tx
             .insert(paymentAllocations)
             .values({
