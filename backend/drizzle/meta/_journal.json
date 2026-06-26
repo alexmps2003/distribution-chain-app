@@ -8,6 +8,13 @@
       "when": 1782485056153,
       "tag": "0000_secret_black_cat",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1782495937881,
+      "tag": "0001_deep_obadiah_stane",
+      "breakpoints": true
     }
   ]
 }

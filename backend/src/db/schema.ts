@@ -48,3 +48,14 @@ export const customers = pgTable('Customer', {
   isActive: boolean('isActive').notNull(),
   createdAt: timestamp('createdAt').notNull(),
 });
+
+export const invoices = pgTable('Invoice', {
+  id: text('id').primaryKey(),
+  invoiceNumber: text('invoiceNumber').notNull().unique(),
+  amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
+  invoiceDate: timestamp('invoiceDate').notNull(),
+  dueDate: timestamp('dueDate'),
+  status: invoiceStatus('status').notNull().default('UNPAID'),
+  customerId: text('customerId').notNull(),
+  createdAt: timestamp('createdAt').notNull(),
+});
