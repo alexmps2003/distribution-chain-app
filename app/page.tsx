@@ -100,6 +100,12 @@ const moduleCards = [
     title: "Outstanding",
   },
   {
+    cta: "Open Aging",
+    description: "Review unpaid balances by due date aging buckets.",
+    href: "/aging",
+    title: "Aging Report",
+  },
+  {
     cta: "Record Payment",
     description: "Allocate a new customer payment across open invoices.",
     href: "/payments/new",

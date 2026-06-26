@@ -10,6 +10,7 @@ const navItems = [
   { href: "/payments", label: "Payments" },
   { href: "/cheques", label: "Cheques" },
   { href: "/outstanding", label: "Outstanding" },
+  { href: "/aging", label: "Aging" },
 ];
 
 function isActivePath(pathname: string, href: string) {
