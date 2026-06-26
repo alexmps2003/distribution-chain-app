@@ -56,10 +56,12 @@ function KpiCard({
   return (
     <Link
       href={href}
-      className="rounded-md border border-zinc-200 bg-white p-5 transition-colors hover:border-zinc-300 hover:bg-zinc-50"
+      className="group rounded-2xl border border-zinc-200/80 bg-white/90 p-5 shadow-sm shadow-zinc-950/[0.03] transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:bg-white hover:shadow-md hover:shadow-zinc-950/[0.06]"
     >
-      <p className="text-xs font-semibold uppercase text-zinc-500">{label}</p>
-      <p className="mt-2 text-2xl font-semibold tracking-tight text-zinc-950">
+      <p className="text-xs font-medium uppercase tracking-[0.08em] text-zinc-500">
+        {label}
+      </p>
+      <p className="mt-2 text-2xl font-medium tracking-tight text-zinc-950">
         {value}
       </p>
     </Link>
@@ -212,12 +214,12 @@ export default async function Home() {
 
   return (
     <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-9">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">
+          <h1 className="text-3xl font-medium tracking-tight">
             Distribution Chain Dashboard
           </h1>
-          <p className="mt-1 text-sm text-zinc-600">
+          <p className="mt-2 text-sm leading-6 text-zinc-600">
             Monitor customers, invoices, payments, cheques, and outstanding
             balances.
           </p>
@@ -257,17 +259,17 @@ export default async function Home() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold tracking-tight">
+          <h2 className="text-lg font-medium tracking-tight">
             Quick Actions
           </h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {moduleCards.map((card) => (
               <div
                 key={card.href}
-                className="flex flex-col justify-between rounded-md border border-zinc-200 bg-white p-5"
+                className="flex flex-col justify-between rounded-2xl border border-zinc-200/80 bg-white/90 p-5 shadow-sm shadow-zinc-950/[0.03]"
               >
                 <div>
-                  <h3 className="text-base font-semibold text-zinc-950">
+                  <h3 className="text-base font-medium text-zinc-950">
                     {card.title}
                   </h3>
                   <p className="mt-2 text-sm leading-6 text-zinc-600">
@@ -276,7 +278,7 @@ export default async function Home() {
                 </div>
                 <Link
                   href={card.href}
-                  className="mt-5 inline-flex h-9 w-fit items-center justify-center rounded-md bg-zinc-950 px-3 text-xs font-medium text-white hover:bg-zinc-800"
+                  className="mt-5 inline-flex h-10 w-fit items-center justify-center rounded-full bg-zinc-950 px-4 text-xs font-medium text-white shadow-sm shadow-zinc-950/10 transition-colors hover:bg-zinc-800"
                 >
                   {card.cta}
                 </Link>
@@ -286,58 +288,58 @@ export default async function Home() {
         </section>
 
         <div className="grid gap-8 lg:grid-cols-2">
-          <section className="rounded-md border border-zinc-200 bg-white p-6">
+          <section className="rounded-2xl border border-zinc-200/80 bg-white/90 p-6 shadow-sm shadow-zinc-950/[0.03]">
             <div className="flex items-center justify-between gap-4">
-              <h2 className="text-lg font-semibold tracking-tight">
+              <h2 className="text-lg font-medium tracking-tight">
                 Recent Activity
               </h2>
               <Link
                 href="/payments"
-                className="text-sm font-medium text-zinc-700 hover:text-zinc-950"
+                className="text-sm font-medium text-zinc-600 transition-colors hover:text-zinc-950"
               >
                 View all
               </Link>
             </div>
 
             {latestPayments.length === 0 ? (
-              <div className="mt-4 rounded-md border border-dashed border-zinc-300 bg-zinc-50 p-8 text-center text-sm text-zinc-600">
+              <div className="mt-4 rounded-xl border border-dashed border-zinc-300 bg-zinc-50/80 p-8 text-center text-sm text-zinc-600">
                 No payments recorded yet.
               </div>
             ) : (
-              <div className="mt-4 overflow-hidden rounded-md border border-zinc-200">
+              <div className="mt-4 overflow-hidden rounded-xl border border-zinc-200/80">
                 <table className="min-w-full divide-y divide-zinc-200 text-sm">
-                  <thead className="bg-zinc-100 text-left text-xs font-semibold uppercase text-zinc-600">
+                  <thead className="bg-zinc-50 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500">
                     <tr>
-                      <th scope="col" className="px-4 py-3">
+                      <th scope="col" className="px-4 py-3.5">
                         Customer
                       </th>
-                      <th scope="col" className="px-4 py-3">
+                      <th scope="col" className="px-4 py-3.5">
                         Date
                       </th>
-                      <th scope="col" className="px-4 py-3 text-right">
+                      <th scope="col" className="px-4 py-3.5 text-right">
                         Amount
                       </th>
-                      <th scope="col" className="px-4 py-3 text-right">
+                      <th scope="col" className="px-4 py-3.5 text-right">
                         Receipt
                       </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-200">
                     {latestPayments.map((payment) => (
-                      <tr key={payment.id}>
-                        <td className="whitespace-nowrap px-4 py-3 font-medium text-zinc-950">
+                      <tr key={payment.id} className="transition-colors hover:bg-zinc-50/80">
+                        <td className="whitespace-nowrap px-4 py-4 font-medium text-zinc-950">
                           {payment.customer.name} ({payment.customer.code})
                         </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
+                        <td className="whitespace-nowrap px-4 py-4 text-zinc-600">
                           {formatDate(payment.paymentDate)}
                         </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-zinc-600">
+                        <td className="whitespace-nowrap px-4 py-4 text-right font-medium text-zinc-600">
                           {formatAmount(payment.amount)}
                         </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-right">
+                        <td className="whitespace-nowrap px-4 py-4 text-right">
                           <Link
                             href={`/payments/${payment.id}`}
-                            className="inline-flex h-8 items-center justify-center rounded-md border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
+                            className="inline-flex h-9 items-center justify-center rounded-full border border-zinc-300 bg-white px-3.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 hover:text-zinc-950"
                           >
                             Receipt
                           </Link>
@@ -350,35 +352,35 @@ export default async function Home() {
             )}
           </section>
 
-          <section className="rounded-md border border-zinc-200 bg-white p-6">
+          <section className="rounded-2xl border border-zinc-200/80 bg-white/90 p-6 shadow-sm shadow-zinc-950/[0.03]">
             <div className="flex items-center justify-between gap-4">
-              <h2 className="text-lg font-semibold tracking-tight">
+              <h2 className="text-lg font-medium tracking-tight">
                 High Outstanding Customers
               </h2>
               <Link
                 href="/outstanding"
-                className="text-sm font-medium text-zinc-700 hover:text-zinc-950"
+                className="text-sm font-medium text-zinc-600 transition-colors hover:text-zinc-950"
               >
                 View report
               </Link>
             </div>
 
             {highOutstandingCustomers.length === 0 ? (
-              <div className="mt-4 rounded-md border border-dashed border-zinc-300 bg-zinc-50 p-8 text-center text-sm text-zinc-600">
+              <div className="mt-4 rounded-xl border border-dashed border-zinc-300 bg-zinc-50/80 p-8 text-center text-sm text-zinc-600">
                 No outstanding customer balances.
               </div>
             ) : (
-              <div className="mt-4 overflow-hidden rounded-md border border-zinc-200">
+              <div className="mt-4 overflow-hidden rounded-xl border border-zinc-200/80">
                 <table className="min-w-full divide-y divide-zinc-200 text-sm">
-                  <thead className="bg-zinc-100 text-left text-xs font-semibold uppercase text-zinc-600">
+                  <thead className="bg-zinc-50 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500">
                     <tr>
-                      <th scope="col" className="px-4 py-3">
+                      <th scope="col" className="px-4 py-3.5">
                         Customer
                       </th>
-                      <th scope="col" className="px-4 py-3">
+                      <th scope="col" className="px-4 py-3.5">
                         Code
                       </th>
-                      <th scope="col" className="px-4 py-3 text-right">
+                      <th scope="col" className="px-4 py-3.5 text-right">
                         Outstanding
                       </th>
                     </tr>
@@ -388,22 +390,22 @@ export default async function Home() {
                       const href = `/outstanding?customerId=${customer.id}`;
 
                       return (
-                        <tr key={customer.id} className="hover:bg-zinc-50">
+                        <tr key={customer.id} className="transition-colors hover:bg-zinc-50/80">
                           <td className="whitespace-nowrap font-medium">
                             <Link
                               href={href}
-                              className="block px-4 py-3 font-semibold text-zinc-950"
+                              className="block px-4 py-4 font-medium text-zinc-950"
                             >
                               {customer.name}
                             </Link>
                           </td>
                           <td className="whitespace-nowrap text-zinc-600">
-                            <Link href={href} className="block px-4 py-3">
+                            <Link href={href} className="block px-4 py-4">
                               {customer.code}
                             </Link>
                           </td>
                           <td className="whitespace-nowrap text-right font-medium text-zinc-600">
-                            <Link href={href} className="block px-4 py-3">
+                            <Link href={href} className="block px-4 py-4">
                               {formatAmount(customer.outstanding)}
                             </Link>
                           </td>

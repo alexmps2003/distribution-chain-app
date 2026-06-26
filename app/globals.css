@@ -258,4 +258,18 @@
   [data-slot] {
     font-family: var(--app-font) !important;
   }
+  a,
+  button,
+  input,
+  select,
+  textarea {
+    transition-duration: 150ms;
+  }
+  thead {
+    color: rgb(113 113 122);
+  }
+  tbody tr {
+    transition-property: background-color, color, box-shadow;
+    transition-duration: 150ms;
+  }
 }
