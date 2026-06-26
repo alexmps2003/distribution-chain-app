@@ -1,13 +1,18 @@
 import Link from "next/link";
 import { Prisma } from "@prisma/client";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getValidationErrorMessage } from "@/lib/validation/errors";
 import { parsePaymentFormData } from "@/lib/validation/payment";
 
 import CustomerSelect from "./CustomerSelect";
-import PaymentMethodEntry from "./PaymentMethodEntry";
+import PaymentMethodEntry, {
+  type InitialPaymentMethodEntryState,
+  type PaymentMethod,
+} from "./PaymentMethodEntry";
 
+const PAYMENT_FORM_COOKIE = "last-invalid-payment-form";
 
 type OutstandingInvoice = Prisma.InvoiceGetPayload<{
   include: {
@@ -46,6 +51,172 @@ function redirectPaymentError(message: string, customerId?: string): never {
   redirect(`/payments/new?${params.toString()}`);
 }
 
+type PreservedPaymentFormValues = Record<string, string[]>;
+
+function getPreservedValue(
+  values: PreservedPaymentFormValues | undefined,
+  name: string,
+) {
+  return values?.[name]?.[0] ?? "";
+}
+
+function serializeFormData(formData: FormData) {
+  const values: PreservedPaymentFormValues = {};
+
+  for (const [key, value] of formData.entries()) {
+    if (typeof value !== "string") {
+      continue;
+    }
+
+    values[key] = [...(values[key] ?? []), value];
+  }
+
+  return JSON.stringify(values);
+}
+
+function parsePreservedPaymentForm(value: string | undefined) {
+  if (!value) {
+    return undefined;
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return undefined;
+    }
+
+    return Object.fromEntries(
+      Object.entries(parsed).map(([key, entry]) => [
+        key,
+        Array.isArray(entry)
+          ? entry.filter((item): item is string => typeof item === "string")
+          : [],
+      ]),
+    );
+  } catch {
+    return undefined;
+  }
+}
+
+function getPaymentMethodDetails({
+  chequeBank,
+  chequeDate,
+  chequeNumber,
+  method,
+  referenceNumber,
+}: {
+  chequeBank: string;
+  chequeDate: string;
+  chequeNumber: string;
+  method: PaymentMethod;
+  referenceNumber: string;
+}) {
+  if (method === "CHEQUE") {
+    return [chequeNumber ? `Cheque ${chequeNumber}` : "", chequeBank, chequeDate]
+      .filter(Boolean)
+      .join(" - ");
+  }
+
+  if (method === "BANK_TRANSFER" || method === "CARD") {
+    return referenceNumber ? `Ref ${referenceNumber}` : "";
+  }
+
+  return "";
+}
+
+function buildInitialPaymentMethodState(
+  values: PreservedPaymentFormValues | undefined,
+  invoices: { id: string; invoiceNumber: string }[],
+): InitialPaymentMethodEntryState | undefined {
+  if (!values) {
+    return undefined;
+  }
+
+  const selectedInvoices = Object.fromEntries(
+    (values.invoiceIds ?? []).map((invoiceId) => [invoiceId, true]),
+  );
+  const allocationAmounts = Object.fromEntries(
+    (values.invoiceIds ?? []).map((invoiceId) => [
+      invoiceId,
+      getPreservedValue(values, `allocationAmount:${invoiceId}`),
+    ]),
+  );
+  const invoiceNumberById = new Map(
+    invoices.map((invoice) => [invoice.id, invoice.invoiceNumber]),
+  );
+  const addedMethods = (values.addedMethodIds ?? []).flatMap((clientId) => {
+    const method = getPreservedValue(values, `addedMethod:${clientId}:method`);
+
+    if (
+      method !== "CASH" &&
+      method !== "CHEQUE" &&
+      method !== "BANK_TRANSFER" &&
+      method !== "CARD"
+    ) {
+      return [];
+    }
+
+    const restoredMethod: PaymentMethod = method;
+
+    const chequeBank = getPreservedValue(
+      values,
+      `addedMethod:${clientId}:chequeBankName`,
+    );
+    const chequeDate = getPreservedValue(
+      values,
+      `addedMethod:${clientId}:chequeDate`,
+    );
+    const chequeNumber = getPreservedValue(
+      values,
+      `addedMethod:${clientId}:chequeNumber`,
+    );
+    const referenceNumber =
+      getPreservedValue(values, `addedMethod:${clientId}:bankReference`) ||
+      getPreservedValue(values, `addedMethod:${clientId}:cardReference`);
+
+    return [
+      {
+        id: clientId,
+        method: restoredMethod,
+        amount: getPreservedValue(values, `addedMethod:${clientId}:amount`),
+        details: getPaymentMethodDetails({
+          chequeBank,
+          chequeDate,
+          chequeNumber,
+          method: restoredMethod,
+          referenceNumber,
+        }),
+        chequeNumber: chequeNumber || undefined,
+        chequeBank: chequeBank || undefined,
+        chequeDate: chequeDate || undefined,
+        bankReference:
+          restoredMethod === "BANK_TRANSFER"
+            ? referenceNumber || undefined
+            : undefined,
+        cardReference:
+          restoredMethod === "CARD" ? referenceNumber || undefined : undefined,
+        allocations: (
+          values[`addedMethod:${clientId}:invoiceIds`] ?? []
+        ).map((invoiceId) => ({
+          invoiceId,
+          invoiceNumber: invoiceNumberById.get(invoiceId) ?? invoiceId,
+          amount: getPreservedValue(
+            values,
+            `addedMethod:${clientId}:allocation:${invoiceId}`,
+          ),
+        })),
+      },
+    ];
+  });
+
+  return {
+    addedMethods,
+    allocationAmounts,
+    selectedInvoices,
+  };
+}
+
 function sumDecimals(values: Prisma.Decimal[]) {
   return values.reduce(
     (total, value) => total.plus(value),
@@ -70,6 +241,15 @@ async function createPayment(formData: FormData) {
   try {
     paymentInput = parsePaymentFormData(formData);
   } catch (validationError) {
+    const cookieStore = await cookies();
+
+    cookieStore.set(PAYMENT_FORM_COOKIE, serializeFormData(formData), {
+      httpOnly: true,
+      maxAge: 300,
+      path: "/payments/new",
+      sameSite: "lax",
+    });
+
     redirectPaymentError(
       getValidationErrorMessage(validationError),
       submittedCustomerId || undefined,
@@ -237,6 +417,10 @@ async function createPayment(formData: FormData) {
     }
   });
 
+  const cookieStore = await cookies();
+
+  cookieStore.delete(PAYMENT_FORM_COOKIE);
+
   redirect("/payments");
 }
 
@@ -246,6 +430,10 @@ export default async function NewPaymentPage(props: {
   const searchParams = await props.searchParams;
   const customerId = searchParams?.customerId;
   const error = searchParams?.error;
+  const cookieStore = await cookies();
+  const preservedPaymentForm = error
+    ? parsePreservedPaymentForm(cookieStore.get(PAYMENT_FORM_COOKIE)?.value)
+    : undefined;
 
   const customers = await prisma.customer.findMany({
     where: { isActive: true },
@@ -300,6 +488,10 @@ export default async function NewPaymentPage(props: {
       };
     })
     .filter((invoice) => Number(invoice.outstandingAmount) > 0);
+  const initialPaymentMethodState = buildInitialPaymentMethodState(
+    preservedPaymentForm,
+    allocationInvoices,
+  );
 
   return (
     <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
@@ -321,7 +513,10 @@ export default async function NewPaymentPage(props: {
           </Link>
         </div>
 
-        <form className="grid gap-6 rounded-md border border-zinc-200 bg-white p-6">
+        <form
+          noValidate
+          className="grid gap-6 rounded-md border border-zinc-200 bg-white p-6"
+        >
           {error ? (
             <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
               {error}
@@ -342,6 +537,10 @@ export default async function NewPaymentPage(props: {
                 name="paymentDate"
                 type="date"
                 required
+                defaultValue={getPreservedValue(
+                  preservedPaymentForm,
+                  "paymentDate",
+                )}
               />
             </div>
 
@@ -350,6 +549,7 @@ export default async function NewPaymentPage(props: {
               <textarea
                 name="notes"
                 placeholder="Optional notes about this payment..."
+                defaultValue={getPreservedValue(preservedPaymentForm, "notes")}
                 className="h-20 resize-none rounded-md border border-zinc-300 bg-white p-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
               />
             </label>
@@ -357,6 +557,7 @@ export default async function NewPaymentPage(props: {
 
           <PaymentMethodEntry
             customerId={customerId}
+            initialState={initialPaymentMethodState}
             invoices={allocationInvoices}
             saveAction={createPayment}
           />
@@ -372,17 +573,15 @@ function Field({
   name,
   type = "text",
   required = false,
-  min,
-  step,
   placeholder,
+  defaultValue,
 }: {
   label: string;
   name: string;
   type?: string;
   required?: boolean;
-  min?: string;
-  step?: string;
   placeholder?: string;
+  defaultValue?: string;
 }) {
   return (
     <label className="flex flex-col gap-2 text-sm font-medium text-zinc-800">
@@ -390,10 +589,8 @@ function Field({
       <input
         name={name}
         type={type}
-        required={required}
-        min={min}
-        step={step}
         placeholder={placeholder}
+        defaultValue={defaultValue}
         className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
       />
     </label>

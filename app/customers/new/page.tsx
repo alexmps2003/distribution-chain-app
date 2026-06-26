@@ -4,6 +4,49 @@ import { prisma } from "@/lib/prisma";
 import { getValidationErrorMessage } from "@/lib/validation/errors";
 import { parseCustomerFormData } from "@/lib/validation/customer";
 
+const customerFormFields = [
+  "address",
+  "area",
+  "assignedCollector",
+  "assignedSalesRep",
+  "code",
+  "contactPerson",
+  "creditLimit",
+  "email",
+  "name",
+  "ownerName",
+  "paymentTermsDays",
+  "phone",
+  "routeName",
+  "whatsappNumber",
+] as const;
+
+type CustomerSearchParams = {
+  [key: string]: string | string[] | undefined;
+  error?: string;
+};
+
+function getFormValue(
+  searchParams: CustomerSearchParams,
+  name: string,
+): string | undefined {
+  const value = searchParams[name];
+
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function buildInvalidCustomerHref(formData: FormData, message: string) {
+  const params = new URLSearchParams({ error: message });
+
+  for (const field of customerFormFields) {
+    const value = formData.get(field);
+
+    params.set(field, typeof value === "string" ? value : "");
+  }
+
+  return `/customers/new?${params.toString()}`;
+}
+
 function ErrorMessage({ message }: { message?: string }) {
   if (!message) {
     return null;
@@ -19,9 +62,10 @@ function ErrorMessage({ message }: { message?: string }) {
 export default async function NewCustomerPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<CustomerSearchParams>;
 }) {
-  const { error } = await searchParams;
+  const submittedValues = await searchParams;
+  const error = getFormValue(submittedValues, "error");
 
   async function createCustomer(formData: FormData) {
     "use server";
@@ -32,9 +76,10 @@ export default async function NewCustomerPage({
       customer = parseCustomerFormData(formData);
     } catch (validationError) {
       redirect(
-        `/customers/new?error=${encodeURIComponent(
+        buildInvalidCustomerHref(
+          formData,
           getValidationErrorMessage(validationError),
-        )}`,
+        ),
       );
     }
 
@@ -82,37 +127,86 @@ export default async function NewCustomerPage({
 
         <form
           action={createCustomer}
+          noValidate
           className="grid gap-6 rounded-md border border-zinc-200 bg-white p-6"
         >
           <ErrorMessage message={error} />
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Code" name="code" required />
-            <Field label="Name" name="name" required />
-            <Field label="Owner Name" name="ownerName" />
-            <Field label="Contact Person" name="contactPerson" />
-            <Field label="Phone" name="phone" />
-            <Field label="WhatsApp Number" name="whatsappNumber" />
-            <Field label="Email" name="email" type="email" />
-            <Field label="Address" name="address" />
-            <Field label="Area" name="area" />
-            <Field label="Route Name" name="routeName" />
-            <Field label="Assigned Sales Rep" name="assignedSalesRep" />
-            <Field label="Assigned Collector" name="assignedCollector" />
+            <Field
+              label="Code"
+              name="code"
+              required
+              defaultValue={getFormValue(submittedValues, "code")}
+            />
+            <Field
+              label="Name"
+              name="name"
+              required
+              defaultValue={getFormValue(submittedValues, "name")}
+            />
+            <Field
+              label="Owner Name"
+              name="ownerName"
+              defaultValue={getFormValue(submittedValues, "ownerName")}
+            />
+            <Field
+              label="Contact Person"
+              name="contactPerson"
+              defaultValue={getFormValue(submittedValues, "contactPerson")}
+            />
+            <Field
+              label="Phone"
+              name="phone"
+              defaultValue={getFormValue(submittedValues, "phone")}
+            />
+            <Field
+              label="WhatsApp Number"
+              name="whatsappNumber"
+              defaultValue={getFormValue(submittedValues, "whatsappNumber")}
+            />
+            <Field
+              label="Email"
+              name="email"
+              defaultValue={getFormValue(submittedValues, "email")}
+            />
+            <Field
+              label="Address"
+              name="address"
+              defaultValue={getFormValue(submittedValues, "address")}
+            />
+            <Field
+              label="Area"
+              name="area"
+              defaultValue={getFormValue(submittedValues, "area")}
+            />
+            <Field
+              label="Route Name"
+              name="routeName"
+              defaultValue={getFormValue(submittedValues, "routeName")}
+            />
+            <Field
+              label="Assigned Sales Rep"
+              name="assignedSalesRep"
+              defaultValue={getFormValue(submittedValues, "assignedSalesRep")}
+            />
+            <Field
+              label="Assigned Collector"
+              name="assignedCollector"
+              defaultValue={getFormValue(submittedValues, "assignedCollector")}
+            />
             <Field
               label="Credit Limit"
               name="creditLimit"
               type="number"
-              step="0.01"
-              min="0"
               placeholder="0.00"
+              defaultValue={getFormValue(submittedValues, "creditLimit")}
             />
             <Field
               label="Payment Terms Days"
               name="paymentTermsDays"
               type="number"
-              min="0"
-              step="1"
               placeholder="0"
+              defaultValue={getFormValue(submittedValues, "paymentTermsDays")}
             />
           </div>
 
@@ -141,28 +235,24 @@ function Field({
   name,
   type = "text",
   required = false,
-  min,
-  step,
   placeholder,
+  defaultValue,
 }: {
   label: string;
   name: string;
   type?: string;
   required?: boolean;
-  min?: string;
-  step?: string;
   placeholder?: string;
+  defaultValue?: string;
 }) {
   return (
     <label className="flex flex-col gap-2 text-sm font-medium text-zinc-800">
-      {label}
+      {label} {required && <span className="text-red-500">*</span>}
       <input
         name={name}
         type={type}
-        required={required}
-        min={min}
-        step={step}
         placeholder={placeholder}
+        defaultValue={defaultValue}
         className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
       />
     </label>

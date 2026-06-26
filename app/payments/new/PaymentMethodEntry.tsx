@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { BANK_OPTIONS } from "@/lib/bank-options";
 
-type PaymentMethod = "CASH" | "CHEQUE" | "BANK_TRANSFER" | "CARD";
+export type PaymentMethod = "CASH" | "CHEQUE" | "BANK_TRANSFER" | "CARD";
 
 type AllocationInvoice = {
   id: string;
@@ -30,6 +30,12 @@ type AddedMethod = {
     invoiceNumber: string;
     amount: string;
   }[];
+};
+
+export type InitialPaymentMethodEntryState = {
+  addedMethods?: AddedMethod[];
+  allocationAmounts?: Record<string, string>;
+  selectedInvoices?: Record<string, boolean>;
 };
 
 const paymentMethods: { id: PaymentMethod; label: string }[] = [
@@ -75,19 +81,21 @@ function getMethodLabel(method: PaymentMethod) {
 
 export default function PaymentMethodEntry({
   customerId,
+  initialState,
   invoices,
   saveAction,
 }: {
   customerId?: string;
+  initialState?: InitialPaymentMethodEntryState;
   invoices: AllocationInvoice[];
   saveAction: (formData: FormData) => void | Promise<void>;
 }) {
   const [selectedInvoices, setSelectedInvoices] = useState<
     Record<string, boolean>
-  >({});
+  >(initialState?.selectedInvoices ?? {});
   const [allocationAmounts, setAllocationAmounts] = useState<
     Record<string, string>
-  >({});
+  >(initialState?.allocationAmounts ?? {});
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | "">("");
   const [methodAmount, setMethodAmount] = useState("");
   const [chequeNumber, setChequeNumber] = useState("");
@@ -97,7 +105,9 @@ export default function PaymentMethodEntry({
   const [methodAllocationAmounts, setMethodAllocationAmounts] = useState<
     Record<string, string>
   >({});
-  const [addedMethods, setAddedMethods] = useState<AddedMethod[]>([]);
+  const [addedMethods, setAddedMethods] = useState<AddedMethod[]>(
+    initialState?.addedMethods ?? [],
+  );
   const [methodMessage, setMethodMessage] = useState("");
 
   const selectedAllocationInvoices = useMemo(() => {

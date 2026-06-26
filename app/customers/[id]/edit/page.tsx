@@ -4,13 +4,57 @@ import { prisma } from "@/lib/prisma";
 import { getValidationErrorMessage } from "@/lib/validation/errors";
 import { parseCustomerFormData } from "@/lib/validation/customer";
 
+const customerFormFields = [
+  "address",
+  "area",
+  "assignedCollector",
+  "assignedSalesRep",
+  "code",
+  "contactPerson",
+  "creditLimit",
+  "email",
+  "isActive",
+  "name",
+  "ownerName",
+  "paymentTermsDays",
+  "phone",
+  "routeName",
+  "whatsappNumber",
+] as const;
+
 interface EditCustomerPageProps {
   params: Promise<{
     id: string;
   }>;
   searchParams: Promise<{
+    [key: string]: string | string[] | undefined;
     error?: string;
   }>;
+}
+
+function getFormValue(
+  searchParams: Awaited<EditCustomerPageProps["searchParams"]>,
+  name: string,
+): string | undefined {
+  const value = searchParams[name];
+
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function buildInvalidCustomerHref(
+  customerId: string,
+  formData: FormData,
+  message: string,
+) {
+  const params = new URLSearchParams({ error: message });
+
+  for (const field of customerFormFields) {
+    const value = formData.get(field);
+
+    params.set(field, typeof value === "string" ? value : "");
+  }
+
+  return `/customers/${customerId}/edit?${params.toString()}`;
 }
 
 function ErrorMessage({ message }: { message?: string }) {
@@ -30,7 +74,8 @@ export default async function EditCustomerPage({
   searchParams,
 }: EditCustomerPageProps) {
   const { id } = await params;
-  const { error } = await searchParams;
+  const submittedValues = await searchParams;
+  const error = getFormValue(submittedValues, "error");
   const customer = await prisma.customer.findUnique({
     where: { id },
   });
@@ -48,9 +93,11 @@ export default async function EditCustomerPage({
       customerInput = parseCustomerFormData(formData);
     } catch (validationError) {
       redirect(
-        `/customers/${id}/edit?error=${encodeURIComponent(
+        buildInvalidCustomerHref(
+          id,
+          formData,
           getValidationErrorMessage(validationError),
-        )}`,
+        ),
       );
     }
 
@@ -100,6 +147,7 @@ export default async function EditCustomerPage({
 
         <form
           action={updateCustomer}
+          noValidate
           className="grid gap-6 rounded-md border border-zinc-200 bg-white p-6"
         >
           <ErrorMessage message={error} />
@@ -108,88 +156,126 @@ export default async function EditCustomerPage({
               label="Code"
               name="code"
               required
-              defaultValue={customer.code}
+              defaultValue={getFormValue(submittedValues, "code") ?? customer.code}
             />
             <Field
               label="Name"
               name="name"
               required
-              defaultValue={customer.name}
+              defaultValue={getFormValue(submittedValues, "name") ?? customer.name}
             />
             <Field
               label="Owner Name"
               name="ownerName"
-              defaultValue={customer.ownerName ?? ""}
+              defaultValue={
+                getFormValue(submittedValues, "ownerName") ??
+                customer.ownerName ??
+                ""
+              }
             />
             <Field
               label="Contact Person"
               name="contactPerson"
-              defaultValue={customer.contactPerson ?? ""}
+              defaultValue={
+                getFormValue(submittedValues, "contactPerson") ??
+                customer.contactPerson ??
+                ""
+              }
             />
             <Field
               label="Phone"
               name="phone"
-              defaultValue={customer.phone ?? ""}
+              defaultValue={
+                getFormValue(submittedValues, "phone") ?? customer.phone ?? ""
+              }
             />
             <Field
               label="WhatsApp Number"
               name="whatsappNumber"
-              defaultValue={customer.whatsappNumber ?? ""}
+              defaultValue={
+                getFormValue(submittedValues, "whatsappNumber") ??
+                customer.whatsappNumber ??
+                ""
+              }
             />
             <Field
               label="Email"
               name="email"
-              type="email"
-              defaultValue={customer.email ?? ""}
+              defaultValue={
+                getFormValue(submittedValues, "email") ?? customer.email ?? ""
+              }
             />
             <Field
               label="Address"
               name="address"
-              defaultValue={customer.address ?? ""}
+              defaultValue={
+                getFormValue(submittedValues, "address") ??
+                customer.address ??
+                ""
+              }
             />
             <Field
               label="Area"
               name="area"
-              defaultValue={customer.area ?? ""}
+              defaultValue={
+                getFormValue(submittedValues, "area") ?? customer.area ?? ""
+              }
             />
             <Field
               label="Route Name"
               name="routeName"
-              defaultValue={customer.routeName ?? ""}
+              defaultValue={
+                getFormValue(submittedValues, "routeName") ??
+                customer.routeName ??
+                ""
+              }
             />
             <Field
               label="Assigned Sales Rep"
               name="assignedSalesRep"
-              defaultValue={customer.assignedSalesRep ?? ""}
+              defaultValue={
+                getFormValue(submittedValues, "assignedSalesRep") ??
+                customer.assignedSalesRep ??
+                ""
+              }
             />
             <Field
               label="Assigned Collector"
               name="assignedCollector"
-              defaultValue={customer.assignedCollector ?? ""}
+              defaultValue={
+                getFormValue(submittedValues, "assignedCollector") ??
+                customer.assignedCollector ??
+                ""
+              }
             />
             <Field
               label="Credit Limit"
               name="creditLimit"
               type="number"
-              step="0.01"
-              min="0"
               placeholder="0.00"
-              defaultValue={customer.creditLimit.toString()}
+              defaultValue={
+                getFormValue(submittedValues, "creditLimit") ??
+                customer.creditLimit.toString()
+              }
             />
             <Field
               label="Payment Terms Days"
               name="paymentTermsDays"
               type="number"
-              min="0"
-              step="1"
               placeholder="0"
-              defaultValue={customer.paymentTermsDays.toString()}
+              defaultValue={
+                getFormValue(submittedValues, "paymentTermsDays") ??
+                customer.paymentTermsDays.toString()
+              }
             />
             <label className="flex flex-col gap-2 text-sm font-medium text-zinc-800">
               Is Active
               <select
                 name="isActive"
-                defaultValue={customer.isActive ? "true" : "false"}
+                defaultValue={
+                  getFormValue(submittedValues, "isActive") ??
+                  (customer.isActive ? "true" : "false")
+                }
                 className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
               >
                 <option value="true">Active</option>
@@ -223,8 +309,6 @@ function Field({
   name,
   type = "text",
   required = false,
-  min,
-  step,
   placeholder,
   defaultValue,
 }: {
@@ -232,20 +316,15 @@ function Field({
   name: string;
   type?: string;
   required?: boolean;
-  min?: string;
-  step?: string;
   placeholder?: string;
   defaultValue?: string;
 }) {
   return (
     <label className="flex flex-col gap-2 text-sm font-medium text-zinc-800">
-      {label}
+      {label} {required && <span className="text-red-500">*</span>}
       <input
         name={name}
         type={type}
-        required={required}
-        min={min}
-        step={step}
         placeholder={placeholder}
         defaultValue={defaultValue}
         className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"

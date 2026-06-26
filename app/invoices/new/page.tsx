@@ -4,6 +4,40 @@ import { prisma } from "@/lib/prisma";
 import { getValidationErrorMessage } from "@/lib/validation/errors";
 import { parseInvoiceFormData } from "@/lib/validation/invoice";
 
+const invoiceFormFields = [
+  "amount",
+  "customerId",
+  "dueDate",
+  "invoiceDate",
+  "invoiceNumber",
+] as const;
+
+type InvoiceSearchParams = {
+  [key: string]: string | string[] | undefined;
+  error?: string;
+};
+
+function getFormValue(
+  searchParams: InvoiceSearchParams,
+  name: string,
+): string | undefined {
+  const value = searchParams[name];
+
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function buildInvalidInvoiceHref(formData: FormData, message: string) {
+  const params = new URLSearchParams({ error: message });
+
+  for (const field of invoiceFormFields) {
+    const value = formData.get(field);
+
+    params.set(field, typeof value === "string" ? value : "");
+  }
+
+  return `/invoices/new?${params.toString()}`;
+}
+
 function ErrorMessage({ message }: { message?: string }) {
   if (!message) {
     return null;
@@ -19,9 +53,10 @@ function ErrorMessage({ message }: { message?: string }) {
 export default async function NewInvoicePage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<InvoiceSearchParams>;
 }) {
-  const { error } = await searchParams;
+  const submittedValues = await searchParams;
+  const error = getFormValue(submittedValues, "error");
   const customers = await prisma.customer.findMany({
     where: { isActive: true },
     select: { id: true, name: true, code: true },
@@ -37,9 +72,10 @@ export default async function NewInvoicePage({
       invoice = parseInvoiceFormData(formData);
     } catch (validationError) {
       redirect(
-        `/invoices/new?error=${encodeURIComponent(
+        buildInvalidInvoiceHref(
+          formData,
           getValidationErrorMessage(validationError),
-        )}`,
+        ),
       );
     }
 
@@ -79,6 +115,7 @@ export default async function NewInvoicePage({
 
         <form
           action={createInvoice}
+          noValidate
           className="grid gap-6 rounded-md border border-zinc-200 bg-white p-6"
         >
           <ErrorMessage message={error} />
@@ -87,7 +124,7 @@ export default async function NewInvoicePage({
               Customer <span className="text-red-500">*</span>
               <select
                 name="customerId"
-                required
+                defaultValue={getFormValue(submittedValues, "customerId") ?? ""}
                 className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
               >
                 <option value="">Select a customer</option>
@@ -99,22 +136,32 @@ export default async function NewInvoicePage({
               </select>
             </label>
 
-            <Field label="Invoice Number" name="invoiceNumber" required />
+            <Field
+              label="Invoice Number"
+              name="invoiceNumber"
+              required
+              defaultValue={getFormValue(submittedValues, "invoiceNumber")}
+            />
             <Field
               label="Invoice Date"
               name="invoiceDate"
               type="date"
               required
+              defaultValue={getFormValue(submittedValues, "invoiceDate")}
             />
-            <Field label="Due Date" name="dueDate" type="date" />
+            <Field
+              label="Due Date"
+              name="dueDate"
+              type="date"
+              defaultValue={getFormValue(submittedValues, "dueDate")}
+            />
             <Field
               label="Amount"
               name="amount"
               type="number"
-              step="0.01"
-              min="0"
               placeholder="0.00"
               required
+              defaultValue={getFormValue(submittedValues, "amount")}
             />
           </div>
 
@@ -143,17 +190,15 @@ function Field({
   name,
   type = "text",
   required = false,
-  min,
-  step,
   placeholder,
+  defaultValue,
 }: {
   label: string;
   name: string;
   type?: string;
   required?: boolean;
-  min?: string;
-  step?: string;
   placeholder?: string;
+  defaultValue?: string;
 }) {
   return (
     <label className="flex flex-col gap-2 text-sm font-medium text-zinc-800">
@@ -161,10 +206,8 @@ function Field({
       <input
         name={name}
         type={type}
-        required={required}
-        min={min}
-        step={step}
         placeholder={placeholder}
+        defaultValue={defaultValue}
         className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
       />
     </label>
