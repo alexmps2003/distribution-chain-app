@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import * as crypto from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import {
@@ -14,7 +14,17 @@ import { CreatePaymentDto } from './dto/create-payment.dto';
 export class PaymentsService {
   constructor(private readonly databaseService: DatabaseService) {}
 
+  private sumMoney(values: string[]): number {
+    return values.reduce((sum, value) => sum + Number(value), 0);
+  }
+
   async create(dto: CreatePaymentDto) {
+    const methodTotal = this.sumMoney(dto.methods.map((method) => method.amount));
+
+    if (Number(dto.amount) !== methodTotal) {
+      throw new BadRequestException('Payment amount must equal payment method total');
+    }
+
     return this.databaseService.db.transaction(async (tx) => {
       const [payment] = await tx
         .insert(payments)
