@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Prisma } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { withToast } from "@/lib/toast";
 import ReverseChequeButton from "./ReverseChequeButton";
 import UndoChequeReversalButton from "./UndoChequeReversalButton";
 
@@ -165,7 +166,7 @@ async function reverseCheque(formData: FormData) {
     }
   });
 
-  redirect(`/cheques/${chequeId}`);
+  redirect(withToast(`/cheques/${chequeId}`, "success", "Cheque reversed"));
 }
 
 async function undoChequeReversal(formData: FormData) {
@@ -265,7 +266,9 @@ async function undoChequeReversal(formData: FormData) {
     }
   });
 
-  redirect(`/cheques/${chequeId}`);
+  redirect(
+    withToast(`/cheques/${chequeId}`, "success", "Cheque reversal undone"),
+  );
 }
 
 function DetailItem({ label, value }: { label: string; value: string }) {

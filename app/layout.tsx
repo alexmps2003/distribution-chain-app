@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import AppNav from "@/components/AppNav";
+import AppToastListener from "@/components/AppToastListener";
+import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -17,6 +20,10 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <AppNav />
         {children}
+        <Suspense fallback={null}>
+          <AppToastListener />
+        </Suspense>
+        <Toaster richColors closeButton duration={3500} />
       </body>
     </html>
   );

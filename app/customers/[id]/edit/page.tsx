@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { withToast } from "@/lib/toast";
 import { getValidationErrorMessage } from "@/lib/validation/errors";
 import { parseCustomerFormData } from "@/lib/validation/customer";
 
@@ -122,7 +123,7 @@ export default async function EditCustomerPage({
       },
     });
 
-    redirect(`/customers/${id}`);
+    redirect(withToast(`/customers/${id}`, "success", "Customer updated"));
   }
 
   return (

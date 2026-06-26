@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { withToast } from "@/lib/toast";
 import { getValidationErrorMessage } from "@/lib/validation/errors";
 import { parsePaymentFormData } from "@/lib/validation/payment";
 
@@ -421,7 +422,7 @@ async function createPayment(formData: FormData) {
 
   cookieStore.delete(PAYMENT_FORM_COOKIE);
 
-  redirect("/payments");
+  redirect(withToast("/payments", "success", "Payment recorded"));
 }
 
 export default async function NewPaymentPage(props: {

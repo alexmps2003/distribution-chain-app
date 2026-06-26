@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { withToast } from "@/lib/toast";
 import { getValidationErrorMessage } from "@/lib/validation/errors";
 import { parseInvoiceFormData } from "@/lib/validation/invoice";
 
@@ -90,7 +91,7 @@ export default async function NewInvoicePage({
       },
     });
 
-    redirect("/invoices");
+    redirect(withToast("/invoices", "success", "Invoice created"));
   }
 
   return (
