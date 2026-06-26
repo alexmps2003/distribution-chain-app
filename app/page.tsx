@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import DashboardCharts from "./DashboardCharts";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
@@ -42,6 +43,164 @@ function getActivePaidAmount(payments: {
       })
       .map((allocation) => allocation.amount),
   );
+}
+
+function getInvoiceDisplayStatus(
+  invoiceTotal: Prisma.Decimal,
+  paidAmount: Prisma.Decimal,
+) {
+  if (paidAmount.gte(invoiceTotal)) {
+    return "PAID";
+  }
+
+  if (paidAmount.gt(0)) {
+    return "PARTIALLY_PAID";
+  }
+
+  return "UNPAID";
+}
+
+function getMonthLabel(date: Date) {
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function getSearchParamValue(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function getOutstandingLimit(value: string | string[] | undefined) {
+  const selectedValue = getSearchParamValue(value);
+  const limit = Number(selectedValue);
+
+  return limit === 20 || limit === 50 ? limit : 10;
+}
+
+type InvoiceStatusRange =
+  | "allTime"
+  | "last3Months"
+  | "last6Months"
+  | "lastMonth"
+  | "thisMonth"
+  | "thisYear";
+
+type CollectionsRange =
+  | "allTime"
+  | "last3Months"
+  | "last6Months"
+  | "lastYear"
+  | "thisYear";
+
+function getInvoiceStatusRange(
+  value: string | string[] | undefined,
+): InvoiceStatusRange {
+  const selectedValue = getSearchParamValue(value);
+
+  if (
+    selectedValue === "thisMonth" ||
+    selectedValue === "lastMonth" ||
+    selectedValue === "last3Months" ||
+    selectedValue === "last6Months" ||
+    selectedValue === "thisYear"
+  ) {
+    return selectedValue;
+  }
+
+  return "allTime";
+}
+
+function getCollectionsRange(
+  value: string | string[] | undefined,
+): CollectionsRange {
+  const selectedValue = getSearchParamValue(value);
+
+  if (
+    selectedValue === "last3Months" ||
+    selectedValue === "last6Months" ||
+    selectedValue === "lastYear" ||
+    selectedValue === "allTime"
+  ) {
+    return selectedValue;
+  }
+
+  return "thisYear";
+}
+
+function startOfMonth(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function addMonths(date: Date, months: number) {
+  return new Date(date.getFullYear(), date.getMonth() + months, 1);
+}
+
+function getInvoiceStatusDateRange(range: InvoiceStatusRange, today: Date) {
+  const thisMonthStart = startOfMonth(today);
+
+  if (range === "thisMonth") {
+    return { end: addMonths(thisMonthStart, 1), start: thisMonthStart };
+  }
+
+  if (range === "lastMonth") {
+    return { end: thisMonthStart, start: addMonths(thisMonthStart, -1) };
+  }
+
+  if (range === "last3Months") {
+    return { end: addMonths(thisMonthStart, 1), start: addMonths(thisMonthStart, -2) };
+  }
+
+  if (range === "last6Months") {
+    return { end: addMonths(thisMonthStart, 1), start: addMonths(thisMonthStart, -5) };
+  }
+
+  if (range === "thisYear") {
+    return {
+      end: new Date(today.getFullYear() + 1, 0, 1),
+      start: new Date(today.getFullYear(), 0, 1),
+    };
+  }
+
+  return {};
+}
+
+function getCollectionsDateRange(range: CollectionsRange, today: Date) {
+  const thisMonthStart = startOfMonth(today);
+
+  if (range === "last3Months") {
+    return { end: addMonths(thisMonthStart, 1), start: addMonths(thisMonthStart, -2) };
+  }
+
+  if (range === "last6Months") {
+    return { end: addMonths(thisMonthStart, 1), start: addMonths(thisMonthStart, -5) };
+  }
+
+  if (range === "lastYear") {
+    return {
+      end: new Date(today.getFullYear(), 0, 1),
+      start: new Date(today.getFullYear() - 1, 0, 1),
+    };
+  }
+
+  if (range === "allTime") {
+    return {};
+  }
+
+  return {
+    end: new Date(today.getFullYear() + 1, 0, 1),
+    start: new Date(today.getFullYear(), 0, 1),
+  };
+}
+
+function isDateInRange(
+  date: Date,
+  range: {
+    end?: Date;
+    start?: Date;
+  },
+) {
+  return (!range.start || date >= range.start) && (!range.end || date < range.end);
 }
 
 function KpiCard({
@@ -125,13 +284,30 @@ const moduleCards = [
   },
 ];
 
-export default async function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    collectionsRange?: string | string[];
+    invoiceStatusRange?: string | string[];
+    outstandingLimit?: string | string[];
+  }>;
+}) {
+  const {
+    collectionsRange: collectionsRangeParam,
+    invoiceStatusRange: invoiceStatusRangeParam,
+    outstandingLimit: outstandingLimitParam,
+  } = await searchParams;
+  const outstandingLimit = getOutstandingLimit(outstandingLimitParam);
+  const invoiceStatusRange = getInvoiceStatusRange(invoiceStatusRangeParam);
+  const collectionsRange = getCollectionsRange(collectionsRangeParam);
   const [customerCount, invoices, latestPayments, activeCheques, reversedCheques] =
     await Promise.all([
       prisma.customer.count(),
       prisma.invoice.findMany({
         select: {
           amount: true,
+          invoiceDate: true,
           customer: {
             select: {
               id: true,
@@ -142,6 +318,11 @@ export default async function Home() {
           payments: {
             select: {
               amount: true,
+              payment: {
+                select: {
+                  paymentDate: true,
+                },
+              },
               paymentPart: {
                 select: {
                   status: true,
@@ -217,6 +398,78 @@ export default async function Home() {
   const highOutstandingCustomers = Array.from(outstandingByCustomer.values())
     .sort((left, right) => right.outstanding.comparedTo(left.outstanding))
     .slice(0, 5);
+  const topOutstandingCustomers = Array.from(outstandingByCustomer.values())
+    .sort((left, right) => right.outstanding.comparedTo(left.outstanding))
+    .slice(0, outstandingLimit)
+    .map((customer) => ({
+      customer: customer.name,
+      outstanding: Number(customer.outstanding.toString()),
+    }));
+  const today = new Date();
+  const invoiceStatusDateRange = getInvoiceStatusDateRange(
+    invoiceStatusRange,
+    today,
+  );
+  const collectionsDateRange = getCollectionsDateRange(collectionsRange, today);
+  const filteredInvoiceStatusInvoices = invoices.filter((invoice) => {
+    return isDateInRange(invoice.invoiceDate, invoiceStatusDateRange);
+  });
+  const invoiceStatusCounts = filteredInvoiceStatusInvoices.reduce(
+    (counts, invoice) => {
+      const paidAmount = getActivePaidAmount(invoice.payments);
+      const status = getInvoiceDisplayStatus(invoice.amount, paidAmount);
+
+      if (status === "PAID") {
+        return { ...counts, paid: counts.paid + 1 };
+      }
+
+      if (status === "PARTIALLY_PAID") {
+        return { ...counts, partiallyPaid: counts.partiallyPaid + 1 };
+      }
+
+      return { ...counts, unpaid: counts.unpaid + 1 };
+    },
+    { paid: 0, partiallyPaid: 0, unpaid: 0 },
+  );
+  const monthlyCollectionsByKey = new Map<
+    string,
+    { amount: Prisma.Decimal; date: Date; month: string }
+  >();
+
+  for (const invoice of invoices) {
+    for (const allocation of invoice.payments) {
+      if (
+        allocation.paymentPart !== null &&
+        allocation.paymentPart.status !== "ACTIVE"
+      ) {
+        continue;
+      }
+
+      const paymentDate = allocation.payment.paymentDate;
+
+      if (!isDateInRange(paymentDate, collectionsDateRange)) {
+        continue;
+      }
+
+      const monthKey = paymentDate.toISOString().slice(0, 7);
+      const existing = monthlyCollectionsByKey.get(monthKey);
+
+      monthlyCollectionsByKey.set(monthKey, {
+        amount: (existing?.amount ?? new Prisma.Decimal(0)).plus(
+          allocation.amount,
+        ),
+        date: existing?.date ?? paymentDate,
+        month: existing?.month ?? getMonthLabel(paymentDate),
+      });
+    }
+  }
+
+  const monthlyCollections = Array.from(monthlyCollectionsByKey.values())
+    .sort((left, right) => left.date.getTime() - right.date.getTime())
+    .map((month) => ({
+      amount: Number(month.amount.toString()),
+      month: month.month,
+    }));
 
   return (
     <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
@@ -263,6 +516,15 @@ export default async function Home() {
             value={formatAmount(totalPaid)}
           />
         </section>
+
+        <DashboardCharts
+          customerOutstanding={topOutstandingCustomers}
+          invoiceStatus={invoiceStatusCounts}
+          selectedCollectionsRange={collectionsRange}
+          selectedInvoiceStatusRange={invoiceStatusRange}
+          selectedOutstandingLimit={outstandingLimit}
+          monthlyCollections={monthlyCollections}
+        />
 
         <section>
           <h2 className="text-lg font-medium tracking-tight">
