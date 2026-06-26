@@ -1,7 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import * as crypto from 'node:crypto';
+import { eq } from 'drizzle-orm';
+import {
+  invoices,
+  paymentAllocations,
+  paymentParts,
+  payments,
+} from '../db/schema';
 import { DatabaseService } from '../database/database.service';
-import { paymentAllocations, paymentParts, payments } from '../db/schema';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 
 @Injectable()
@@ -57,6 +63,44 @@ export class PaymentsService {
 
         allocations.push(createdAllocation);
       }
+    }
+
+    const affectedInvoiceIds = [
+      ...new Set(allocations.map((allocation) => allocation.invoiceId)),
+    ];
+
+    for (const invoiceId of affectedInvoiceIds) {
+      const [invoice] = await this.databaseService.db
+        .select()
+        .from(invoices)
+        .where(eq(invoices.id, invoiceId));
+
+      if (!invoice) {
+        continue;
+      }
+
+      const invoiceAllocations = await this.databaseService.db
+        .select()
+        .from(paymentAllocations)
+        .where(eq(paymentAllocations.invoiceId, invoiceId));
+
+      const paidTotal = invoiceAllocations.reduce(
+        (sum, allocation) => sum + Number(allocation.amount),
+        0,
+      );
+
+      const invoiceAmount = Number(invoice.amount);
+      const status =
+        paidTotal >= invoiceAmount
+          ? 'PAID'
+          : paidTotal > 0
+            ? 'PARTIALLY_PAID'
+            : 'UNPAID';
+
+      await this.databaseService.db
+        .update(invoices)
+        .set({ status })
+        .where(eq(invoices.id, invoiceId));
     }
 
     return {
