@@ -25,6 +25,16 @@ export class PaymentsService {
       throw new BadRequestException('Payment amount must equal payment method total');
     }
 
+    const allocationTotal = this.sumMoney(
+      dto.methods.flatMap((method) =>
+        (method.allocations ?? []).map((allocation) => allocation.amount),
+      ),
+    );
+
+    if (Number(dto.amount) !== allocationTotal) {
+      throw new BadRequestException('Payment amount must equal allocation total');
+    }
+
     return this.databaseService.db.transaction(async (tx) => {
       const [payment] = await tx
         .insert(payments)
