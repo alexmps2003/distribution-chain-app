@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Param, Patch, Post } from '@nestjs/common';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { PaymentsService } from './payments.service';
 
@@ -9,5 +9,10 @@ export class PaymentsController {
   @Post()
   create(@Body() body: CreatePaymentDto) {
     return this.paymentsService.create(body);
+  }
+
+  @Patch(':id/reverse')
+  reverse(@Param('id') id: string) {
+    return this.paymentsService.reverse(id);
   }
 }

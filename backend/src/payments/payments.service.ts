@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import * as crypto from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import {
@@ -163,5 +167,25 @@ export class PaymentsService {
         allocations,
       };
     });
+  }
+
+  async reverse(id: string) {
+    const parts = await this.databaseService.db
+      .select()
+      .from(paymentParts)
+      .where(eq(paymentParts.paymentId, id));
+
+    if (parts.length === 0) {
+      throw new NotFoundException('Payment not found');
+    }
+
+    await this.databaseService.db
+      .update(paymentParts)
+      .set({ status: 'REVERSED' })
+      .where(eq(paymentParts.paymentId, id));
+
+    return {
+      message: 'Payment reversed',
+    };
   }
 }
