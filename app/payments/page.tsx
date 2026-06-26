@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { Prisma } from "@prisma/client";
+import { CreditCard } from "lucide-react";
+import EmptyState from "@/components/EmptyState";
 import { prisma } from "@/lib/prisma";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
@@ -225,9 +227,13 @@ export default async function PaymentsPage({
         </form>
 
         {payments.length === 0 ? (
-          <div className="rounded-md border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-600">
-            No payments found.
-          </div>
+          <EmptyState
+            icon={CreditCard}
+            title="No payments recorded"
+            description="Record a customer payment once invoices have been issued."
+            actionHref="/payments/new"
+            actionLabel="Record Payment"
+          />
         ) : (
           <div className="overflow-hidden rounded-md border border-zinc-200 bg-white">
             <div className="overflow-x-auto">

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Prisma } from "@prisma/client";
+import { FileText, Users } from "lucide-react";
 import { notFound } from "next/navigation";
+import EmptyState from "@/components/EmptyState";
 import { prisma } from "@/lib/prisma";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
@@ -255,9 +257,13 @@ export default async function InvoicesPage({
           />
 
           {invoiceRows.length === 0 ? (
-            <div className="rounded-md border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-600">
-              No invoices found for this customer and status filter.
-            </div>
+            <EmptyState
+              icon={FileText}
+              title="No invoices found"
+              description="Create an invoice for this customer or adjust the current status filter."
+              actionHref="/invoices/new"
+              actionLabel="Create Invoice"
+            />
           ) : (
             <div className="overflow-hidden rounded-md border border-zinc-200 bg-white">
               <div className="overflow-x-auto">
@@ -442,9 +448,13 @@ export default async function InvoicesPage({
         <InvoiceStatusFilters selectedStatus={selectedStatus} />
 
         {customerRows.length === 0 ? (
-          <div className="rounded-md border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-600">
-            No customers found.
-          </div>
+          <EmptyState
+            icon={Users}
+            title="No customers yet"
+            description="Add a customer before creating and reviewing invoices."
+            actionHref="/customers/new"
+            actionLabel="Add Customer"
+          />
         ) : (
           <div className="overflow-hidden rounded-md border border-zinc-200 bg-white">
             <div className="overflow-x-auto">

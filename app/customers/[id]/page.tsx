@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { Prisma } from "@prisma/client";
+import { FileText } from "lucide-react";
+import EmptyState from "@/components/EmptyState";
 import { prisma } from "@/lib/prisma";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
@@ -168,9 +170,13 @@ export default async function CustomerDetailPage({
             Invoice History
           </h2>
           {customer.invoices.length === 0 ? (
-            <div className="rounded-md border border-dashed border-zinc-300 bg-zinc-50 p-8 text-center text-sm text-zinc-600">
-              No invoices found.
-            </div>
+            <EmptyState
+              icon={FileText}
+              title="No invoices found"
+              description="Create an invoice to start building this customer's transaction history."
+              actionHref="/invoices/new"
+              actionLabel="Create Invoice"
+            />
           ) : (
             <div className="overflow-hidden rounded-md border border-zinc-200 bg-white">
               <div className="overflow-x-auto">

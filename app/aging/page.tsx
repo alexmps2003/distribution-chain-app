@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { Prisma } from "@prisma/client";
+import { Clock3 } from "lucide-react";
+import EmptyState from "@/components/EmptyState";
 import { prisma } from "@/lib/prisma";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
@@ -311,8 +313,12 @@ export default async function AgingPage() {
           </div>
 
           {customerRows.length === 0 ? (
-            <div className="mt-5 rounded-xl border border-dashed border-zinc-300 bg-zinc-50/80 p-8 text-center text-sm text-zinc-600">
-              No outstanding invoice balances found.
+            <div className="mt-5">
+              <EmptyState
+                icon={Clock3}
+                title="Nothing overdue"
+                description="There are currently no outstanding invoices to analyse."
+              />
             </div>
           ) : (
             <div className="mt-5 overflow-hidden rounded-xl border border-zinc-200/80">
@@ -423,8 +429,12 @@ export default async function AgingPage() {
           </div>
 
           {outstandingInvoices.length === 0 ? (
-            <div className="mt-5 rounded-xl border border-dashed border-zinc-300 bg-zinc-50/80 p-8 text-center text-sm text-zinc-600">
-              No unpaid invoices found.
+            <div className="mt-5">
+              <EmptyState
+                icon={Clock3}
+                title="Nothing overdue"
+                description="There are currently no outstanding invoices to analyse."
+              />
             </div>
           ) : (
             <div className="mt-5 overflow-hidden rounded-xl border border-zinc-200/80">

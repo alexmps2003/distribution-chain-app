@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { Prisma } from "@prisma/client";
+import { Users } from "lucide-react";
+import EmptyState from "@/components/EmptyState";
 import { prisma } from "@/lib/prisma";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
@@ -250,9 +252,13 @@ export default async function CustomersPage({
         </section>
 
         {filteredCustomerRows.length === 0 ? (
-          <div className="rounded-md border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-600">
-            No customers found.
-          </div>
+          <EmptyState
+            icon={Users}
+            title="No customers yet"
+            description="Create your first customer to begin recording invoices and payments."
+            actionHref="/customers/new"
+            actionLabel="Add Customer"
+          />
         ) : (
           <div className="overflow-hidden rounded-md border border-zinc-200 bg-white">
             <div className="overflow-x-auto">

@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { Prisma } from "@prisma/client";
+import { CircleCheck, CreditCard } from "lucide-react";
+import EmptyState from "@/components/EmptyState";
 import { prisma } from "@/lib/prisma";
 import DashboardCharts from "./DashboardCharts";
 
@@ -722,8 +724,14 @@ export default async function Home({
             </div>
 
             {latestPayments.length === 0 ? (
-              <div className="mt-4 rounded-xl border border-dashed border-zinc-300 bg-zinc-50/80 p-8 text-center text-sm text-zinc-600">
-                No payments recorded yet.
+              <div className="mt-4">
+                <EmptyState
+                  icon={CreditCard}
+                  title="No payments recorded"
+                  description="Record a payment to start seeing recent activity here."
+                  actionHref="/payments/new"
+                  actionLabel="Record Payment"
+                />
               </div>
             ) : (
               <div className="mt-4 overflow-hidden rounded-xl border border-zinc-200/80">
@@ -786,8 +794,12 @@ export default async function Home({
             </div>
 
             {highOutstandingCustomers.length === 0 ? (
-              <div className="mt-4 rounded-xl border border-dashed border-zinc-300 bg-zinc-50/80 p-8 text-center text-sm text-zinc-600">
-                No outstanding customer balances.
+              <div className="mt-4">
+                <EmptyState
+                  icon={CircleCheck}
+                  title="No outstanding balances"
+                  description="All invoices are fully paid."
+                />
               </div>
             ) : (
               <div className="mt-4 overflow-hidden rounded-xl border border-zinc-200/80">

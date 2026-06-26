@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { Landmark } from "lucide-react";
+import EmptyState from "@/components/EmptyState";
 import { prisma } from "@/lib/prisma";
 import { BANK_OPTIONS } from "@/lib/bank-options";
 
@@ -172,9 +174,13 @@ export default async function ChequesPage({
         </form>
 
         {cheques.length === 0 ? (
-          <div className="rounded-md border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-600">
-            No cheques found.
-          </div>
+          <EmptyState
+            icon={Landmark}
+            title="No cheques available"
+            description="Cheque payments will appear here after they are recorded."
+            actionHref="/payments/new"
+            actionLabel="Record Payment"
+          />
         ) : (
           <div className="overflow-hidden rounded-md border border-zinc-200 bg-white">
             <div className="overflow-x-auto">

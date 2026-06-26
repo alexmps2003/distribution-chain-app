@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { CircleCheck } from "lucide-react";
 import { notFound } from "next/navigation";
+import EmptyState from "@/components/EmptyState";
 import {
   getOutstandingReport,
   sumDecimals,
@@ -120,9 +122,11 @@ export default async function OutstandingPage({
                 </Link>
               </div>
             </div>
-            <div className="rounded-md border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-600">
-              No outstanding invoices found for this customer.
-            </div>
+            <EmptyState
+              icon={CircleCheck}
+              title="No outstanding balances"
+              description="All invoices are fully paid for this customer."
+            />
           </div>
         </main>
       );
@@ -291,9 +295,11 @@ export default async function OutstandingPage({
         </section>
 
         {customerRows.length === 0 ? (
-          <div className="rounded-md border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-600">
-            No outstanding customer balances found.
-          </div>
+          <EmptyState
+            icon={CircleCheck}
+            title="No outstanding balances"
+            description="All invoices are fully paid."
+          />
         ) : (
           <div className="overflow-hidden rounded-md border border-zinc-200 bg-white">
             <div className="overflow-x-auto">

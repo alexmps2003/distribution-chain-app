@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Prisma } from "@prisma/client";
+import { ReceiptText } from "lucide-react";
+import EmptyState from "@/components/EmptyState";
 import { prisma } from "@/lib/prisma";
 import PrintStatementButton from "./PrintStatementButton";
 
@@ -393,8 +395,14 @@ export default async function CustomerStatementPage({
           </div>
 
           {ledgerRows.length === 0 ? (
-            <div className="mt-5 rounded-xl border border-dashed border-zinc-300 bg-zinc-50/80 p-8 text-center text-sm text-zinc-600">
-              No statement activity found for this customer.
+            <div className="mt-5">
+              <EmptyState
+                icon={ReceiptText}
+                title="No transactions"
+                description="This customer has no invoices or payments yet."
+                actionHref="/invoices/new"
+                actionLabel="Create Invoice"
+              />
             </div>
           ) : (
             <div className="mt-5 overflow-hidden rounded-xl border border-zinc-200/80">
