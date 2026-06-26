@@ -60,4 +60,13 @@ export class CustomersService {
 
     return customer ?? null;
   }
+
+  async remove(id: string) {
+    const [customer] = await this.databaseService.db
+      .delete(customers)
+      .where(eq(customers.id, id))
+      .returning();
+
+    return customer ?? null;
+  }
 }
