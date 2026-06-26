@@ -115,12 +115,20 @@ export default async function CustomerDetailPage({
               Code: <span className="font-medium">{customer.code}</span>
             </p>
           </div>
-          <Link
-            href="/customers"
-            className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
-          >
-            Back to Customers
-          </Link>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Link
+              href={`/customers/${customer.id}/statement`}
+              className="inline-flex h-10 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
+            >
+              Statement
+            </Link>
+            <Link
+              href="/customers"
+              className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
+            >
+              Back to Customers
+            </Link>
+          </div>
         </div>
 
         <section className="rounded-md border border-zinc-200 bg-white p-6">
