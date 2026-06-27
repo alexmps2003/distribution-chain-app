@@ -19,7 +19,7 @@ export class PaymentsService {
   constructor(private readonly databaseService: DatabaseService) {}
 
   private sumMoney(values: string[]): number {
-    return values.reduce((sum, value) => sum + Number(value), 0);
+    return values.reduce((sum, value) => sum + this.toCents(value), 0);
   }
 
   async findAll() {
@@ -65,9 +65,51 @@ export class PaymentsService {
   }
 
   async create(dto: CreatePaymentDto) {
+    const paymentAmount = this.toCents(dto.amount);
+
+    if (paymentAmount <= 0) {
+      throw new BadRequestException('Payment total must be greater than 0');
+    }
+
+    if (!Array.isArray(dto.methods) || dto.methods.length === 0) {
+      throw new BadRequestException('Payment method is required');
+    }
+
+    for (const method of dto.methods) {
+      const methodAmount = this.toCents(method.amount);
+
+      if (methodAmount <= 0) {
+        throw new BadRequestException('Payment method amount must be greater than 0');
+      }
+
+      const methodAllocationTotal = this.sumMoney(
+        (method.allocations ?? []).map((allocation) => allocation.amount),
+      );
+
+      if (methodAmount !== methodAllocationTotal) {
+        throw new BadRequestException(
+          'Payment method amount must equal method allocation total',
+        );
+      }
+
+      if (method.method === 'CHEQUE') {
+        if (!method.chequeNumber?.trim()) {
+          throw new BadRequestException('Cheque number is required');
+        }
+
+        if (!method.chequeBank?.trim()) {
+          throw new BadRequestException('Cheque bank is required');
+        }
+
+        if (!method.chequeDate?.trim()) {
+          throw new BadRequestException('Cheque date is required');
+        }
+      }
+    }
+
     const methodTotal = this.sumMoney(dto.methods.map((method) => method.amount));
 
-    if (Number(dto.amount) !== methodTotal) {
+    if (paymentAmount !== methodTotal) {
       throw new BadRequestException('Payment amount must equal payment method total');
     }
 
@@ -77,11 +119,13 @@ export class PaymentsService {
       ),
     );
 
-    if (Number(dto.amount) !== allocationTotal) {
+    if (paymentAmount !== allocationTotal) {
       throw new BadRequestException('Payment amount must equal allocation total');
     }
 
     return this.databaseService.db.transaction(async (tx) => {
+      const paymentMethod =
+        dto.methods.length === 1 ? dto.methods[0].method : 'MIXED';
       const [payment] = await tx
         .insert(payments)
         .values({
@@ -89,7 +133,7 @@ export class PaymentsService {
           customerId: dto.customerId,
           paymentDate: dto.paymentDate ? new Date(dto.paymentDate) : new Date(),
           amount: dto.amount,
-          paymentMethod: dto.paymentMethod,
+          paymentMethod,
           notes: dto.notes,
           createdAt: new Date(),
         })
@@ -137,14 +181,13 @@ export class PaymentsService {
             .from(paymentAllocations)
             .where(eq(paymentAllocations.invoiceId, allocation.invoiceId));
 
-          const allocatedTotal = existingAllocations.reduce(
-            (sum, existingAllocation) =>
-              sum + Number(existingAllocation.amount),
-            0,
+          const allocatedTotal = await this.getActiveAllocationTotal(
+            tx,
+            existingAllocations,
           );
-          const outstanding = Number(invoice.amount) - allocatedTotal;
+          const outstanding = this.toCents(invoice.amount) - allocatedTotal;
 
-          if (Number(allocation.amount) > outstanding) {
+          if (this.toCents(allocation.amount) > outstanding) {
             throw new BadRequestException(
               'Allocation exceeds invoice outstanding balance',
             );
@@ -184,12 +227,12 @@ export class PaymentsService {
           .from(paymentAllocations)
           .where(eq(paymentAllocations.invoiceId, invoiceId));
 
-        const paidTotal = invoiceAllocations.reduce(
-          (sum, allocation) => sum + Number(allocation.amount),
-          0,
+        const paidTotal = await this.getActiveAllocationTotal(
+          tx,
+          invoiceAllocations,
         );
 
-        const invoiceAmount = Number(invoice.amount);
+        const invoiceAmount = this.toCents(invoice.amount);
         const status =
           paidTotal >= invoiceAmount
             ? 'PAID'
@@ -209,6 +252,43 @@ export class PaymentsService {
         allocations,
       };
     });
+  }
+
+  private async getActiveAllocationTotal(
+    tx: Parameters<
+      Parameters<typeof this.databaseService.db.transaction>[0]
+    >[0],
+    allocations: (typeof paymentAllocations.$inferSelect)[],
+  ) {
+    let total = 0;
+
+    for (const allocation of allocations) {
+      if (!allocation.paymentPartId) {
+        total += this.toCents(allocation.amount);
+        continue;
+      }
+
+      const [part] = await tx
+        .select()
+        .from(paymentParts)
+        .where(eq(paymentParts.id, allocation.paymentPartId));
+
+      if (part?.status === 'ACTIVE') {
+        total += this.toCents(allocation.amount);
+      }
+    }
+
+    return total;
+  }
+
+  private toCents(value: string | number) {
+    const text = String(value);
+    const sign = text.startsWith('-') ? -1 : 1;
+    const [wholePart, fractionPart = ''] = text.replace('-', '').split('.');
+    const wholeCents = Number(wholePart || '0') * 100;
+    const fractionCents = Number(fractionPart.padEnd(2, '0').slice(0, 2));
+
+    return sign * (wholeCents + fractionCents);
   }
 
   async reverse(id: string) {
