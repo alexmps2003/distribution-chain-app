@@ -10,6 +10,7 @@ import { OutstandingModule } from './outstanding/outstanding.module';
 import { StatementsModule } from './statements/statements.module';
 import { AgingModule } from './aging/aging.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { SearchModule } from './search/search.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
     StatementsModule,
     AgingModule,
     DashboardModule,
+    SearchModule,
   ],
 })
 export class AppModule {}
