@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Prisma } from "@prisma/client";
 import { CircleCheck, CreditCard } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import { apiGet } from "@/lib/api-client";
@@ -37,10 +36,26 @@ type DashboardResponse = {
     paymentDate: string;
   }[];
   highOutstandingCustomers: {
+    area: string | null;
     code: string;
     id: string;
+    invoiceCount: number;
+    isActive: boolean;
     name: string;
     outstanding: MoneyValue;
+    overdueOutstanding: MoneyValue;
+    routeName: string | null;
+  }[];
+  invoiceStatus: {
+    PAID: number;
+    PARTIALLY_PAID: number;
+    UNPAID: number;
+  };
+  monthlyCollections: {
+    amount: MoneyValue;
+    month: string;
+    monthKey: string;
+    receiptCount: number;
   }[];
 };
 
@@ -51,51 +66,6 @@ function formatDate(date: Date | null) {
     year: "numeric",
     month: "short",
     day: "numeric",
-  });
-}
-
-function sumDecimals(values: Prisma.Decimal[]) {
-  return values.reduce(
-    (total, value) => total.plus(value),
-    new Prisma.Decimal(0),
-  );
-}
-
-function getActivePaidAmount(payments: {
-  amount: Prisma.Decimal;
-  paymentPart: { status: string } | null;
-}[]) {
-  return sumDecimals(
-    payments
-      .filter((allocation) => {
-        return (
-          allocation.paymentPart === null ||
-          allocation.paymentPart.status === "ACTIVE"
-        );
-      })
-      .map((allocation) => allocation.amount),
-  );
-}
-
-function getInvoiceDisplayStatus(
-  invoiceTotal: Prisma.Decimal,
-  paidAmount: Prisma.Decimal,
-) {
-  if (paidAmount.gte(invoiceTotal)) {
-    return "PAID";
-  }
-
-  if (paidAmount.gt(0)) {
-    return "PARTIALLY_PAID";
-  }
-
-  return "UNPAID";
-}
-
-function getMonthLabel(date: Date) {
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    year: "numeric",
   });
 }
 
@@ -191,85 +161,6 @@ function getCollectionsRange(
   }
 
   return "thisYear";
-}
-
-function startOfMonth(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), 1);
-}
-
-function addMonths(date: Date, months: number) {
-  return new Date(date.getFullYear(), date.getMonth() + months, 1);
-}
-
-function getInvoiceStatusDateRange(range: InvoiceStatusRange, today: Date) {
-  const thisMonthStart = startOfMonth(today);
-
-  if (range === "thisMonth") {
-    return { end: addMonths(thisMonthStart, 1), start: thisMonthStart };
-  }
-
-  if (range === "lastMonth") {
-    return { end: thisMonthStart, start: addMonths(thisMonthStart, -1) };
-  }
-
-  if (range === "last3Months") {
-    return { end: addMonths(thisMonthStart, 1), start: addMonths(thisMonthStart, -2) };
-  }
-
-  if (range === "last6Months") {
-    return { end: addMonths(thisMonthStart, 1), start: addMonths(thisMonthStart, -5) };
-  }
-
-  if (range === "thisYear") {
-    return {
-      end: new Date(today.getFullYear() + 1, 0, 1),
-      start: new Date(today.getFullYear(), 0, 1),
-    };
-  }
-
-  return {};
-}
-
-function getCollectionsDateRange(range: CollectionsRange, today: Date) {
-  const thisMonthStart = startOfMonth(today);
-
-  if (range === "last3Months") {
-    return { end: addMonths(thisMonthStart, 1), start: addMonths(thisMonthStart, -2) };
-  }
-
-  if (range === "last6Months") {
-    return { end: addMonths(thisMonthStart, 1), start: addMonths(thisMonthStart, -5) };
-  }
-
-  if (range === "lastYear") {
-    return {
-      end: new Date(today.getFullYear(), 0, 1),
-      start: new Date(today.getFullYear() - 1, 0, 1),
-    };
-  }
-
-  if (range === "allTime") {
-    return {};
-  }
-
-  return {
-    end: new Date(today.getFullYear() + 1, 0, 1),
-    start: new Date(today.getFullYear(), 0, 1),
-  };
-}
-
-function isDateInRange(
-  date: Date,
-  range: {
-    end?: Date;
-    start?: Date;
-  },
-) {
-  return (!range.start || date >= range.start) && (!range.end || date < range.end);
-}
-
-function isOverdue(dueDate: Date | null, today: Date) {
-  return dueDate !== null && dueDate < today;
 }
 
 function KpiCard({
@@ -382,7 +273,7 @@ export default async function Home({
   const outstandingStatus = getOutstandingStatus(outstandingStatusParam);
   const invoiceStatusRange = getInvoiceStatusRange(invoiceStatusRangeParam);
   const collectionsRange = getCollectionsRange(collectionsRangeParam);
-  const [dashboard, customerFilterOptions, invoices] = await Promise.all([
+  const [dashboard, customerFilterOptions] = await Promise.all([
       apiGet<DashboardResponse>("/dashboard"),
       prisma.customer.findMany({
         select: {
@@ -391,39 +282,6 @@ export default async function Home({
         },
         orderBy: {
           name: "asc",
-        },
-      }),
-      prisma.invoice.findMany({
-        select: {
-          amount: true,
-          dueDate: true,
-          invoiceDate: true,
-          customer: {
-            select: {
-              area: true,
-              id: true,
-              isActive: true,
-              code: true,
-              name: true,
-              routeName: true,
-            },
-          },
-          payments: {
-            select: {
-              amount: true,
-              payment: {
-                select: {
-                  id: true,
-                  paymentDate: true,
-                },
-              },
-              paymentPart: {
-                select: {
-                  status: true,
-                },
-              },
-            },
-          },
         },
       }),
     ]);
@@ -440,6 +298,15 @@ export default async function Home({
     paymentDate: new Date(payment.paymentDate),
   }));
   const highOutstandingCustomers = dashboard.highOutstandingCustomers;
+  const invoiceStatusCounts = {
+    paid: dashboard.invoiceStatus.PAID,
+    partiallyPaid: dashboard.invoiceStatus.PARTIALLY_PAID,
+    unpaid: dashboard.invoiceStatus.UNPAID,
+  };
+  const monthlyCollections = dashboard.monthlyCollections.map((month) => ({
+    ...month,
+    amount: Number(month.amount),
+  }));
 
   const routeOptions = Array.from(
     new Set(
@@ -461,52 +328,9 @@ export default async function Home({
   const selectedOutstandingArea = areaOptions.includes(outstandingArea)
     ? outstandingArea
     : "all";
-  const today = new Date();
 
-  const outstandingByCustomer = new Map<
-    string,
-    {
-      code: string;
-      area: string | null;
-      id: string;
-      isActive: boolean;
-      name: string;
-      outstanding: Prisma.Decimal;
-      invoiceCount: number;
-      overdueOutstanding: Prisma.Decimal;
-      routeName: string | null;
-    }
-  >();
-
-  for (const invoice of invoices) {
-    const paidAmount = getActivePaidAmount(invoice.payments);
-    const outstandingAmount = invoice.amount.minus(paidAmount);
-
-    if (outstandingAmount.lte(0)) {
-      continue;
-    }
-
-    const existing = outstandingByCustomer.get(invoice.customer.id);
-
-    outstandingByCustomer.set(invoice.customer.id, {
-      area: invoice.customer.area?.trim() || null,
-      code: invoice.customer.code,
-      id: invoice.customer.id,
-      isActive: invoice.customer.isActive,
-      name: invoice.customer.name,
-      outstanding: (existing?.outstanding ?? new Prisma.Decimal(0)).plus(
-        outstandingAmount,
-      ),
-      invoiceCount: (existing?.invoiceCount ?? 0) + 1,
-      overdueOutstanding: (
-        existing?.overdueOutstanding ?? new Prisma.Decimal(0)
-      ).plus(isOverdue(invoice.dueDate, today) ? outstandingAmount : 0),
-      routeName: invoice.customer.routeName?.trim() || null,
-    });
-  }
-
-  const filteredOutstandingCustomers = Array.from(outstandingByCustomer.values())
-    .filter((customer) => customer.outstanding.gte(outstandingMin))
+  const filteredOutstandingCustomers = highOutstandingCustomers
+    .filter((customer) => Number(customer.outstanding) >= outstandingMin)
     .filter((customer) => {
       return (
         selectedOutstandingArea === "all" ||
@@ -530,7 +354,10 @@ export default async function Home({
 
       return true;
     })
-    .sort((left, right) => right.outstanding.comparedTo(left.outstanding));
+    .sort(
+      (left, right) =>
+        Number(right.outstanding) - Number(left.outstanding),
+    );
   const topOutstandingCustomers = (
     outstandingLimit === "all"
       ? filteredOutstandingCustomers
@@ -540,85 +367,8 @@ export default async function Home({
       customer: customer.name,
       customerId: customer.id,
       invoiceCount: customer.invoiceCount,
-      outstanding: Number(customer.outstanding.toString()),
-      overdueOutstanding: Number(customer.overdueOutstanding.toString()),
-    }));
-  const invoiceStatusDateRange = getInvoiceStatusDateRange(
-    invoiceStatusRange,
-    today,
-  );
-  const collectionsDateRange = getCollectionsDateRange(collectionsRange, today);
-  const filteredInvoiceStatusInvoices = invoices.filter((invoice) => {
-    return isDateInRange(invoice.invoiceDate, invoiceStatusDateRange);
-  });
-  const invoiceStatusCounts = filteredInvoiceStatusInvoices.reduce(
-    (counts, invoice) => {
-      const paidAmount = getActivePaidAmount(invoice.payments);
-      const status = getInvoiceDisplayStatus(invoice.amount, paidAmount);
-
-      if (status === "PAID") {
-        return { ...counts, paid: counts.paid + 1 };
-      }
-
-      if (status === "PARTIALLY_PAID") {
-        return { ...counts, partiallyPaid: counts.partiallyPaid + 1 };
-      }
-
-      return { ...counts, unpaid: counts.unpaid + 1 };
-    },
-    { paid: 0, partiallyPaid: 0, unpaid: 0 },
-  );
-  const monthlyCollectionsByKey = new Map<
-    string,
-    {
-      amount: Prisma.Decimal;
-      date: Date;
-      month: string;
-      receiptIds: Set<string>;
-    }
-  >();
-
-  for (const invoice of invoices) {
-    for (const allocation of invoice.payments) {
-      if (
-        allocation.paymentPart !== null &&
-        allocation.paymentPart.status !== "ACTIVE"
-      ) {
-        continue;
-      }
-
-      const paymentDate = allocation.payment.paymentDate;
-
-      if (!isDateInRange(paymentDate, collectionsDateRange)) {
-        continue;
-      }
-
-      const monthKey = paymentDate.toISOString().slice(0, 7);
-      const existing = monthlyCollectionsByKey.get(monthKey);
-
-      monthlyCollectionsByKey.set(monthKey, {
-        amount: (existing?.amount ?? new Prisma.Decimal(0)).plus(
-          allocation.amount,
-        ),
-        date: existing?.date ?? paymentDate,
-        month: existing?.month ?? getMonthLabel(paymentDate),
-        receiptIds: new Set([
-          ...(existing?.receiptIds ?? []),
-          allocation.payment.id,
-        ]),
-      });
-    }
-  }
-
-  const monthlyCollections = Array.from(monthlyCollectionsByKey.values())
-    .sort((left, right) => left.date.getTime() - right.date.getTime())
-    .map((month) => ({
-      amount: Number(month.amount.toString()),
-      month: month.month,
-      monthKey: `${month.date.getFullYear()}-${String(
-        month.date.getMonth() + 1,
-      ).padStart(2, "0")}`,
-      receiptCount: month.receiptIds.size,
+      outstanding: Number(customer.outstanding),
+      overdueOutstanding: Number(customer.overdueOutstanding),
     }));
 
   return (
