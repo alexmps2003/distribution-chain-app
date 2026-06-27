@@ -1,5 +1,5 @@
-import { Injectable } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { asc, eq } from 'drizzle-orm';
 import * as crypto from 'node:crypto';
 import { DatabaseService } from '../database/database.service';
 import {
@@ -16,8 +16,107 @@ import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 export class InvoicesService {
   constructor(private readonly databaseService: DatabaseService) {}
 
-  async findAll() {
-    return this.databaseService.db.select().from(invoices);
+  async findAll(customerId?: string) {
+    const customerRows = await this.databaseService.db
+      .select()
+      .from(customers)
+      .orderBy(asc(customers.name));
+    const invoiceRows = await this.databaseService.db.select().from(invoices);
+    const allocationRows = await this.databaseService.db
+      .select()
+      .from(paymentAllocations);
+    const paymentPartRows = await this.databaseService.db
+      .select()
+      .from(paymentParts);
+
+    const paymentPartById = new Map(
+      paymentPartRows.map((paymentPart) => [paymentPart.id, paymentPart]),
+    );
+    const invoicesByCustomerId = new Map<
+      string,
+      (typeof invoices.$inferSelect)[]
+    >();
+    const allocationsByInvoiceId = new Map<
+      string,
+      (typeof paymentAllocations.$inferSelect)[]
+    >();
+
+    for (const invoice of invoiceRows) {
+      const customerInvoices = invoicesByCustomerId.get(invoice.customerId) ?? [];
+      customerInvoices.push(invoice);
+      invoicesByCustomerId.set(invoice.customerId, customerInvoices);
+    }
+
+    for (const allocation of allocationRows) {
+      const invoiceAllocations =
+        allocationsByInvoiceId.get(allocation.invoiceId) ?? [];
+      invoiceAllocations.push(allocation);
+      allocationsByInvoiceId.set(allocation.invoiceId, invoiceAllocations);
+    }
+
+    if (customerId) {
+      const customer = customerRows.find((row) => row.id === customerId);
+
+      if (!customer) {
+        throw new NotFoundException('Customer not found');
+      }
+
+      const customerInvoices = (invoicesByCustomerId.get(customer.id) ?? [])
+        .map((invoice) =>
+          this.buildCalculatedInvoiceRow(
+            invoice,
+            allocationsByInvoiceId,
+            paymentPartById,
+          ),
+        )
+        .sort(
+          (left, right) =>
+            right.invoice.createdAt.getTime() - left.invoice.createdAt.getTime(),
+        );
+
+      return {
+        customer,
+        invoices: customerInvoices,
+      };
+    }
+
+    return customerRows.map((customer) => {
+      const customerInvoices = invoicesByCustomerId.get(customer.id) ?? [];
+      const calculatedInvoices = customerInvoices.map((invoice) =>
+        this.buildCalculatedInvoiceRow(
+          invoice,
+          allocationsByInvoiceId,
+          paymentPartById,
+        ),
+      );
+      const totalInvoicedCents = calculatedInvoices.reduce(
+        (sum, invoice) => sum + this.toCents(invoice.invoice.amount),
+        0,
+      );
+      const totalPaidCents = calculatedInvoices.reduce(
+        (sum, invoice) => sum + this.toCents(invoice.activePaidAmount),
+        0,
+      );
+
+      return {
+        customer,
+        invoiceCount: calculatedInvoices.length,
+        totalInvoiced: this.fromCents(totalInvoicedCents),
+        totalPaid: this.fromCents(totalPaidCents),
+        totalOutstanding: this.fromCents(totalInvoicedCents - totalPaidCents),
+        calculatedStatusSummary: calculatedInvoices.reduce(
+          (summary, invoice) => {
+            summary[invoice.displayStatus] += 1;
+            return summary;
+          },
+          {
+            PAID: 0,
+            PARTIALLY_PAID: 0,
+            UNPAID: 0,
+          },
+        ),
+      };
+    });
   }
 
   async create(dto: CreateInvoiceDto) {
@@ -128,6 +227,40 @@ export class InvoicesService {
     }
 
     return 'UNPAID';
+  }
+
+  private buildCalculatedInvoiceRow(
+    invoice: typeof invoices.$inferSelect,
+    allocationsByInvoiceId: Map<
+      string,
+      (typeof paymentAllocations.$inferSelect)[]
+    >,
+    paymentPartById: Map<string, typeof paymentParts.$inferSelect>,
+  ) {
+    const activePaidCents = (allocationsByInvoiceId.get(invoice.id) ?? []).reduce(
+      (sum, allocation) => {
+        if (!allocation.paymentPartId) {
+          return sum + this.toCents(allocation.amount);
+        }
+
+        const paymentPart = paymentPartById.get(allocation.paymentPartId);
+
+        if (paymentPart?.status === 'ACTIVE') {
+          return sum + this.toCents(allocation.amount);
+        }
+
+        return sum;
+      },
+      0,
+    );
+    const invoiceAmountCents = this.toCents(invoice.amount);
+
+    return {
+      invoice,
+      activePaidAmount: this.fromCents(activePaidCents),
+      outstanding: this.fromCents(invoiceAmountCents - activePaidCents),
+      displayStatus: this.getDisplayStatus(invoiceAmountCents, activePaidCents),
+    };
   }
 
   private toCents(value: string | number) {
