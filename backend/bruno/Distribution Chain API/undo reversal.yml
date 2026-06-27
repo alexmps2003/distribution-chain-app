@@ -1,0 +1,15 @@
+info:
+  name: undo reversal
+  type: http
+  seq: 17
+
+http:
+  method: PATCH
+  url: http://localhost:3000/api/cheques/part_1da5f5ec-0eae-4c72-a4e9-d92cfdbf626d/undo-reversal
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
