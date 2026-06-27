@@ -9,6 +9,7 @@ import { ChequesModule } from './cheques/cheques.module';
 import { OutstandingModule } from './outstanding/outstanding.module';
 import { StatementsModule } from './statements/statements.module';
 import { AgingModule } from './aging/aging.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { AgingModule } from './aging/aging.module';
     OutstandingModule,
     StatementsModule,
     AgingModule,
+    DashboardModule,
   ],
 })
 export class AppModule {}
