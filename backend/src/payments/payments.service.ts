@@ -22,6 +22,48 @@ export class PaymentsService {
     return values.reduce((sum, value) => sum + Number(value), 0);
   }
 
+  async findAll() {
+    const paymentRows = await this.databaseService.db.select().from(payments);
+    const partRows = await this.databaseService.db.select().from(paymentParts);
+    const allocationRows = await this.databaseService.db
+      .select()
+      .from(paymentAllocations);
+
+    return paymentRows.map((payment) => ({
+      ...payment,
+      parts: partRows.filter((part) => part.paymentId === payment.id),
+      allocations: allocationRows.filter(
+        (allocation) => allocation.paymentId === payment.id,
+      ),
+    }));
+  }
+
+  async findOne(id: string) {
+    const [payment] = await this.databaseService.db
+      .select()
+      .from(payments)
+      .where(eq(payments.id, id));
+
+    if (!payment) {
+      return null;
+    }
+
+    const parts = await this.databaseService.db
+      .select()
+      .from(paymentParts)
+      .where(eq(paymentParts.paymentId, id));
+    const allocations = await this.databaseService.db
+      .select()
+      .from(paymentAllocations)
+      .where(eq(paymentAllocations.paymentId, id));
+
+    return {
+      ...payment,
+      parts,
+      allocations,
+    };
+  }
+
   async create(dto: CreatePaymentDto) {
     const methodTotal = this.sumMoney(dto.methods.map((method) => method.amount));
 
