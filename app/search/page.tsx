@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Prisma } from "@prisma/client";
 import {
   CreditCard,
   FileText,
@@ -9,15 +8,74 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
-import { prisma } from "@/lib/prisma";
+import { apiGet } from "@/lib/api-client";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
 
-function formatAmount(value: { toString(): string }) {
-  return numberFormatter.format(Number(value.toString()));
+type MoneyValue = string | number;
+
+type SearchCustomer = {
+  area: string | null;
+  code: string;
+  id: string;
+  name: string;
+  routeName: string | null;
+};
+
+type SearchCustomerSummary = {
+  code: string;
+  id: string;
+  name: string;
+};
+
+type SearchPaymentPart = {
+  amount: MoneyValue;
+  bankReference: string | null;
+  cardReference: string | null;
+  chequeBank: string | null;
+  chequeDate: string | null;
+  chequeNumber: string | null;
+  id: string;
+  method: string;
+};
+
+type SearchResponse = {
+  customers: SearchCustomer[];
+  invoices: {
+    invoice: {
+      id: string;
+      invoiceDate: string;
+      invoiceNumber: string;
+    };
+    customer: SearchCustomerSummary | null;
+    amount: MoneyValue;
+  }[];
+  payments: {
+    payment: {
+      amount: MoneyValue;
+      id: string;
+      paymentDate: string;
+    };
+    receiptReference: string;
+    customer: SearchCustomerSummary | null;
+    parts: SearchPaymentPart[];
+  }[];
+  cheques: {
+    cheque: SearchPaymentPart;
+    payment: {
+      id: string;
+      paymentDate: string;
+    } | null;
+    customer: SearchCustomerSummary | null;
+    status: string;
+  }[];
+};
+
+function formatAmount(value: MoneyValue) {
+  return numberFormatter.format(Number(String(value)));
 }
 
 function formatDate(date: Date | null) {
@@ -28,47 +86,6 @@ function formatDate(date: Date | null) {
     month: "short",
     year: "numeric",
   });
-}
-
-function formatPaymentReference(payment: { id: string; paymentDate: Date }) {
-  const datePart = payment.paymentDate
-    .toISOString()
-    .slice(0, 10)
-    .replaceAll("-", "");
-  const idPart = payment.id.slice(-4).toUpperCase();
-
-  return `PAY-${datePart}-${idPart}`;
-}
-
-function getReceiptSearchWhere(query: string): Prisma.PaymentWhereInput[] {
-  const receiptMatch = query.match(/^PAY-(\d{8})-([A-Za-z0-9]+)$/i);
-
-  if (!receiptMatch) {
-    return [];
-  }
-
-  const [, dateValue, idSuffix] = receiptMatch;
-  const year = Number(dateValue.slice(0, 4));
-  const month = Number(dateValue.slice(4, 6));
-  const day = Number(dateValue.slice(6, 8));
-  const start = new Date(Date.UTC(year, month - 1, day));
-
-  if (Number.isNaN(start.getTime())) {
-    return [];
-  }
-
-  return [
-    {
-      id: {
-        endsWith: idSuffix,
-        mode: "insensitive",
-      },
-      paymentDate: {
-        gte: start,
-        lt: new Date(start.getTime() + 24 * 60 * 60 * 1000),
-      },
-    },
-  ];
 }
 
 function ResultSection({
@@ -155,135 +172,8 @@ export default async function SearchPage({
     );
   }
 
-  const paymentWhere: Prisma.PaymentWhereInput = {
-    OR: [
-      {
-        id: {
-          contains: query,
-          mode: "insensitive",
-        },
-      },
-      ...getReceiptSearchWhere(query),
-      {
-        parts: {
-          some: {
-            OR: [
-              {
-                bankReference: {
-                  contains: query,
-                  mode: "insensitive",
-                },
-              },
-              {
-                cardReference: {
-                  contains: query,
-                  mode: "insensitive",
-                },
-              },
-              {
-                chequeNumber: {
-                  contains: query,
-                  mode: "insensitive",
-                },
-              },
-            ],
-          },
-        },
-      },
-    ],
-  };
-  const [customers, invoices, payments, cheques] = await Promise.all([
-    prisma.customer.findMany({
-      where: {
-        OR: [
-          {
-            name: {
-              contains: query,
-              mode: "insensitive",
-            },
-          },
-          {
-            code: {
-              contains: query,
-              mode: "insensitive",
-            },
-          },
-        ],
-      },
-      orderBy: {
-        name: "asc",
-      },
-      take: 10,
-    }),
-    prisma.invoice.findMany({
-      where: {
-        invoiceNumber: {
-          contains: query,
-          mode: "insensitive",
-        },
-      },
-      include: {
-        customer: {
-          select: {
-            code: true,
-            name: true,
-          },
-        },
-      },
-      orderBy: {
-        invoiceDate: "desc",
-      },
-      take: 10,
-    }),
-    prisma.payment.findMany({
-      where: paymentWhere,
-      include: {
-        customer: {
-          select: {
-            code: true,
-            name: true,
-          },
-        },
-        parts: {
-          select: {
-            bankReference: true,
-            cardReference: true,
-            chequeNumber: true,
-            method: true,
-          },
-        },
-      },
-      orderBy: {
-        paymentDate: "desc",
-      },
-      take: 10,
-    }),
-    prisma.paymentPart.findMany({
-      where: {
-        method: "CHEQUE",
-        chequeNumber: {
-          contains: query,
-          mode: "insensitive",
-        },
-      },
-      include: {
-        payment: {
-          include: {
-            customer: {
-              select: {
-                code: true,
-                name: true,
-              },
-            },
-          },
-        },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-      take: 10,
-    }),
-  ]);
+  const { cheques, customers, invoices, payments } =
+    await apiGet<SearchResponse>(`/search?q=${encodeURIComponent(query)}`);
   const customerResults = customers.map((customer) => ({
     href: `/customers/${customer.id}`,
     subtitle: [
@@ -297,11 +187,11 @@ export default async function SearchPage({
     type: "Customer",
   }));
   const invoiceResults = invoices.map((invoice) => ({
-    href: `/invoices/${invoice.id}`,
-    subtitle: `${invoice.customer.name} (${invoice.customer.code}) • ${formatDate(
-      invoice.invoiceDate,
+    href: `/invoices/${invoice.invoice.id}`,
+    subtitle: `${invoice.customer ? `${invoice.customer.name} (${invoice.customer.code})` : "Customer not found"} • ${formatDate(
+      new Date(invoice.invoice.invoiceDate),
     )} • Rs. ${formatAmount(invoice.amount)}`,
-    title: invoice.invoiceNumber,
+    title: invoice.invoice.invoiceNumber,
     type: "Invoice",
   }));
   const paymentResults = payments.map((payment) => {
@@ -314,28 +204,32 @@ export default async function SearchPage({
       .filter(Boolean);
 
     return {
-      href: `/payments/${payment.id}`,
+      href: `/payments/${payment.payment.id}`,
       subtitle: [
-        `${payment.customer.name} (${payment.customer.code})`,
-        formatDate(payment.paymentDate),
-        `Rs. ${formatAmount(payment.amount)}`,
+        payment.customer
+          ? `${payment.customer.name} (${payment.customer.code})`
+          : "Customer not found",
+        formatDate(new Date(payment.payment.paymentDate)),
+        `Rs. ${formatAmount(payment.payment.amount)}`,
         references[0] ?? "",
       ]
         .filter(Boolean)
         .join(" • "),
-      title: formatPaymentReference(payment),
+      title: payment.receiptReference,
       type: "Payment",
     };
   });
   const chequeResults = cheques.map((cheque) => ({
-    href: `/cheques/${cheque.id}`,
+    href: `/cheques/${cheque.cheque.id}`,
     subtitle: [
-      cheque.chequeBank ?? "Bank not set",
-      cheque.payment.customer.name,
-      formatDate(cheque.chequeDate),
-      `Rs. ${formatAmount(cheque.amount)}`,
+      cheque.cheque.chequeBank ?? "Bank not set",
+      cheque.customer?.name ?? "Customer not found",
+      formatDate(
+        cheque.cheque.chequeDate ? new Date(cheque.cheque.chequeDate) : null,
+      ),
+      `Rs. ${formatAmount(cheque.cheque.amount)}`,
     ].join(" • "),
-    title: cheque.chequeNumber ?? "Cheque without number",
+    title: cheque.cheque.chequeNumber ?? "Cheque without number",
     type: "Cheque",
   }));
   const hasResults =

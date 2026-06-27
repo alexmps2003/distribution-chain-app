@@ -58,9 +58,11 @@ export class SearchService {
       .sort((left, right) => left.name.localeCompare(right.name))
       .slice(0, 10)
       .map((customer) => ({
+        area: customer.area,
         id: customer.id,
         code: customer.code,
         name: customer.name,
+        routeName: customer.routeName,
       }));
     const invoiceResults = invoiceRows
       .filter((invoice) =>
