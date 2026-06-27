@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { asc } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import {
@@ -12,7 +12,7 @@ import {
 export class OutstandingService {
   constructor(private readonly databaseService: DatabaseService) {}
 
-  async findAll() {
+  async findAll(customerId?: string) {
     const customerRows = await this.databaseService.db
       .select()
       .from(customers)
@@ -129,6 +129,45 @@ export class OutstandingService {
         this.toCents(right.totalOutstanding) -
         this.toCents(left.totalOutstanding),
     )[0];
+
+    if (customerId) {
+      const customer = customerRows.find((row) => row.id === customerId);
+
+      if (!customer) {
+        throw new NotFoundException('Customer not found');
+      }
+
+      const outstandingCustomer = outstandingCustomers.find(
+        (row) => row.customer.id === customerId,
+      );
+      const outstandingInvoices = outstandingCustomer?.invoices ?? [];
+
+      return {
+        customer,
+        summary: {
+          totalOutstanding:
+            outstandingCustomer?.totalOutstanding ?? this.fromCents(0),
+          outstandingInvoiceCount: outstandingInvoices.length,
+          oldestDueDate: outstandingCustomer?.oldestDueDate ?? null,
+        },
+        invoices: outstandingInvoices.map((invoice) => ({
+          invoice: {
+            id: invoice.id,
+            invoiceNumber: invoice.invoiceNumber,
+            amount: invoice.amount,
+            invoiceDate: invoice.invoiceDate,
+            dueDate: invoice.dueDate,
+            status: invoice.status,
+            customerId: invoice.customerId,
+            createdAt: invoice.createdAt,
+          },
+          activePaidAmount: invoice.activePaidAmount,
+          outstanding: invoice.outstanding,
+          displayStatus: invoice.displayStatus,
+          daysOverdue: invoice.daysOverdue,
+        })),
+      };
+    }
 
     return {
       summary: {
