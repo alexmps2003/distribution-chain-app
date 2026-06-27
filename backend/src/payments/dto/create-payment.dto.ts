@@ -3,7 +3,6 @@ export class CreatePaymentDto {
   paymentDate?: string;
   notes?: string;
   amount: string;
-  paymentMethod: string;
   methods: {
     method: 'CASH' | 'CHEQUE' | 'BANK_TRANSFER' | 'CARD';
     amount: string;
@@ -17,5 +16,4 @@ export class CreatePaymentDto {
       amount: string;
     }[];
   }[];
-  allocations?: unknown[];
 }
