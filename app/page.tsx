@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Prisma } from "@prisma/client";
 import { CircleCheck, CreditCard } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
+import { apiGet } from "@/lib/api-client";
 import { prisma } from "@/lib/prisma";
 import DashboardCharts from "./DashboardCharts";
 
@@ -13,6 +14,35 @@ const numberFormatter = new Intl.NumberFormat("en-US", {
 function formatAmount(value: { toString(): string }) {
   return numberFormatter.format(Number(value.toString()));
 }
+
+type MoneyValue = string | number;
+
+type DashboardResponse = {
+  summary: {
+    activeCheques: number;
+    reversedCheques: number;
+    totalCustomers: number;
+    totalInvoiced: MoneyValue;
+    totalOutstanding: MoneyValue;
+    totalPaid: MoneyValue;
+  };
+  recentPayments: {
+    amount: MoneyValue;
+    customer: {
+      code: string;
+      id: string;
+      name: string;
+    } | null;
+    id: string;
+    paymentDate: string;
+  }[];
+  highOutstandingCustomers: {
+    code: string;
+    id: string;
+    name: string;
+    outstanding: MoneyValue;
+  }[];
+};
 
 function formatDate(date: Date | null) {
   if (!date) return "-";
@@ -352,15 +382,8 @@ export default async function Home({
   const outstandingStatus = getOutstandingStatus(outstandingStatusParam);
   const invoiceStatusRange = getInvoiceStatusRange(invoiceStatusRangeParam);
   const collectionsRange = getCollectionsRange(collectionsRangeParam);
-  const [
-    customerCount,
-    customerFilterOptions,
-    invoices,
-    latestPayments,
-    activeCheques,
-    reversedCheques,
-  ] = await Promise.all([
-      prisma.customer.count(),
+  const [dashboard, customerFilterOptions, invoices] = await Promise.all([
+      apiGet<DashboardResponse>("/dashboard"),
       prisma.customer.findMany({
         select: {
           area: true,
@@ -403,33 +426,20 @@ export default async function Home({
           },
         },
       }),
-      prisma.payment.findMany({
-        include: {
-          customer: {
-            select: {
-              code: true,
-              name: true,
-            },
-          },
-        },
-        orderBy: {
-          createdAt: "desc",
-        },
-        take: 5,
-      }),
-      prisma.paymentPart.count({
-        where: {
-          method: "CHEQUE",
-          status: "ACTIVE",
-        },
-      }),
-      prisma.paymentPart.count({
-        where: {
-          method: "CHEQUE",
-          status: "REVERSED",
-        },
-      }),
     ]);
+  const {
+    activeCheques,
+    reversedCheques,
+    totalCustomers,
+    totalInvoiced,
+    totalOutstanding,
+    totalPaid,
+  } = dashboard.summary;
+  const recentPayments = dashboard.recentPayments.map((payment) => ({
+    ...payment,
+    paymentDate: new Date(payment.paymentDate),
+  }));
+  const highOutstandingCustomers = dashboard.highOutstandingCustomers;
 
   const routeOptions = Array.from(
     new Set(
@@ -453,11 +463,6 @@ export default async function Home({
     : "all";
   const today = new Date();
 
-  const totalInvoiced = sumDecimals(invoices.map((invoice) => invoice.amount));
-  const totalPaid = sumDecimals(
-    invoices.map((invoice) => getActivePaidAmount(invoice.payments)),
-  );
-  const totalOutstanding = totalInvoiced.minus(totalPaid);
   const outstandingByCustomer = new Map<
     string,
     {
@@ -500,9 +505,6 @@ export default async function Home({
     });
   }
 
-  const highOutstandingCustomers = Array.from(outstandingByCustomer.values())
-    .sort((left, right) => right.outstanding.comparedTo(left.outstanding))
-    .slice(0, 5);
   const filteredOutstandingCustomers = Array.from(outstandingByCustomer.values())
     .filter((customer) => customer.outstanding.gte(outstandingMin))
     .filter((customer) => {
@@ -636,7 +638,7 @@ export default async function Home({
           <KpiCard
             href="/customers"
             label="Total Customers"
-            value={customerCount}
+            value={totalCustomers}
           />
           <KpiCard
             href="/outstanding"
@@ -723,7 +725,7 @@ export default async function Home({
               </Link>
             </div>
 
-            {latestPayments.length === 0 ? (
+            {recentPayments.length === 0 ? (
               <div className="mt-4">
                 <EmptyState
                   icon={CreditCard}
@@ -753,10 +755,12 @@ export default async function Home({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-200">
-                    {latestPayments.map((payment) => (
+                    {recentPayments.map((payment) => (
                       <tr key={payment.id} className="transition-colors hover:bg-zinc-50/80">
                         <td className="whitespace-nowrap px-4 py-4 font-medium text-zinc-950">
-                          {payment.customer.name} ({payment.customer.code})
+                          {payment.customer
+                            ? `${payment.customer.name} (${payment.customer.code})`
+                            : "Customer not found"}
                         </td>
                         <td className="whitespace-nowrap px-4 py-4 text-zinc-600">
                           {formatDate(payment.paymentDate)}
