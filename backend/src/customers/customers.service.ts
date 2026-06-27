@@ -55,7 +55,8 @@ export class CustomersService {
     >();
 
     for (const invoice of invoiceRows) {
-      const customerInvoices = invoicesByCustomerId.get(invoice.customerId) ?? [];
+      const customerInvoices =
+        invoicesByCustomerId.get(invoice.customerId) ?? [];
       customerInvoices.push(invoice);
       invoicesByCustomerId.set(invoice.customerId, customerInvoices);
     }
@@ -186,7 +187,10 @@ export class CustomersService {
     let totalPaidCents = 0;
     let unpaidInvoiceCount = 0;
     const invoiceSummaries = invoiceRows
-      .sort((left, right) => right.invoiceDate.getTime() - left.invoiceDate.getTime())
+      .sort(
+        (left, right) =>
+          right.invoiceDate.getTime() - left.invoiceDate.getTime(),
+      )
       .map((invoice) => {
         const invoiceAmountCents = this.toCents(invoice.amount);
         const invoiceAllocations = allocationsByInvoiceId.get(invoice.id) ?? [];

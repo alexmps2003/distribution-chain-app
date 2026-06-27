@@ -7,7 +7,10 @@ export class OutstandingController {
 
   @Get('export')
   @Header('Content-Type', 'text/csv; charset=utf-8')
-  @Header('Content-Disposition', 'attachment; filename="outstanding-invoices.csv"')
+  @Header(
+    'Content-Disposition',
+    'attachment; filename="outstanding-invoices.csv"',
+  )
   exportCsv() {
     return this.outstandingService.exportCsv();
   }

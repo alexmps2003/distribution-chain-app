@@ -138,7 +138,7 @@ export class ChequesService {
 
         for (const allocation of invoiceAllocations) {
           if (!allocation.paymentPartId) {
-            activePaidTotal += Number(allocation.amount);
+            activePaidTotal += this.toCents(allocation.amount);
             continue;
           }
 
@@ -148,11 +148,11 @@ export class ChequesService {
             .where(eq(paymentParts.id, allocation.paymentPartId));
 
           if (part?.status === 'ACTIVE') {
-            activePaidTotal += Number(allocation.amount);
+            activePaidTotal += this.toCents(allocation.amount);
           }
         }
 
-        const invoiceAmount = Number(invoice.amount);
+        const invoiceAmount = this.toCents(invoice.amount);
         const status =
           activePaidTotal >= invoiceAmount
             ? 'PAID'
@@ -229,7 +229,7 @@ export class ChequesService {
 
         for (const allocation of invoiceAllocations) {
           if (!allocation.paymentPartId) {
-            activePaidTotal += Number(allocation.amount);
+            activePaidTotal += this.toCents(allocation.amount);
             continue;
           }
 
@@ -239,11 +239,11 @@ export class ChequesService {
             .where(eq(paymentParts.id, allocation.paymentPartId));
 
           if (part?.status === 'ACTIVE') {
-            activePaidTotal += Number(allocation.amount);
+            activePaidTotal += this.toCents(allocation.amount);
           }
         }
 
-        const invoiceAmount = Number(invoice.amount);
+        const invoiceAmount = this.toCents(invoice.amount);
         const status =
           activePaidTotal >= invoiceAmount
             ? 'PAID'
@@ -300,5 +300,15 @@ export class ChequesService {
       payment: payment ? { ...payment, customer: customer ?? null } : null,
       allocations,
     };
+  }
+
+  private toCents(value: string | number) {
+    const text = String(value);
+    const sign = text.startsWith('-') ? -1 : 1;
+    const [wholePart, fractionPart = ''] = text.replace('-', '').split('.');
+    const wholeCents = Number(wholePart || '0') * 100;
+    const fractionCents = Number(fractionPart.padEnd(2, '0').slice(0, 2));
+
+    return sign * (wholeCents + fractionCents);
   }
 }

@@ -1,11 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
-import {
-  customers,
-  invoices,
-  paymentParts,
-  payments,
-} from '../db/schema';
+import { customers, invoices, paymentParts, payments } from '../db/schema';
 
 @Injectable()
 export class SearchService {
@@ -42,7 +37,10 @@ export class SearchService {
       (typeof paymentParts.$inferSelect)[]
     >();
     const matchesReceiptReference = (payment: typeof payments.$inferSelect) =>
-      this.includesSearch(this.formatPaymentReference(payment), normalizedQuery);
+      this.includesSearch(
+        this.formatPaymentReference(payment),
+        normalizedQuery,
+      );
 
     for (const part of paymentPartRows) {
       const parts = partsByPaymentId.get(part.paymentId) ?? [];
@@ -68,7 +66,10 @@ export class SearchService {
       .filter((invoice) =>
         this.includesSearch(invoice.invoiceNumber, normalizedQuery),
       )
-      .sort((left, right) => right.invoiceDate.getTime() - left.invoiceDate.getTime())
+      .sort(
+        (left, right) =>
+          right.invoiceDate.getTime() - left.invoiceDate.getTime(),
+      )
       .slice(0, 10)
       .map((invoice) => {
         const customer = customerById.get(invoice.customerId);
@@ -101,7 +102,10 @@ export class SearchService {
           })
         );
       })
-      .sort((left, right) => right.paymentDate.getTime() - left.paymentDate.getTime())
+      .sort(
+        (left, right) =>
+          right.paymentDate.getTime() - left.paymentDate.getTime(),
+      )
       .slice(0, 10)
       .map((payment) => {
         const customer = customerById.get(payment.customerId);
@@ -126,7 +130,9 @@ export class SearchService {
           this.includesSearch(part.chequeNumber, normalizedQuery)
         );
       })
-      .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
+      .sort(
+        (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
+      )
       .slice(0, 10)
       .map((cheque) => {
         const payment = paymentById.get(cheque.paymentId);

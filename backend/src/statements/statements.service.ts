@@ -128,7 +128,10 @@ export class StatementsService {
           continue;
         }
 
-        if (paymentPart.method === 'CHEQUE' && paymentPart.status === 'REVERSED') {
+        if (
+          paymentPart.method === 'CHEQUE' &&
+          paymentPart.status === 'REVERSED'
+        ) {
           ledgerEntries.push({
             creditCents: null,
             date: paymentPart.reversedAt ?? payment.paymentDate,

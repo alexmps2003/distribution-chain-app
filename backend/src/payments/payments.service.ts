@@ -107,7 +107,10 @@ export class PaymentsService {
 
         return (
           this.includesSearch(payment.id, searchQuery) ||
-          this.includesSearch(this.formatPaymentReference(payment), searchQuery) ||
+          this.includesSearch(
+            this.formatPaymentReference(payment),
+            searchQuery,
+          ) ||
           payment.parts.some((part) => {
             return (
               this.includesSearch(part.chequeNumber, searchQuery) ||
@@ -164,7 +167,9 @@ export class PaymentsService {
       .select()
       .from(customers)
       .where(eq(customers.id, payment.customerId));
-    const invoiceIds = new Set(allocations.map((allocation) => allocation.invoiceId));
+    const invoiceIds = new Set(
+      allocations.map((allocation) => allocation.invoiceId),
+    );
     const invoiceRows = await this.databaseService.db.select().from(invoices);
     const invoiceById = new Map(
       invoiceRows
@@ -203,7 +208,9 @@ export class PaymentsService {
       const methodAmount = this.toCents(method.amount);
 
       if (methodAmount <= 0) {
-        throw new BadRequestException('Payment method amount must be greater than 0');
+        throw new BadRequestException(
+          'Payment method amount must be greater than 0',
+        );
       }
 
       const methodAllocationTotal = this.sumMoney(
@@ -231,10 +238,14 @@ export class PaymentsService {
       }
     }
 
-    const methodTotal = this.sumMoney(dto.methods.map((method) => method.amount));
+    const methodTotal = this.sumMoney(
+      dto.methods.map((method) => method.amount),
+    );
 
     if (paymentAmount !== methodTotal) {
-      throw new BadRequestException('Payment amount must equal payment method total');
+      throw new BadRequestException(
+        'Payment amount must equal payment method total',
+      );
     }
 
     const allocationTotal = this.sumMoney(
@@ -244,7 +255,9 @@ export class PaymentsService {
     );
 
     if (paymentAmount !== allocationTotal) {
-      throw new BadRequestException('Payment amount must equal allocation total');
+      throw new BadRequestException(
+        'Payment amount must equal allocation total',
+      );
     }
 
     return this.databaseService.db.transaction(async (tx) => {
@@ -291,7 +304,9 @@ export class PaymentsService {
             .where(eq(invoices.id, allocation.invoiceId));
 
           if (!invoice) {
-            throw new BadRequestException('Selected invoice could not be found');
+            throw new BadRequestException(
+              'Selected invoice could not be found',
+            );
           }
 
           if (invoice.customerId !== dto.customerId) {
@@ -480,7 +495,9 @@ export class PaymentsService {
     return `PAY-${datePart}-${idPart}`;
   }
 
-  async reverse(id: string) {
+  reverse(id: string) {
+    void id;
+
     throw new NotImplementedException(
       'Whole payment reversal is not implemented. Use /api/cheques/:id/reverse for cheque reversal.',
     );

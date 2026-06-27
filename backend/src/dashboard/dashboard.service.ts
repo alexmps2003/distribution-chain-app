@@ -206,7 +206,9 @@ export class DashboardService {
         receiptCount: month.receiptIds.size,
       }));
     const recentPayments = paymentRows
-      .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
+      .sort(
+        (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
+      )
       .slice(0, 5)
       .map((payment) => {
         const customer = customerById.get(payment.customerId);
@@ -271,7 +273,10 @@ export class DashboardService {
     return paymentPartById.get(allocation.paymentPartId)?.status === 'ACTIVE';
   }
 
-  private getInvoiceDisplayStatus(invoiceTotalCents: number, paidCents: number) {
+  private getInvoiceDisplayStatus(
+    invoiceTotalCents: number,
+    paidCents: number,
+  ) {
     if (paidCents >= invoiceTotalCents) {
       return 'PAID';
     }

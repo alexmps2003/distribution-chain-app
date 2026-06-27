@@ -42,7 +42,8 @@ export class InvoicesService {
     >();
 
     for (const invoice of invoiceRows) {
-      const customerInvoices = invoicesByCustomerId.get(invoice.customerId) ?? [];
+      const customerInvoices =
+        invoicesByCustomerId.get(invoice.customerId) ?? [];
       customerInvoices.push(invoice);
       invoicesByCustomerId.set(invoice.customerId, customerInvoices);
     }
@@ -71,7 +72,8 @@ export class InvoicesService {
         )
         .sort(
           (left, right) =>
-            right.invoice.createdAt.getTime() - left.invoice.createdAt.getTime(),
+            right.invoice.createdAt.getTime() -
+            left.invoice.createdAt.getTime(),
         );
 
       return {
@@ -237,22 +239,21 @@ export class InvoicesService {
     >,
     paymentPartById: Map<string, typeof paymentParts.$inferSelect>,
   ) {
-    const activePaidCents = (allocationsByInvoiceId.get(invoice.id) ?? []).reduce(
-      (sum, allocation) => {
-        if (!allocation.paymentPartId) {
-          return sum + this.toCents(allocation.amount);
-        }
+    const activePaidCents = (
+      allocationsByInvoiceId.get(invoice.id) ?? []
+    ).reduce((sum, allocation) => {
+      if (!allocation.paymentPartId) {
+        return sum + this.toCents(allocation.amount);
+      }
 
-        const paymentPart = paymentPartById.get(allocation.paymentPartId);
+      const paymentPart = paymentPartById.get(allocation.paymentPartId);
 
-        if (paymentPart?.status === 'ACTIVE') {
-          return sum + this.toCents(allocation.amount);
-        }
+      if (paymentPart?.status === 'ACTIVE') {
+        return sum + this.toCents(allocation.amount);
+      }
 
-        return sum;
-      },
-      0,
-    );
+      return sum;
+    }, 0);
     const invoiceAmountCents = this.toCents(invoice.amount);
 
     return {

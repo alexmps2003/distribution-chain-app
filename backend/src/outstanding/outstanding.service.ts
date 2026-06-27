@@ -44,7 +44,8 @@ export class OutstandingService {
     >();
 
     for (const invoice of invoiceRows) {
-      const customerInvoices = invoicesByCustomerId.get(invoice.customerId) ?? [];
+      const customerInvoices =
+        invoicesByCustomerId.get(invoice.customerId) ?? [];
       customerInvoices.push(invoice);
       invoicesByCustomerId.set(invoice.customerId, customerInvoices);
     }
@@ -188,7 +189,8 @@ export class OutstandingService {
   async exportCsv() {
     const report = await this.findAll();
 
-    const reportCustomers = 'customers' in report ? report.customers : undefined;
+    const reportCustomers =
+      'customers' in report ? report.customers : undefined;
 
     if (!reportCustomers) {
       return this.toCsv([
