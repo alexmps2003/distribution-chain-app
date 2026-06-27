@@ -1,4 +1,13 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { CustomersService } from './customers.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
@@ -8,8 +17,22 @@ export class CustomersController {
   constructor(private readonly customersService: CustomersService) {}
 
   @Get()
-  async findAll() {
-    return this.customersService.findAll();
+  async findAll(
+    @Query('area') area?: string,
+    @Query('outstandingOnly') outstandingOnly?: string,
+    @Query('q') query?: string,
+    @Query('route') route?: string,
+    @Query('routeName') routeName?: string,
+    @Query('search') search?: string,
+  ) {
+    return this.customersService.findAll({
+      area,
+      outstandingOnly,
+      query,
+      route,
+      routeName,
+      search,
+    });
   }
 
   @Post()

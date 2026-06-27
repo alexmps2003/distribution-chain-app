@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import * as crypto from 'node:crypto';
 import { DatabaseService } from '../database/database.service';
 import {
@@ -11,12 +11,112 @@ import {
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 
+type CustomerListFilters = {
+  area?: string;
+  outstandingOnly?: string;
+  query?: string;
+  route?: string;
+  routeName?: string;
+  search?: string;
+};
+
 @Injectable()
 export class CustomersService {
   constructor(private readonly databaseService: DatabaseService) {}
 
-  async findAll() {
-    return this.databaseService.db.select().from(customers);
+  async findAll(filters: CustomerListFilters = {}) {
+    const customerRows = await this.databaseService.db
+      .select()
+      .from(customers)
+      .orderBy(desc(customers.createdAt));
+    const invoiceRows = await this.databaseService.db.select().from(invoices);
+    const allocationRows = await this.databaseService.db
+      .select()
+      .from(paymentAllocations);
+    const paymentPartRows = await this.databaseService.db
+      .select()
+      .from(paymentParts);
+
+    const searchQuery = filters.search?.trim() || filters.query?.trim() || '';
+    const selectedArea = filters.area?.trim() ?? '';
+    const selectedRoute =
+      filters.routeName?.trim() || filters.route?.trim() || '';
+    const outstandingOnly = filters.outstandingOnly === 'true';
+    const paymentPartById = new Map(
+      paymentPartRows.map((paymentPart) => [paymentPart.id, paymentPart]),
+    );
+    const invoicesByCustomerId = new Map<
+      string,
+      (typeof invoices.$inferSelect)[]
+    >();
+    const allocationsByInvoiceId = new Map<
+      string,
+      (typeof paymentAllocations.$inferSelect)[]
+    >();
+
+    for (const invoice of invoiceRows) {
+      const customerInvoices = invoicesByCustomerId.get(invoice.customerId) ?? [];
+      customerInvoices.push(invoice);
+      invoicesByCustomerId.set(invoice.customerId, customerInvoices);
+    }
+
+    for (const allocation of allocationRows) {
+      const invoiceAllocations =
+        allocationsByInvoiceId.get(allocation.invoiceId) ?? [];
+      invoiceAllocations.push(allocation);
+      allocationsByInvoiceId.set(allocation.invoiceId, invoiceAllocations);
+    }
+
+    return customerRows
+      .map((customer) => {
+        const customerInvoices = invoicesByCustomerId.get(customer.id) ?? [];
+        let totalInvoicedCents = 0;
+        let totalPaidCents = 0;
+        let unpaidInvoiceCount = 0;
+
+        for (const invoice of customerInvoices) {
+          const invoiceAmountCents = this.toCents(invoice.amount);
+          const activePaidCents = this.getActivePaidCents(
+            allocationsByInvoiceId.get(invoice.id) ?? [],
+            paymentPartById,
+          );
+
+          totalInvoicedCents += invoiceAmountCents;
+          totalPaidCents += activePaidCents;
+
+          if (activePaidCents < invoiceAmountCents) {
+            unpaidInvoiceCount += 1;
+          }
+        }
+
+        return {
+          customer,
+          summary: {
+            totalInvoiced: this.fromCents(totalInvoicedCents),
+            totalPaid: this.fromCents(totalPaidCents),
+            totalOutstanding: this.fromCents(
+              totalInvoicedCents - totalPaidCents,
+            ),
+            unpaidInvoiceCount,
+          },
+        };
+      })
+      .filter((row) => {
+        const customer = row.customer;
+        const matchesSearch =
+          !searchQuery ||
+          this.includesSearch(customer.name, searchQuery) ||
+          this.includesSearch(customer.code, searchQuery);
+        const matchesArea = !selectedArea || customer.area === selectedArea;
+        const matchesRoute =
+          !selectedRoute || customer.routeName === selectedRoute;
+        const matchesOutstanding =
+          !outstandingOnly || this.toCents(row.summary.totalOutstanding) > 0;
+
+        return (
+          matchesSearch && matchesArea && matchesRoute && matchesOutstanding
+        );
+      });
   }
 
   async create(dto: CreateCustomerDto) {
@@ -185,6 +285,10 @@ export class CustomersService {
     const fractionCents = Number(fractionPart.padEnd(2, '0').slice(0, 2));
 
     return sign * (wholeCents + fractionCents);
+  }
+
+  private includesSearch(value: string | null | undefined, query: string) {
+    return value?.toLowerCase().includes(query.toLowerCase()) ?? false;
   }
 
   private fromCents(value: number) {
