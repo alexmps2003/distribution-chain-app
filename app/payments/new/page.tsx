@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Prisma } from "@prisma/client";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { apiGet } from "@/lib/api-client";
 import { prisma } from "@/lib/prisma";
 import { withToast } from "@/lib/toast";
 import { getValidationErrorMessage } from "@/lib/validation/errors";
@@ -15,20 +16,31 @@ import PaymentMethodEntry, {
 
 const PAYMENT_FORM_COOKIE = "last-invalid-payment-form";
 
-type OutstandingInvoice = Prisma.InvoiceGetPayload<{
-  include: {
-    payments: {
-      select: {
-        amount: true;
-        paymentPart: {
-          select: {
-            status: true;
-          };
-        };
-      };
-    };
+type MoneyValue = string | number;
+
+type CustomerListResponse = {
+  customer: {
+    code: string;
+    id: string;
+    isActive: boolean;
+    name: string;
   };
-}>;
+}[];
+
+type InvoiceListResponse = {
+  invoices: {
+    invoice: {
+      amount: MoneyValue;
+      dueDate: string | null;
+      id: string;
+      invoiceDate: string;
+      invoiceNumber: string;
+    };
+    activePaidAmount: MoneyValue;
+    displayStatus: string;
+    outstanding: MoneyValue;
+  }[];
+};
 
 function getString(formData: FormData, name: string) {
   const value = formData.get(name);
@@ -436,59 +448,49 @@ export default async function NewPaymentPage(props: {
     ? parsePreservedPaymentForm(cookieStore.get(PAYMENT_FORM_COOKIE)?.value)
     : undefined;
 
-  const customers = await prisma.customer.findMany({
-    where: { isActive: true },
-    select: { id: true, name: true, code: true },
-    orderBy: { name: "asc" },
-  });
+  const customerRows = await apiGet<CustomerListResponse>("/customers");
+  const customers = customerRows
+    .filter((row) => row.customer.isActive)
+    .sort((left, right) =>
+      left.customer.name.localeCompare(right.customer.name),
+    )
+    .map((row) => ({
+      id: row.customer.id,
+      name: row.customer.name,
+      code: row.customer.code,
+    }));
 
-  let outstandingInvoices: OutstandingInvoice[] = [];
+  let outstandingInvoices: InvoiceListResponse["invoices"] = [];
   if (customerId) {
-    outstandingInvoices = await prisma.invoice.findMany({
-      where: {
-        customerId,
-        status: { in: ["UNPAID", "PARTIALLY_PAID"] },
-      },
-      include: {
-        payments: {
-          select: {
-            amount: true,
-            paymentPart: {
-              select: {
-                status: true,
-              },
-            },
-          },
-        },
-      },
-      orderBy: { invoiceDate: "asc" },
-    });
+    try {
+      const invoiceResponse = await apiGet<InvoiceListResponse>(
+        `/invoices?customerId=${encodeURIComponent(customerId)}`,
+      );
+
+      outstandingInvoices = invoiceResponse.invoices;
+    } catch (fetchError) {
+      if (
+        !(fetchError instanceof Error) ||
+        !fetchError.message.includes("failed with 404")
+      ) {
+        throw fetchError;
+      }
+    }
   }
 
   const allocationInvoices = outstandingInvoices
-    .map((invoice) => {
-      const activeAllocated = sumDecimals(
-        invoice.payments
-          .filter((allocation) => {
-            return (
-              allocation.paymentPart === null ||
-              allocation.paymentPart.status === "ACTIVE"
-            );
-          })
-          .map((allocation) => allocation.amount),
-      );
-      const outstandingAmount = invoice.amount.minus(activeAllocated);
-
-      return {
-        id: invoice.id,
-        invoiceNumber: invoice.invoiceNumber,
-        dueDate: invoice.dueDate?.toISOString() ?? null,
-        invoiceTotal: invoice.amount.toString(),
-        outstandingAmount: outstandingAmount.toFixed(2),
-        status: invoice.status,
-      };
-    })
-    .filter((invoice) => Number(invoice.outstandingAmount) > 0);
+    .filter((row) => Number(String(row.outstanding)) > 0)
+    .sort((left, right) =>
+      left.invoice.invoiceDate.localeCompare(right.invoice.invoiceDate),
+    )
+    .map(({ displayStatus, invoice, outstanding }) => ({
+      id: invoice.id,
+      invoiceNumber: invoice.invoiceNumber,
+      dueDate: invoice.dueDate,
+      invoiceTotal: invoice.amount.toString(),
+      outstandingAmount: Number(String(outstanding)).toFixed(2),
+      status: displayStatus,
+    }));
   const initialPaymentMethodState = buildInitialPaymentMethodState(
     preservedPaymentForm,
     allocationInvoices,
