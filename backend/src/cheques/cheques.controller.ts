@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Query } from '@nestjs/common';
 import { ReverseChequeDto } from './dto/reverse-cheque.dto';
 import { ChequesService } from './cheques.service';
 
@@ -7,8 +7,12 @@ export class ChequesController {
   constructor(private readonly chequesService: ChequesService) {}
 
   @Get()
-  findAll() {
-    return this.chequesService.findAll();
+  findAll(
+    @Query('q') query?: string,
+    @Query('bank') bank?: string,
+    @Query('status') status?: string,
+  ) {
+    return this.chequesService.findAll({ bank, query, status });
   }
 
   @Get(':id')

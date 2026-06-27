@@ -18,15 +18,45 @@ import { ReverseChequeDto } from './dto/reverse-cheque.dto';
 export class ChequesService {
   constructor(private readonly databaseService: DatabaseService) {}
 
-  async findAll() {
+  async findAll(filters: { bank?: string; query?: string; status?: string }) {
+    const query = filters.query?.trim().toLowerCase() ?? '';
+    const bank = filters.bank?.trim() ?? '';
+    const status =
+      filters.status === 'ACTIVE' || filters.status === 'REVERSED'
+        ? filters.status
+        : '';
     const chequeRows = await this.databaseService.db
       .select()
       .from(paymentParts)
       .where(eq(paymentParts.method, 'CHEQUE'))
       .orderBy(desc(paymentParts.chequeDate));
+    const filteredChequeRows = chequeRows
+      .filter((cheque) => {
+        if (!query) {
+          return true;
+        }
+
+        return cheque.chequeNumber?.toLowerCase().includes(query) ?? false;
+      })
+      .filter((cheque) => {
+        if (!bank) {
+          return true;
+        }
+
+        return cheque.chequeBank === bank;
+      })
+      .filter((cheque) => {
+        if (!status) {
+          return true;
+        }
+
+        return cheque.status === status;
+      });
 
     return Promise.all(
-      chequeRows.map((cheque) => this.withPaymentAndAllocations(cheque)),
+      filteredChequeRows.map((cheque) =>
+        this.withPaymentAndAllocations(cheque),
+      ),
     );
   }
 
