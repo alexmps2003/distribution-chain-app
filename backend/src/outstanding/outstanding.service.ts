@@ -185,6 +185,55 @@ export class OutstandingService {
     };
   }
 
+  async exportCsv() {
+    const report = await this.findAll();
+
+    const reportCustomers = 'customers' in report ? report.customers : undefined;
+
+    if (!reportCustomers) {
+      return this.toCsv([
+        [
+          'Customer Code',
+          'Customer Name',
+          'Invoice Number',
+          'Invoice Date',
+          'Due Date',
+          'Invoice Amount',
+          'Active Paid Amount',
+          'Outstanding',
+          'Days Overdue',
+        ],
+      ]);
+    }
+
+    return this.toCsv([
+      [
+        'Customer Code',
+        'Customer Name',
+        'Invoice Number',
+        'Invoice Date',
+        'Due Date',
+        'Invoice Amount',
+        'Active Paid Amount',
+        'Outstanding',
+        'Days Overdue',
+      ],
+      ...reportCustomers.flatMap((customer) =>
+        customer.invoices.map((invoice) => [
+          customer.customer.code,
+          customer.customer.name,
+          invoice.invoiceNumber,
+          this.formatDateForCsv(invoice.invoiceDate),
+          this.formatDateForCsv(invoice.dueDate),
+          invoice.amount,
+          invoice.activePaidAmount,
+          invoice.outstanding,
+          invoice.daysOverdue ?? '',
+        ]),
+      ),
+    ]);
+  }
+
   private getDisplayStatus(paidCents: number, outstandingCents: number) {
     if (outstandingCents <= 0) {
       return 'PAID';
@@ -240,5 +289,29 @@ export class OutstandingService {
     const fraction = String(absoluteValue % 100).padStart(2, '0');
 
     return `${sign}${whole}.${fraction}`;
+  }
+
+  private formatDateForCsv(date: Date | null) {
+    if (!date) {
+      return '';
+    }
+
+    return date.toISOString().slice(0, 10);
+  }
+
+  private escapeCsvValue(value: string | number) {
+    const text = String(value);
+
+    if (/[",\n\r]/.test(text)) {
+      return `"${text.replaceAll('"', '""')}"`;
+    }
+
+    return text;
+  }
+
+  private toCsv(rows: (string | number)[][]) {
+    return rows
+      .map((row) => row.map((value) => this.escapeCsvValue(value)).join(','))
+      .join('\r\n');
   }
 }

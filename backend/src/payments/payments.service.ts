@@ -160,11 +160,31 @@ export class PaymentsService {
       .select()
       .from(paymentAllocations)
       .where(eq(paymentAllocations.paymentId, id));
+    const [customer] = await this.databaseService.db
+      .select()
+      .from(customers)
+      .where(eq(customers.id, payment.customerId));
+    const invoiceIds = new Set(allocations.map((allocation) => allocation.invoiceId));
+    const invoiceRows = await this.databaseService.db.select().from(invoices);
+    const invoiceById = new Map(
+      invoiceRows
+        .filter((invoice) => invoiceIds.has(invoice.id))
+        .map((invoice) => [invoice.id, invoice]),
+    );
+    const paymentPartById = new Map(parts.map((part) => [part.id, part]));
 
     return {
-      ...payment,
+      payment,
+      receiptReference: this.formatPaymentReference(payment),
+      customer: customer ?? null,
       parts,
-      allocations,
+      allocations: allocations.map((allocation) => ({
+        ...allocation,
+        invoice: invoiceById.get(allocation.invoiceId) ?? null,
+        paymentPart: allocation.paymentPartId
+          ? (paymentPartById.get(allocation.paymentPartId) ?? null)
+          : null,
+      })),
     };
   }
 
