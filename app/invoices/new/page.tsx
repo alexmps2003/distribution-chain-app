@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { apiGet, apiPost } from "@/lib/api-client";
 import { withToast } from "@/lib/toast";
 import { getValidationErrorMessage } from "@/lib/validation/errors";
 import { parseInvoiceFormData } from "@/lib/validation/invoice";
@@ -12,6 +12,15 @@ const invoiceFormFields = [
   "invoiceDate",
   "invoiceNumber",
 ] as const;
+
+type CustomerListRow = {
+  customer: {
+    id: string;
+    name: string;
+    code: string;
+    isActive: boolean;
+  };
+};
 
 type InvoiceSearchParams = {
   [key: string]: string | string[] | undefined;
@@ -58,11 +67,10 @@ export default async function NewInvoicePage({
 }) {
   const submittedValues = await searchParams;
   const error = getFormValue(submittedValues, "error");
-  const customers = await prisma.customer.findMany({
-    where: { isActive: true },
-    select: { id: true, name: true, code: true },
-    orderBy: { name: "asc" },
-  });
+  const customers = (await apiGet<CustomerListRow[]>("/customers"))
+    .map(({ customer }) => customer)
+    .filter((customer) => customer.isActive)
+    .sort((left, right) => left.name.localeCompare(right.name));
 
   async function createInvoice(formData: FormData) {
     "use server";
@@ -80,15 +88,12 @@ export default async function NewInvoicePage({
       );
     }
 
-    await prisma.invoice.create({
-      data: {
-        customerId: invoice.customerId,
-        invoiceNumber: invoice.invoiceNumber,
-        amount: invoice.amount,
-        invoiceDate: invoice.invoiceDate,
-        dueDate: invoice.dueDate,
-        status: "UNPAID",
-      },
+    await apiPost("/invoices", {
+      customerId: invoice.customerId,
+      invoiceNumber: invoice.invoiceNumber,
+      amount: invoice.amount,
+      invoiceDate: invoice.invoiceDate,
+      dueDate: invoice.dueDate,
     });
 
     redirect(withToast("/invoices", "success", "Invoice created"));
