@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Landmark } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
-import { prisma } from "@/lib/prisma";
+import { apiGet } from "@/lib/api-client";
 import { BANK_OPTIONS } from "@/lib/bank-options";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
@@ -9,8 +9,27 @@ const numberFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 2,
 });
 
-function formatAmount(value: { toString(): string }) {
-  return numberFormatter.format(Number(value.toString()));
+type MoneyValue = string | number;
+
+type ChequeRow = {
+  amount: MoneyValue;
+  chequeBank: string | null;
+  chequeDate: string | null;
+  chequeNumber: string | null;
+  id: string;
+  payment: {
+    id: string;
+    paymentDate: string;
+    customer: {
+      code: string;
+      name: string;
+    } | null;
+  } | null;
+  status: string | null;
+};
+
+function formatAmount(value: MoneyValue) {
+  return numberFormatter.format(Number(String(value)));
 }
 
 function formatDate(date: Date | null) {
@@ -70,38 +89,23 @@ export default async function ChequesPage({
   const selectedStatus =
     status === "ACTIVE" || status === "REVERSED" ? status : "";
 
-  const cheques = await prisma.paymentPart.findMany({
-    where: {
-      method: "CHEQUE",
-      ...(selectedStatus ? { status: selectedStatus } : {}),
-      ...(selectedBank ? { chequeBank: selectedBank } : {}),
-      ...(query
-        ? {
-            chequeNumber: {
-              contains: query,
-              mode: "insensitive",
-            },
-          }
-        : {}),
-    },
-    include: {
-      payment: {
-        select: {
-          id: true,
-          paymentDate: true,
-          customer: {
-            select: {
-              code: true,
-              name: true,
-            },
-          },
-        },
-      },
-    },
-    orderBy: {
-      chequeDate: "desc",
-    },
-  });
+  const apiParams = new URLSearchParams();
+
+  if (query) {
+    apiParams.set("q", query);
+  }
+
+  if (selectedBank) {
+    apiParams.set("bank", selectedBank);
+  }
+
+  if (selectedStatus) {
+    apiParams.set("status", selectedStatus);
+  }
+
+  const cheques = await apiGet<ChequeRow[]>(
+    `/cheques${apiParams.size > 0 ? `?${apiParams.toString()}` : ""}`,
+  );
 
   return (
     <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
@@ -226,17 +230,24 @@ export default async function ChequesPage({
                         {cheque.chequeBank ?? "-"}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
-                        {formatDate(cheque.chequeDate)}
+                        {formatDate(
+                          cheque.chequeDate ? new Date(cheque.chequeDate) : null,
+                        )}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-zinc-600">
                         {formatAmount(cheque.amount)}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
-                        {cheque.payment.customer.name} (
-                        {cheque.payment.customer.code})
+                        {cheque.payment?.customer
+                          ? `${cheque.payment.customer.name} (${cheque.payment.customer.code})`
+                          : "Customer not found"}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
-                        {formatDate(cheque.payment.paymentDate)}
+                        {formatDate(
+                          cheque.payment
+                            ? new Date(cheque.payment.paymentDate)
+                            : null,
+                        )}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
                         <span
@@ -249,7 +260,11 @@ export default async function ChequesPage({
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-right">
                         <Link
-                          href={`/payments/${cheque.payment.id}?returnTo=/cheques`}
+                          href={
+                            cheque.payment
+                              ? `/payments/${cheque.payment.id}?returnTo=/cheques`
+                              : "/payments"
+                          }
                           className="inline-flex h-8 items-center justify-center rounded-md border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
                         >
                           Receipt

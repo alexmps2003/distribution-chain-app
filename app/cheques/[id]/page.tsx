@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { Prisma } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { apiGet, apiPatch } from "@/lib/api-client";
 import { withToast } from "@/lib/toast";
 import ReverseChequeButton from "./ReverseChequeButton";
 import UndoChequeReversalButton from "./UndoChequeReversalButton";
@@ -11,8 +10,37 @@ const numberFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 2,
 });
 
-function formatAmount(value: { toString(): string }) {
-  return numberFormatter.format(Number(value.toString()));
+type MoneyValue = string | number;
+
+type ChequeResponse = {
+  amount: MoneyValue;
+  allocations: {
+    amount: MoneyValue;
+    id: string;
+    invoice: {
+      amount: MoneyValue;
+      invoiceNumber: string;
+      status: string;
+    } | null;
+  }[];
+  chequeBank: string | null;
+  chequeDate: string | null;
+  chequeNumber: string | null;
+  id: string;
+  payment: {
+    customer: {
+      code: string;
+      name: string;
+    } | null;
+    paymentDate: string;
+  } | null;
+  reversalReason: string | null;
+  reversedAt: string | null;
+  status: string | null;
+};
+
+function formatAmount(value: MoneyValue) {
+  return numberFormatter.format(Number(String(value)));
 }
 
 function formatDate(date: Date | null) {
@@ -57,13 +85,6 @@ function getString(formData: FormData, name: string) {
   return value.trim();
 }
 
-function sumDecimals(values: Prisma.Decimal[]) {
-  return values.reduce(
-    (total, value) => total.plus(value),
-    new Prisma.Decimal(0),
-  );
-}
-
 async function reverseCheque(formData: FormData) {
   "use server";
 
@@ -78,93 +99,10 @@ async function reverseCheque(formData: FormData) {
     throw new Error("Reversal reason is required");
   }
 
-  await prisma.$transaction(async (tx) => {
-    const cheque = await tx.paymentPart.findUnique({
-      where: {
-        id: chequeId,
-      },
-      include: {
-        allocations: {
-          include: {
-            invoice: {
-              select: {
-                id: true,
-                amount: true,
-              },
-            },
-          },
-        },
-      },
-    });
-
-    if (!cheque) {
-      throw new Error("Cheque not found");
-    }
-
-    if (cheque.method !== "CHEQUE") {
-      throw new Error("Only cheque payment parts can be reversed here");
-    }
-
-    if (cheque.status !== "ACTIVE") {
-      throw new Error("Only active cheques can be reversed");
-    }
-
-    await tx.paymentPart.update({
-      where: {
-        id: cheque.id,
-      },
-      data: {
-        status: "REVERSED",
-        reversedAt: new Date(),
-        reversalReason,
-      },
-    });
-
-    const affectedInvoices = new Map(
-      cheque.allocations.map((allocation) => [
-        allocation.invoice.id,
-        allocation.invoice,
-      ]),
-    );
-
-    for (const invoice of affectedInvoices.values()) {
-      const activeAllocations = await tx.paymentAllocation.findMany({
-        where: {
-          invoiceId: invoice.id,
-          OR: [
-            {
-              paymentPartId: null,
-            },
-            {
-              paymentPart: {
-                status: "ACTIVE",
-              },
-            },
-          ],
-        },
-        select: {
-          amount: true,
-        },
-      });
-      const activePaidTotal = sumDecimals(
-        activeAllocations.map((allocation) => allocation.amount),
-      );
-      const status = activePaidTotal.gte(invoice.amount)
-        ? "PAID"
-        : activePaidTotal.gt(0)
-          ? "PARTIALLY_PAID"
-          : "UNPAID";
-
-      await tx.invoice.update({
-        where: {
-          id: invoice.id,
-        },
-        data: {
-          status,
-        },
-      });
-    }
-  });
+  await apiPatch<unknown, { reversalReason: string }>(
+    `/cheques/${encodeURIComponent(chequeId)}/reverse`,
+    { reversalReason },
+  );
 
   redirect(withToast(`/cheques/${chequeId}`, "success", "Cheque reversed"));
 }
@@ -178,93 +116,10 @@ async function undoChequeReversal(formData: FormData) {
     throw new Error("Cheque id is required");
   }
 
-  await prisma.$transaction(async (tx) => {
-    const cheque = await tx.paymentPart.findUnique({
-      where: {
-        id: chequeId,
-      },
-      include: {
-        allocations: {
-          include: {
-            invoice: {
-              select: {
-                id: true,
-                amount: true,
-              },
-            },
-          },
-        },
-      },
-    });
-
-    if (!cheque) {
-      throw new Error("Cheque not found");
-    }
-
-    if (cheque.method !== "CHEQUE") {
-      throw new Error("Only cheque payment parts can be restored here");
-    }
-
-    if (cheque.status !== "REVERSED") {
-      throw new Error("Only reversed cheques can be restored");
-    }
-
-    await tx.paymentPart.update({
-      where: {
-        id: cheque.id,
-      },
-      data: {
-        status: "ACTIVE",
-        reversedAt: null,
-        reversalReason: null,
-      },
-    });
-
-    const affectedInvoices = new Map(
-      cheque.allocations.map((allocation) => [
-        allocation.invoice.id,
-        allocation.invoice,
-      ]),
-    );
-
-    for (const invoice of affectedInvoices.values()) {
-      const activeAllocations = await tx.paymentAllocation.findMany({
-        where: {
-          invoiceId: invoice.id,
-          OR: [
-            {
-              paymentPartId: null,
-            },
-            {
-              paymentPart: {
-                status: "ACTIVE",
-              },
-            },
-          ],
-        },
-        select: {
-          amount: true,
-        },
-      });
-      const activePaidTotal = sumDecimals(
-        activeAllocations.map((allocation) => allocation.amount),
-      );
-      const status = activePaidTotal.gte(invoice.amount)
-        ? "PAID"
-        : activePaidTotal.gt(0)
-          ? "PARTIALLY_PAID"
-          : "UNPAID";
-
-      await tx.invoice.update({
-        where: {
-          id: invoice.id,
-        },
-        data: {
-          status,
-        },
-      });
-    }
-  });
+  await apiPatch<unknown, Record<string, never>>(
+    `/cheques/${encodeURIComponent(chequeId)}/undo-reversal`,
+    {},
+  );
 
   redirect(
     withToast(`/cheques/${chequeId}`, "success", "Cheque reversal undone"),
@@ -286,39 +141,30 @@ export default async function ChequeDetailsPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const cheque = await prisma.paymentPart.findUnique({
-    where: { id },
-    include: {
-      payment: {
-        include: {
-          customer: {
-            select: {
-              code: true,
-              name: true,
-            },
-          },
-        },
-      },
-      allocations: {
-        include: {
-          invoice: {
-            select: {
-              invoiceNumber: true,
-              amount: true,
-              status: true,
-            },
-          },
-        },
-        orderBy: {
-          id: "asc",
-        },
-      },
-    },
-  });
+  let cheque: ChequeResponse | null;
 
-  if (!cheque || cheque.method !== "CHEQUE") {
+  try {
+    cheque = await apiGet<ChequeResponse | null>(
+      `/cheques/${encodeURIComponent(id)}`,
+    );
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("failed with 404")) {
+      notFound();
+    }
+
+    throw error;
+  }
+
+  if (!cheque) {
     notFound();
   }
+
+  cheque = {
+    ...cheque,
+    allocations: [...cheque.allocations].sort((left, right) =>
+      left.id.localeCompare(right.id),
+    ),
+  };
 
   const chequeStatus = normalizePaymentPartStatus(cheque.status);
   const isReversed = chequeStatus === "REVERSED";
@@ -367,16 +213,24 @@ export default async function ChequeDetailsPage({
             <DetailItem label="Bank" value={cheque.chequeBank ?? "-"} />
             <DetailItem
               label="Cheque Date"
-              value={formatDate(cheque.chequeDate)}
+              value={formatDate(
+                cheque.chequeDate ? new Date(cheque.chequeDate) : null,
+              )}
             />
             <DetailItem label="Amount" value={formatAmount(cheque.amount)} />
             <DetailItem
               label="Customer"
-              value={`${cheque.payment.customer.name} (${cheque.payment.customer.code})`}
+              value={
+                cheque.payment?.customer
+                  ? `${cheque.payment.customer.name} (${cheque.payment.customer.code})`
+                  : "Customer not found"
+              }
             />
             <DetailItem
               label="Payment Date"
-              value={formatDate(cheque.payment.paymentDate)}
+              value={formatDate(
+                cheque.payment ? new Date(cheque.payment.paymentDate) : null,
+              )}
             />
             <DetailItem label="Status" value={formatStatus(chequeStatus)} />
           </dl>
@@ -421,16 +275,18 @@ export default async function ChequeDetailsPage({
                     {cheque.allocations.map((allocation) => (
                       <tr key={allocation.id}>
                         <td className="whitespace-nowrap px-4 py-3 font-medium text-zinc-950">
-                          {allocation.invoice.invoiceNumber}
+                          {allocation.invoice?.invoiceNumber ?? "-"}
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-zinc-600">
-                          {formatAmount(allocation.invoice.amount)}
+                          {allocation.invoice
+                            ? formatAmount(allocation.invoice.amount)
+                            : "-"}
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-zinc-600">
                           {formatAmount(allocation.amount)}
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
-                          {allocation.invoice.status.replace("_", " ")}
+                          {allocation.invoice?.status.replace("_", " ") ?? "-"}
                         </td>
                       </tr>
                     ))}
@@ -457,7 +313,9 @@ export default async function ChequeDetailsPage({
               <dl className="grid gap-4 sm:grid-cols-2">
                 <DetailItem
                   label="Reversed Date"
-                  value={formatDate(cheque.reversedAt)}
+                  value={formatDate(
+                    cheque.reversedAt ? new Date(cheque.reversedAt) : null,
+                  )}
                 />
                 <DetailItem
                   label="Reversal Reason"
