@@ -1,39 +1,64 @@
 import Link from "next/link";
-import { Prisma } from "@prisma/client";
 import { Users } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
-import { prisma } from "@/lib/prisma";
+import { apiGet } from "@/lib/api-client";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
 
-function formatAmount(value: { toString(): string }) {
-  return numberFormatter.format(Number(value.toString()));
+type CustomerListRow = {
+  customer: {
+    id: string;
+    code: string;
+    name: string;
+    area: string | null;
+    routeName: string | null;
+    assignedCollector: string | null;
+    isActive: boolean;
+  };
+  summary: {
+    totalInvoiced: string | number;
+    totalPaid: string | number;
+    totalOutstanding: string | number;
+    unpaidInvoiceCount: number;
+  };
+};
+
+function formatAmount(value: string | number) {
+  return numberFormatter.format(Number(String(value)));
 }
 
-function sumDecimals(values: Prisma.Decimal[]) {
-  return values.reduce(
-    (total, value) => total.plus(value),
-    new Prisma.Decimal(0),
-  );
+function toCents(value: string | number) {
+  const text = String(value);
+  const sign = text.startsWith("-") ? -1 : 1;
+  const [wholePart, fractionPart = ""] = text.replace("-", "").split(".");
+  const wholeCents = Number(wholePart || "0") * 100;
+  const fractionCents = Number(fractionPart.padEnd(2, "0").slice(0, 2));
+
+  return sign * (wholeCents + fractionCents);
 }
 
-function getActivePaidAmount(payments: {
-  amount: Prisma.Decimal;
-  paymentPart: { status: string } | null;
-}[]) {
-  return sumDecimals(
-    payments
-      .filter((allocation) => {
-        return (
-          allocation.paymentPart === null ||
-          allocation.paymentPart.status === "ACTIVE"
-        );
-      })
-      .map((allocation) => allocation.amount),
-  );
+function fromCents(value: number) {
+  const sign = value < 0 ? "-" : "";
+  const absoluteValue = Math.abs(value);
+  const whole = Math.floor(absoluteValue / 100);
+  const fraction = String(absoluteValue % 100).padStart(2, "0");
+
+  return `${sign}${whole}.${fraction}`;
+}
+
+function sumAmounts(values: (string | number)[]) {
+  const totalCents = values.reduce<number>((total, value) => {
+    return total + toCents(value);
+  }, 0);
+
+  return fromCents(totalCents);
+}
+
+function subtractAmounts(left: string | number, right: string | number) {
+  return fromCents(toCents(left) - toCents(right));
 }
 
 function SummaryCard({
@@ -78,61 +103,20 @@ export default async function CustomersPage({
   const selectedArea = area?.trim() ?? "";
   const selectedRoute = route?.trim() ?? "";
   const outstandingOnly = outstanding === "true";
-  const customers = await prisma.customer.findMany({
-    select: {
-      id: true,
-      code: true,
-      name: true,
-      area: true,
-      routeName: true,
-      assignedCollector: true,
-      isActive: true,
-      invoices: {
-        select: {
-          amount: true,
-          payments: {
-            select: {
-              amount: true,
-              paymentPart: {
-                select: {
-                  status: true,
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-  });
-  const areaOptions = getUniqueOptions(customers.map((customer) => customer.area));
-  const routeOptions = getUniqueOptions(
-    customers.map((customer) => customer.routeName),
+  const customers = await apiGet<CustomerListRow[]>("/customers");
+  const areaOptions = getUniqueOptions(
+    customers.map(({ customer }) => customer.area),
   );
-  const customerRows = customers.map((customer) => {
-    const totalInvoiced = sumDecimals(
-      customer.invoices.map((invoice) => invoice.amount),
-    );
-    const totalPaid = sumDecimals(
-      customer.invoices.map((invoice) => getActivePaidAmount(invoice.payments)),
-    );
-    const invoiceOutstanding = totalInvoiced.minus(totalPaid);
-    const openInvoiceCount = customer.invoices.filter((invoice) => {
-      const paidAmount = getActivePaidAmount(invoice.payments);
-
-      return paidAmount.lt(invoice.amount);
-    }).length;
-
-    return {
-      ...customer,
-      invoiceOutstanding,
-      openInvoiceCount,
-      totalInvoiced,
-      totalPaid,
-    };
-  });
+  const routeOptions = getUniqueOptions(
+    customers.map(({ customer }) => customer.routeName),
+  );
+  const customerRows = customers.map(({ customer, summary }) => ({
+    ...customer,
+    invoiceOutstanding: summary.totalOutstanding,
+    openInvoiceCount: summary.unpaidInvoiceCount,
+    totalInvoiced: summary.totalInvoiced,
+    totalPaid: summary.totalPaid,
+  }));
   const filteredCustomerRows = customerRows.filter((customer) => {
     const matchesSearch =
       !searchQuery ||
@@ -141,17 +125,17 @@ export default async function CustomersPage({
     const matchesArea = !selectedArea || customer.area === selectedArea;
     const matchesRoute = !selectedRoute || customer.routeName === selectedRoute;
     const matchesOutstanding =
-      !outstandingOnly || customer.invoiceOutstanding.gt(0);
+      !outstandingOnly || toCents(customer.invoiceOutstanding) > 0;
 
     return matchesSearch && matchesArea && matchesRoute && matchesOutstanding;
   });
-  const totalInvoiced = sumDecimals(
+  const totalInvoiced = sumAmounts(
     filteredCustomerRows.map((customer) => customer.totalInvoiced),
   );
-  const totalPaid = sumDecimals(
+  const totalPaid = sumAmounts(
     filteredCustomerRows.map((customer) => customer.totalPaid),
   );
-  const totalOutstanding = totalInvoiced.minus(totalPaid);
+  const totalOutstanding = subtractAmounts(totalInvoiced, totalPaid);
 
   return (
     <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
