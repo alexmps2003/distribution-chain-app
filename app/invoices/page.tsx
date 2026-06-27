@@ -1,16 +1,53 @@
 import Link from "next/link";
-import { Prisma } from "@prisma/client";
 import { FileText, Users } from "lucide-react";
 import { notFound } from "next/navigation";
 import EmptyState from "@/components/EmptyState";
-import { prisma } from "@/lib/prisma";
+import { apiGet } from "@/lib/api-client";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
 
-function formatAmount(value: { toString(): string }) {
+type InvoiceCustomer = {
+  id: string;
+  code: string;
+  name: string;
+};
+
+type InvoiceRecord = {
+  id: string;
+  invoiceNumber: string;
+  invoiceDate: string;
+  dueDate: string | null;
+  amount: string | number;
+  createdAt: string;
+};
+
+type CustomerInvoiceResponse = {
+  customer: InvoiceCustomer;
+  invoices: {
+    invoice: InvoiceRecord;
+    activePaidAmount: string | number;
+    outstanding: string | number;
+    displayStatus: string;
+  }[];
+};
+
+type CustomerInvoiceSummaryRow = {
+  customer: InvoiceCustomer;
+  invoiceCount: number;
+  totalInvoiced: string | number;
+  totalPaid: string | number;
+  totalOutstanding: string | number;
+  calculatedStatusSummary: {
+    PAID: number;
+    PARTIALLY_PAID: number;
+    UNPAID: number;
+  };
+};
+
+function formatAmount(value: string | number) {
   return numberFormatter.format(Number(value.toString()));
 }
 
@@ -21,44 +58,6 @@ function formatDate(date: Date | null) {
     month: "short",
     day: "numeric",
   });
-}
-
-function sumDecimals(values: Prisma.Decimal[]) {
-  return values.reduce(
-    (total, value) => total.plus(value),
-    new Prisma.Decimal(0),
-  );
-}
-
-function getActivePaidAmount(payments: {
-  amount: Prisma.Decimal;
-  paymentPart: { status: string } | null;
-}[]) {
-  return sumDecimals(
-    payments
-      .filter((allocation) => {
-        return (
-          allocation.paymentPart === null ||
-          allocation.paymentPart.status === "ACTIVE"
-        );
-      })
-      .map((allocation) => allocation.amount),
-  );
-}
-
-function getDisplayStatus(
-  invoiceTotal: Prisma.Decimal,
-  paidAmount: Prisma.Decimal,
-) {
-  if (paidAmount.gte(invoiceTotal)) {
-    return "PAID";
-  }
-
-  if (paidAmount.gt(0)) {
-    return "PARTIALLY_PAID";
-  }
-
-  return "UNPAID";
 }
 
 function getStatusBadgeClass(status: string) {
@@ -173,50 +172,31 @@ export default async function InvoicesPage({
   const selectedStatus = getSelectedStatus(status);
 
   if (customerId) {
-    const customer = await prisma.customer.findUnique({
-      where: {
-        id: customerId,
-      },
-      select: {
-        code: true,
-        name: true,
-        invoices: {
-          include: {
-            payments: {
-              select: {
-                amount: true,
-                paymentPart: {
-                  select: {
-                    status: true,
-                  },
-                },
-              },
-            },
-          },
-          orderBy: {
-            createdAt: "desc",
-          },
-        },
-      },
-    });
+    let invoiceResponse: CustomerInvoiceResponse;
 
-    if (!customer) {
-      notFound();
+    try {
+      invoiceResponse = await apiGet<CustomerInvoiceResponse>(
+        `/invoices?customerId=${encodeURIComponent(customerId)}`,
+      );
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("failed with 404")) {
+        notFound();
+      }
+
+      throw error;
     }
 
-    const invoiceRows = customer.invoices
-      .map((invoice) => {
-        const paidAmount = getActivePaidAmount(invoice.payments);
-        const outstandingAmount = invoice.amount.minus(paidAmount);
-        const displayStatus = getDisplayStatus(invoice.amount, paidAmount);
+    const { customer } = invoiceResponse;
+    const invoiceRows = invoiceResponse.invoices
+      .map(({ activePaidAmount, displayStatus, invoice, outstanding }) => {
         const invoiceHref = `/invoices/${invoice.id}?customerId=${customerId}`;
 
         return {
           ...invoice,
           displayStatus,
           invoiceHref,
-          outstandingAmount,
-          paidAmount,
+          outstandingAmount: outstanding,
+          paidAmount: activePaidAmount,
         };
       })
       .filter((invoice) => {
@@ -312,7 +292,7 @@ export default async function InvoicesPage({
                             href={invoice.invoiceHref}
                             className="block px-4 py-3"
                           >
-                            {formatDate(invoice.invoiceDate)}
+                            {formatDate(new Date(invoice.invoiceDate))}
                           </Link>
                         </td>
                         <td className="whitespace-nowrap text-zinc-600">
@@ -320,7 +300,11 @@ export default async function InvoicesPage({
                             href={invoice.invoiceHref}
                             className="block px-4 py-3"
                           >
-                            {formatDate(invoice.dueDate)}
+                            {formatDate(
+                              invoice.dueDate
+                                ? new Date(invoice.dueDate)
+                                : null,
+                            )}
                           </Link>
                         </td>
                         <td className="whitespace-nowrap text-right font-medium text-zinc-600">
@@ -366,7 +350,7 @@ export default async function InvoicesPage({
                             href={invoice.invoiceHref}
                             className="block px-4 py-3"
                           >
-                            {formatDate(invoice.createdAt)}
+                            {formatDate(new Date(invoice.createdAt))}
                           </Link>
                         </td>
                       </tr>
@@ -381,49 +365,18 @@ export default async function InvoicesPage({
     );
   }
 
-  const customers = await prisma.customer.findMany({
-    select: {
-      id: true,
-      code: true,
-      name: true,
-      invoices: {
-        include: {
-          payments: {
-            select: {
-              amount: true,
-              paymentPart: {
-                select: {
-                  status: true,
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-    orderBy: {
-      name: "asc",
-    },
-  });
-  const customerRows = customers.map((customer) => {
-    const totalInvoicedAmount = sumDecimals(
-      customer.invoices.map((invoice) => invoice.amount),
-    );
-    const totalPaidAmount = sumDecimals(
-      customer.invoices.map((invoice) => getActivePaidAmount(invoice.payments)),
-    );
-    const totalOutstandingAmount = totalInvoicedAmount.minus(totalPaidAmount);
-
+  const customers = await apiGet<CustomerInvoiceSummaryRow[]>("/invoices");
+  const customerRows = customers.map((row) => {
     return {
-      ...customer,
+      ...row.customer,
       invoiceHref: buildInvoicesHref({
-        customerId: customer.id,
+        customerId: row.customer.id,
         status: selectedStatus || undefined,
       }),
-      totalInvoicedAmount,
-      totalInvoiceCount: customer.invoices.length,
-      totalOutstandingAmount,
-      totalPaidAmount,
+      totalInvoicedAmount: row.totalInvoiced,
+      totalInvoiceCount: row.invoiceCount,
+      totalOutstandingAmount: row.totalOutstanding,
+      totalPaidAmount: row.totalPaid,
     };
   });
 
