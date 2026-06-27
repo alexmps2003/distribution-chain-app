@@ -90,3 +90,12 @@ export const paymentAllocations = pgTable('PaymentAllocation', {
   paymentPartId: text('paymentPartId'),
   amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
 });
+
+export const collections = pgTable('Collection', {
+  id: text('id').primaryKey(),
+  collectorId: text('collectorId').notNull(),
+  customerId: text('customerId').notNull(),
+  collectionDate: timestamp('collectionDate').notNull(),
+  status: text('status').notNull(),
+  createdAt: timestamp('createdAt').notNull(),
+});
