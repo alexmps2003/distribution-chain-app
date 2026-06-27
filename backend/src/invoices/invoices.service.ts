@@ -128,7 +128,7 @@ export class InvoicesService {
         amount: dto.amount,
         invoiceDate: new Date(dto.invoiceDate),
         dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
-        status: dto.status ?? 'UNPAID',
+        status: 'UNPAID',
         customerId: dto.customerId,
         createdAt: new Date(),
       })

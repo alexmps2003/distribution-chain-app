@@ -1,7 +1,7 @@
 import {
   BadRequestException,
   Injectable,
-  NotFoundException,
+  NotImplementedException,
 } from '@nestjs/common';
 import * as crypto from 'node:crypto';
 import { eq } from 'drizzle-orm';
@@ -292,81 +292,8 @@ export class PaymentsService {
   }
 
   async reverse(id: string) {
-    return this.databaseService.db.transaction(async (tx) => {
-      const parts = await tx
-        .select()
-        .from(paymentParts)
-        .where(eq(paymentParts.paymentId, id));
-
-      if (parts.length === 0) {
-        throw new NotFoundException('Payment not found');
-      }
-
-      await tx
-        .update(paymentParts)
-        .set({ status: 'REVERSED' })
-        .where(eq(paymentParts.paymentId, id));
-
-      const paymentAllocationRows = await tx
-        .select()
-        .from(paymentAllocations)
-        .where(eq(paymentAllocations.paymentId, id));
-
-      const affectedInvoiceIds = [
-        ...new Set(
-          paymentAllocationRows.map((allocation) => allocation.invoiceId),
-        ),
-      ];
-
-      for (const invoiceId of affectedInvoiceIds) {
-        const [invoice] = await tx
-          .select()
-          .from(invoices)
-          .where(eq(invoices.id, invoiceId));
-
-        if (!invoice) {
-          continue;
-        }
-
-        const invoiceAllocations = await tx
-          .select()
-          .from(paymentAllocations)
-          .where(eq(paymentAllocations.invoiceId, invoiceId));
-
-        let paidTotal = 0;
-
-        for (const allocation of invoiceAllocations) {
-          if (!allocation.paymentPartId) {
-            continue;
-          }
-
-          const [part] = await tx
-            .select()
-            .from(paymentParts)
-            .where(eq(paymentParts.id, allocation.paymentPartId));
-
-          if (part?.status === 'ACTIVE') {
-            paidTotal += Number(allocation.amount);
-          }
-        }
-
-        const invoiceAmount = Number(invoice.amount);
-        const status =
-          paidTotal >= invoiceAmount
-            ? 'PAID'
-            : paidTotal > 0
-              ? 'PARTIALLY_PAID'
-              : 'UNPAID';
-
-        await tx
-          .update(invoices)
-          .set({ status })
-          .where(eq(invoices.id, invoiceId));
-      }
-
-      return {
-        message: 'Payment reversed',
-      };
-    });
+    throw new NotImplementedException(
+      'Whole payment reversal is not implemented. Use /api/cheques/:id/reverse for cheque reversal.',
+    );
   }
 }
