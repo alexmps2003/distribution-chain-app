@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { apiGet, apiPatch } from "@/lib/api-client";
 import { withToast } from "@/lib/toast";
 import { getValidationErrorMessage } from "@/lib/validation/errors";
 import { parseCustomerFormData } from "@/lib/validation/customer";
@@ -22,6 +22,27 @@ const customerFormFields = [
   "routeName",
   "whatsappNumber",
 ] as const;
+
+type CustomerDetailResponse = {
+  customer: {
+    id: string;
+    code: string;
+    name: string;
+    ownerName: string | null;
+    contactPerson: string | null;
+    phone: string | null;
+    whatsappNumber: string | null;
+    email: string | null;
+    address: string | null;
+    area: string | null;
+    routeName: string | null;
+    assignedSalesRep: string | null;
+    assignedCollector: string | null;
+    creditLimit: string | number;
+    paymentTermsDays: number;
+    isActive: boolean;
+  };
+};
 
 interface EditCustomerPageProps {
   params: Promise<{
@@ -77,13 +98,15 @@ export default async function EditCustomerPage({
   const { id } = await params;
   const submittedValues = await searchParams;
   const error = getFormValue(submittedValues, "error");
-  const customer = await prisma.customer.findUnique({
-    where: { id },
-  });
+  const customerDetail = await apiGet<CustomerDetailResponse | null>(
+    `/customers/${encodeURIComponent(id)}`,
+  );
 
-  if (!customer) {
+  if (!customerDetail) {
     notFound();
   }
+
+  const { customer } = customerDetail;
 
   async function updateCustomer(formData: FormData) {
     "use server";
@@ -102,25 +125,22 @@ export default async function EditCustomerPage({
       );
     }
 
-    await prisma.customer.update({
-      where: { id },
-      data: {
-        code: customerInput.code,
-        name: customerInput.name,
-        ownerName: customerInput.ownerName,
-        contactPerson: customerInput.contactPerson,
-        phone: customerInput.phone,
-        whatsappNumber: customerInput.whatsappNumber,
-        email: customerInput.email,
-        address: customerInput.address,
-        area: customerInput.area,
-        routeName: customerInput.routeName,
-        assignedSalesRep: customerInput.assignedSalesRep,
-        assignedCollector: customerInput.assignedCollector,
-        creditLimit: customerInput.creditLimit,
-        paymentTermsDays: customerInput.paymentTermsDays,
-        isActive: customerInput.isActive === "true",
-      },
+    await apiPatch(`/customers/${encodeURIComponent(id)}`, {
+      code: customerInput.code,
+      name: customerInput.name,
+      ownerName: customerInput.ownerName,
+      contactPerson: customerInput.contactPerson,
+      phone: customerInput.phone,
+      whatsappNumber: customerInput.whatsappNumber,
+      email: customerInput.email,
+      address: customerInput.address,
+      area: customerInput.area,
+      routeName: customerInput.routeName,
+      assignedSalesRep: customerInput.assignedSalesRep,
+      assignedCollector: customerInput.assignedCollector,
+      creditLimit: customerInput.creditLimit,
+      paymentTermsDays: customerInput.paymentTermsDays,
+      isActive: customerInput.isActive === "true",
     });
 
     redirect(withToast(`/customers/${id}`, "success", "Customer updated"));
