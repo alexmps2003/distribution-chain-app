@@ -22,8 +22,161 @@ The business context is cash collection in a Sri Lankan distribution workflow:
 - Owners need quick reports showing who owes money, how old the balances are,
   what has been collected, and which cheques are active or reversed.
 
+
 The root dashboard is the operational landing page. It links to Customers,
 Invoices, Payments, Cheques, Outstanding, Aging, and creation flows.
+
+## 1.1 Current Project Phase
+
+Phase 1 / backend rebuild work is considered complete at this point:
+
+- NestJS backend was built separately under `backend/src`.
+- Backend behavior was aligned with the existing Next.js web app behavior.
+- Critical parity issues were fixed, especially cheque reversal as
+  `PaymentPart` reversal instead of whole `Payment` reversal.
+- Nice-to-have parity and cleanup/polish were completed.
+- Builds and lint checks were clean before starting frontend integration.
+
+The next active phase is frontend integration.
+
+Frontend integration goal:
+
+- Replace the existing frontend's direct Prisma/server-action data access with
+  calls to the NestJS API.
+- Preserve the current UI behavior unless a future request explicitly changes
+  the product behavior.
+- Migrate one module at a time and test after each module before moving on.
+
+Recommended frontend integration order:
+
+1. Customers
+2. Invoices
+3. Payments read pages
+4. Outstanding
+5. Aging
+6. Dashboard
+7. Search
+8. Cheques
+9. Statements
+10. Payment creation/edit flows
+
+Reason for this order:
+
+- Start with lower-risk read-only or simpler pages.
+- Establish a stable API-client pattern before touching complex financial
+  write flows.
+- Leave payment creation/edit flows until last because mixed-method payments,
+  invoice allocations, and cheque metadata are the most complex parts of the
+  app.
+
+## 1.2 Tech Stack And Architecture
+
+Current existing web app stack:
+
+- Frontend: Next.js, React, TypeScript.
+- UI behavior: existing pages, components, server actions, validation, and toast
+  flows should be preserved during migration.
+- Current web app ORM: Prisma.
+- Current database source of truth: `prisma/schema.prisma`.
+- Database: PostgreSQL.
+
+Backend rebuild stack:
+
+- Backend framework: NestJS.
+- Language: TypeScript.
+- Intended backend ORM: Drizzle.
+- Backend schema rule: Drizzle schema should mirror the existing Prisma schema
+  unless the Prisma model is intentionally changed first or a schema change is
+  explicitly approved.
+- API style: REST endpoints under `/api/...`.
+- Financial writes should use transactions.
+
+Target architecture after frontend integration:
+
+```text
+Next.js frontend
+  -> API client / fetch calls
+  -> NestJS REST API
+  -> Backend services / business logic
+  -> Drizzle ORM
+  -> PostgreSQL database
+```
+
+Important architectural rule:
+
+- The frontend should not directly access Prisma for migrated modules.
+- Prisma remains the source of truth for understanding the existing app model,
+  but the migrated frontend should talk to the backend API.
+- Drizzle belongs inside the backend, not in the frontend.
+- The API layer should protect future clients such as a mobile app from needing
+  to know database or ORM details.
+
+## 1.3 Frontend Migration Rules
+
+When migrating a frontend module from Prisma/server actions to API calls:
+
+- Preserve the existing route URLs and user-facing page behavior where possible.
+- Preserve current validation messages, success toasts, redirects, filters, and
+  query-parameter behavior unless intentionally changed.
+- Replace data loading first, then write actions.
+- Prefer small module-level changes over large rewrites.
+- After each module, run the relevant app checks and manually verify the page in
+  the browser.
+- Do not redesign the UI during API migration unless explicitly requested.
+- Do not change financial calculations in the frontend if the backend already
+  returns the correct calculated values.
+- If the frontend currently calculates a derived value, decide deliberately
+  whether the calculation should remain in the UI or move behind the API.
+- Keep `PROJECT_CONTEXT.md` updated whenever a business rule, architecture
+  decision, or migration decision is clarified.
+
+Migration pattern:
+
+```text
+Before:
+Next.js page/server action -> Prisma -> PostgreSQL
+
+After:
+Next.js page/client helper/server action wrapper -> NestJS API -> Drizzle -> PostgreSQL
+```
+
+## 1.4 Git And Branching Notes
+
+The backend cleanup milestone was reached on branch `phase-3-backend-clean`.
+
+Recommended transition into frontend integration:
+
+```bash
+git checkout dev
+git pull origin dev
+git merge phase-3-backend-clean
+git push origin dev
+
+git checkout -b phase-4-frontend-integration
+git push -u origin phase-4-frontend-integration
+```
+
+Frontend API migration work should happen on a dedicated branch such as
+`phase-4-frontend-integration` so the completed backend milestone stays easy to
+recover or compare against.
+
+## 1.5 Documentation Rules For Future Chats
+
+This file should be treated as the project handbook and source of project
+memory.
+
+When continuing work in a new chat or with a new AI assistant:
+
+- Start by reading this file.
+- Do not rely only on chat memory for business rules.
+- If this file and a previous chat disagree, inspect the actual code and update
+  this file with the confirmed behavior.
+- Record important decisions here, especially financial behavior and migration
+  decisions.
+- Keep uncertain behavior in the `Unknowns / Needs Confirmation` section until
+  it is verified in code.
+- Do not remove existing business rules casually; append corrections or replace
+  them only after confirming against the current code.
 
 ## 2. Source Of Truth
 
@@ -902,5 +1055,10 @@ confirmed before backend behavior is finalized:
 - `OVERDUE` and `CANCELLED` are valid `InvoiceStatus` enum values, but most
   current UI calculations collapse invoice display status to `PAID`,
   `PARTIALLY_PAID`, or `UNPAID`.
+
 - The current backend under `backend/src` is being rebuilt separately from the
   Next.js web app. The web app still uses Prisma directly.
+- During frontend integration, confirm whether each module should receive fully
+  calculated view models from the API or whether some display-only calculations
+  should remain in the Next.js frontend. Prefer backend-calculated financial
+  totals for consistency, but preserve UI behavior during migration.
