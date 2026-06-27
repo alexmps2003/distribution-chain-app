@@ -6,6 +6,7 @@ import {
 import * as crypto from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import {
+  customers,
   invoices,
   paymentAllocations,
   paymentParts,
@@ -13,6 +14,15 @@ import {
 } from '../db/schema';
 import { DatabaseService } from '../database/database.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
+
+type PaymentListFilters = {
+  from?: string;
+  method?: string;
+  month?: string;
+  query?: string;
+  search?: string;
+  to?: string;
+};
 
 @Injectable()
 export class PaymentsService {
@@ -22,20 +32,114 @@ export class PaymentsService {
     return values.reduce((sum, value) => sum + this.toCents(value), 0);
   }
 
-  async findAll() {
+  async findAll(filters: PaymentListFilters = {}) {
     const paymentRows = await this.databaseService.db.select().from(payments);
     const partRows = await this.databaseService.db.select().from(paymentParts);
     const allocationRows = await this.databaseService.db
       .select()
       .from(paymentAllocations);
+    const customerRows = await this.databaseService.db.select().from(customers);
+    const customerById = new Map(
+      customerRows.map((customer) => [customer.id, customer]),
+    );
+    const partsByPaymentId = new Map<
+      string,
+      (typeof paymentParts.$inferSelect)[]
+    >();
+    const allocationsByPaymentId = new Map<
+      string,
+      (typeof paymentAllocations.$inferSelect)[]
+    >();
 
-    return paymentRows.map((payment) => ({
-      ...payment,
-      parts: partRows.filter((part) => part.paymentId === payment.id),
-      allocations: allocationRows.filter(
-        (allocation) => allocation.paymentId === payment.id,
-      ),
-    }));
+    for (const part of partRows) {
+      const paymentPartsForPayment = partsByPaymentId.get(part.paymentId) ?? [];
+      paymentPartsForPayment.push(part);
+      partsByPaymentId.set(part.paymentId, paymentPartsForPayment);
+    }
+
+    for (const allocation of allocationRows) {
+      const paymentAllocationsForPayment =
+        allocationsByPaymentId.get(allocation.paymentId) ?? [];
+      paymentAllocationsForPayment.push(allocation);
+      allocationsByPaymentId.set(
+        allocation.paymentId,
+        paymentAllocationsForPayment,
+      );
+    }
+
+    const searchQuery = filters.search?.trim() || filters.query?.trim() || '';
+    const selectedMethod = this.getSelectedMethod(filters.method);
+    const monthRange = this.getMonthRange(filters.month);
+    const fromDate = monthRange?.start ?? this.getDateFromParam(filters.from);
+    const toDate = monthRange
+      ? monthRange.end
+      : this.getDateFromParam(filters.to, true);
+
+    return paymentRows
+      .map((payment) => {
+        const parts = partsByPaymentId.get(payment.id) ?? [];
+
+        return {
+          ...payment,
+          customer: customerById.get(payment.customerId) ?? null,
+          parts,
+          allocations: allocationsByPaymentId.get(payment.id) ?? [],
+        };
+      })
+      .filter((payment) => {
+        if (!selectedMethod) {
+          return true;
+        }
+
+        if (selectedMethod === 'MIXED') {
+          return payment.paymentMethod === 'MIXED';
+        }
+
+        return (
+          payment.paymentMethod === selectedMethod ||
+          payment.parts.some((part) => part.method === selectedMethod)
+        );
+      })
+      .filter((payment) => {
+        if (!searchQuery) {
+          return true;
+        }
+
+        return (
+          this.includesSearch(payment.id, searchQuery) ||
+          this.includesSearch(this.formatPaymentReference(payment), searchQuery) ||
+          payment.parts.some((part) => {
+            return (
+              this.includesSearch(part.chequeNumber, searchQuery) ||
+              this.includesSearch(part.bankReference, searchQuery) ||
+              this.includesSearch(part.cardReference, searchQuery)
+            );
+          })
+        );
+      })
+      .filter((payment) => {
+        if (fromDate && payment.paymentDate < fromDate) {
+          return false;
+        }
+
+        if (toDate) {
+          return monthRange
+            ? payment.paymentDate < toDate
+            : payment.paymentDate <= toDate;
+        }
+
+        return true;
+      })
+      .sort((left, right) => {
+        const createdDifference =
+          right.createdAt.getTime() - left.createdAt.getTime();
+
+        if (createdDifference !== 0) {
+          return createdDifference;
+        }
+
+        return right.paymentDate.getTime() - left.paymentDate.getTime();
+      });
   }
 
   async findOne(id: string) {
@@ -289,6 +393,71 @@ export class PaymentsService {
     const fractionCents = Number(fractionPart.padEnd(2, '0').slice(0, 2));
 
     return sign * (wholeCents + fractionCents);
+  }
+
+  private getSelectedMethod(method: string | undefined) {
+    if (
+      method === 'CASH' ||
+      method === 'CHEQUE' ||
+      method === 'BANK_TRANSFER' ||
+      method === 'CARD' ||
+      method === 'MIXED'
+    ) {
+      return method;
+    }
+
+    return '';
+  }
+
+  private getDateFromParam(value: string | undefined, endOfDay = false) {
+    if (!value) {
+      return undefined;
+    }
+
+    const date = new Date(`${value}T00:00:00`);
+
+    if (Number.isNaN(date.getTime())) {
+      return undefined;
+    }
+
+    if (endOfDay) {
+      date.setHours(23, 59, 59, 999);
+    }
+
+    return date;
+  }
+
+  private getMonthRange(value: string | undefined) {
+    if (!value || !/^\d{4}-\d{2}$/.test(value)) {
+      return undefined;
+    }
+
+    const [yearValue, monthValue] = value.split('-');
+    const year = Number(yearValue);
+    const month = Number(monthValue);
+
+    if (month < 1 || month > 12) {
+      return undefined;
+    }
+
+    return {
+      start: new Date(year, month - 1, 1),
+      end: new Date(year, month, 1),
+    };
+  }
+
+  private includesSearch(value: string | null | undefined, query: string) {
+    return value?.toLowerCase().includes(query.toLowerCase()) ?? false;
+  }
+
+  private formatPaymentReference(payment: { id: string; paymentDate: Date }) {
+    const datePart = payment.paymentDate
+      .toISOString()
+      .slice(0, 10)
+      .replaceAll('-', '');
+    const idPart = payment.id.slice(-4).toUpperCase();
+
+    return `PAY-${datePart}-${idPart}`;
   }
 
   async reverse(id: string) {
