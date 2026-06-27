@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { Prisma } from "@prisma/client";
 import { Clock3 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
-import { prisma } from "@/lib/prisma";
+import { apiGet } from "@/lib/api-client";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
@@ -20,6 +19,42 @@ const bucketOrder = [
 
 type BucketKey = (typeof bucketOrder)[number];
 
+type MoneyValue = string | number;
+
+type AgingReportResponse = {
+  summary: {
+    totalOutstanding: MoneyValue;
+    overdueOutstanding: MoneyValue;
+    ninetyPlusOutstanding: MoneyValue;
+    overdueInvoiceCount: number;
+  };
+  buckets: {
+    name: string;
+    totalOutstanding: MoneyValue;
+    invoiceCount: number;
+  }[];
+  invoices: {
+    invoice: {
+      id: string;
+      invoiceNumber: string;
+    };
+    customer: {
+      area: string | null;
+      code: string;
+      id: string;
+      name: string;
+      routeName: string | null;
+    };
+    amount: MoneyValue;
+    activePaidAmount: MoneyValue;
+    outstanding: MoneyValue;
+    dueDate: string | null;
+    daysOverdue: number | null;
+    bucket: string;
+    status: string;
+  }[];
+};
+
 const bucketLabels: Record<BucketKey, string> = {
   days0To30: "0-30 days overdue",
   days31To60: "31-60 days overdue",
@@ -29,8 +64,8 @@ const bucketLabels: Record<BucketKey, string> = {
   notDue: "Not Due",
 };
 
-function formatAmount(value: { toString(): string }) {
-  return numberFormatter.format(Number(value.toString()));
+function formatAmount(value: MoneyValue) {
+  return numberFormatter.format(Number(String(value)));
 }
 
 function formatDate(date: Date | null) {
@@ -41,41 +76,6 @@ function formatDate(date: Date | null) {
     month: "short",
     day: "numeric",
   });
-}
-
-function sumDecimals(values: Prisma.Decimal[]) {
-  return values.reduce(
-    (total, value) => total.plus(value),
-    new Prisma.Decimal(0),
-  );
-}
-
-function getActivePaidAmount(payments: {
-  amount: Prisma.Decimal;
-  paymentPart: { status: string } | null;
-}[]) {
-  return sumDecimals(
-    payments
-      .filter((allocation) => {
-        return (
-          allocation.paymentPart === null ||
-          allocation.paymentPart.status === "ACTIVE"
-        );
-      })
-      .map((allocation) => allocation.amount),
-  );
-}
-
-function getDisplayStatus(invoiceTotal: Prisma.Decimal, paidAmount: Prisma.Decimal) {
-  if (paidAmount.gte(invoiceTotal)) {
-    return "PAID";
-  }
-
-  if (paidAmount.gt(0)) {
-    return "PARTIALLY_PAID";
-  }
-
-  return "UNPAID";
 }
 
 function getStatusBadgeClass(status: string) {
@@ -90,57 +90,46 @@ function getStatusBadgeClass(status: string) {
   return "bg-zinc-100 text-zinc-700 ring-zinc-500/20";
 }
 
-function startOfToday() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  return today;
-}
-
-function getDaysOverdue(dueDate: Date | null, today: Date) {
-  if (!dueDate) {
-    return null;
-  }
-
-  const due = new Date(dueDate);
-  due.setHours(0, 0, 0, 0);
-
-  return Math.floor((today.getTime() - due.getTime()) / 86_400_000);
-}
-
-function getAgingBucket(daysOverdue: number | null): BucketKey {
-  if (daysOverdue === null) {
-    return "noDueDate";
-  }
-
-  if (daysOverdue < 0) {
-    return "notDue";
-  }
-
-  if (daysOverdue <= 30) {
-    return "days0To30";
-  }
-
-  if (daysOverdue <= 60) {
-    return "days31To60";
-  }
-
-  if (daysOverdue <= 90) {
-    return "days61To90";
-  }
-
-  return "days90Plus";
+function getBucketKey(label: string): BucketKey {
+  return (
+    (Object.entries(bucketLabels).find(
+      ([, bucketLabel]) => bucketLabel === label,
+    )?.[0] as BucketKey | undefined) ?? "noDueDate"
+  );
 }
 
 function createEmptyBuckets() {
   return {
-    days0To30: new Prisma.Decimal(0),
-    days31To60: new Prisma.Decimal(0),
-    days61To90: new Prisma.Decimal(0),
-    days90Plus: new Prisma.Decimal(0),
-    noDueDate: new Prisma.Decimal(0),
-    notDue: new Prisma.Decimal(0),
-  } satisfies Record<BucketKey, Prisma.Decimal>;
+    days0To30: "0.00",
+    days31To60: "0.00",
+    days61To90: "0.00",
+    days90Plus: "0.00",
+    noDueDate: "0.00",
+    notDue: "0.00",
+  } satisfies Record<BucketKey, MoneyValue>;
+}
+
+function toCents(value: MoneyValue) {
+  const text = String(value);
+  const sign = text.startsWith("-") ? -1 : 1;
+  const [wholePart, fractionPart = ""] = text.replace("-", "").split(".");
+  const wholeCents = Number(wholePart || "0") * 100;
+  const fractionCents = Number(fractionPart.padEnd(2, "0").slice(0, 2));
+
+  return sign * (wholeCents + fractionCents);
+}
+
+function fromCents(value: number) {
+  const sign = value < 0 ? "-" : "";
+  const absoluteValue = Math.abs(value);
+  const whole = Math.floor(absoluteValue / 100);
+  const fraction = String(absoluteValue % 100).padStart(2, "0");
+
+  return `${sign}${whole}.${fraction}`;
+}
+
+function addAmounts(left: MoneyValue, right: MoneyValue) {
+  return fromCents(toCents(left) + toCents(right));
 }
 
 function SummaryCard({
@@ -163,70 +152,30 @@ function SummaryCard({
 }
 
 export default async function AgingPage() {
-  const invoices = await prisma.invoice.findMany({
-    include: {
-      customer: {
-        select: {
-          area: true,
-          code: true,
-          id: true,
-          name: true,
-          routeName: true,
-        },
-      },
-      payments: {
-        select: {
-          amount: true,
-          paymentPart: {
-            select: {
-              status: true,
-            },
-          },
-        },
-      },
-    },
-    orderBy: [{ dueDate: "asc" }, { invoiceDate: "asc" }],
-  });
-  const today = startOfToday();
-  const outstandingInvoices = invoices
-    .map((invoice) => {
-      const paidAmount = getActivePaidAmount(invoice.payments);
-      const outstandingAmount = invoice.amount.minus(paidAmount);
-
-      if (outstandingAmount.lte(0)) {
-        return null;
-      }
-
-      const daysOverdue = getDaysOverdue(invoice.dueDate, today);
-      const bucket = getAgingBucket(daysOverdue);
-
-      return {
-        amount: invoice.amount,
-        bucket,
-        customer: invoice.customer,
-        daysOverdue,
-        dueDate: invoice.dueDate,
-        id: invoice.id,
-        invoiceNumber: invoice.invoiceNumber,
-        outstandingAmount,
-        paidAmount,
-        status: getDisplayStatus(invoice.amount, paidAmount),
-      };
-    })
-    .filter((invoice): invoice is NonNullable<typeof invoice> =>
-      Boolean(invoice),
-    );
+  const report = await apiGet<AgingReportResponse>("/aging");
+  const outstandingInvoices = report.invoices.map((row) => ({
+    amount: row.amount,
+    bucket: getBucketKey(row.bucket),
+    customer: row.customer,
+    daysOverdue: row.daysOverdue,
+    dueDate: row.dueDate ? new Date(row.dueDate) : null,
+    id: row.invoice.id,
+    invoiceNumber: row.invoice.invoiceNumber,
+    outstandingAmount: row.outstanding,
+    paidAmount: row.activePaidAmount,
+    status: row.status,
+  }));
 
   const customerRowsById = new Map<
     string,
     {
       area: string | null;
-      buckets: Record<BucketKey, Prisma.Decimal>;
+      buckets: Record<BucketKey, MoneyValue>;
       code: string;
       id: string;
       name: string;
       routeName: string | null;
-      totalOutstanding: Prisma.Decimal;
+      totalOutstanding: MoneyValue;
     }
   >();
 
@@ -238,35 +187,27 @@ export default async function AgingPage() {
       id: invoice.customer.id,
       name: invoice.customer.name,
       routeName: invoice.customer.routeName,
-      totalOutstanding: new Prisma.Decimal(0),
+      totalOutstanding: "0.00",
     };
 
-    existing.buckets[invoice.bucket] = existing.buckets[invoice.bucket].plus(
+    existing.buckets[invoice.bucket] = addAmounts(
+      existing.buckets[invoice.bucket],
       invoice.outstandingAmount,
     );
-    existing.totalOutstanding = existing.totalOutstanding.plus(
+    existing.totalOutstanding = addAmounts(
+      existing.totalOutstanding,
       invoice.outstandingAmount,
     );
     customerRowsById.set(invoice.customer.id, existing);
   }
 
   const customerRows = Array.from(customerRowsById.values()).sort((left, right) => {
-    return right.totalOutstanding.comparedTo(left.totalOutstanding);
+    return toCents(right.totalOutstanding) - toCents(left.totalOutstanding);
   });
-  const totalOutstanding = sumDecimals(
-    outstandingInvoices.map((invoice) => invoice.outstandingAmount),
-  );
-  const overdueInvoices = outstandingInvoices.filter((invoice) => {
-    return invoice.daysOverdue !== null && invoice.daysOverdue >= 0;
-  });
-  const overdueOutstanding = sumDecimals(
-    overdueInvoices.map((invoice) => invoice.outstandingAmount),
-  );
-  const days90PlusOutstanding = sumDecimals(
-    outstandingInvoices
-      .filter((invoice) => invoice.bucket === "days90Plus")
-      .map((invoice) => invoice.outstandingAmount),
-  );
+  const totalOutstanding = report.summary.totalOutstanding;
+  const overdueOutstanding = report.summary.overdueOutstanding;
+  const days90PlusOutstanding = report.summary.ninetyPlusOutstanding;
+  const overdueInvoiceCount = report.summary.overdueInvoiceCount;
 
   return (
     <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
@@ -296,7 +237,7 @@ export default async function AgingPage() {
           />
           <SummaryCard
             label="Overdue Invoice Count"
-            value={overdueInvoices.length}
+            value={overdueInvoiceCount}
           />
         </section>
 
