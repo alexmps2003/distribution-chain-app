@@ -1,15 +1,25 @@
 import Link from "next/link";
-import { Prisma } from "@prisma/client";
 import { CreditCard } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
-import { prisma } from "@/lib/prisma";
+import { apiGet } from "@/lib/api-client";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
 
-function formatAmount(value: { toString(): string }) {
+type PaymentRow = {
+  id: string;
+  amount: string | number;
+  paymentDate: string;
+  createdAt: string;
+  customer: {
+    name: string;
+    code: string;
+  };
+};
+
+function formatAmount(value: string | number) {
   return numberFormatter.format(Number(value.toString()));
 }
 
@@ -45,41 +55,6 @@ function getSelectedMethod(method: string | undefined) {
   return "";
 }
 
-function getDateFromParam(value: string | undefined, endOfDay = false) {
-  if (!value) return undefined;
-
-  const date = new Date(`${value}T00:00:00`);
-
-  if (Number.isNaN(date.getTime())) {
-    return undefined;
-  }
-
-  if (endOfDay) {
-    date.setHours(23, 59, 59, 999);
-  }
-
-  return date;
-}
-
-function getMonthRangeFromParam(value: string | undefined) {
-  if (!value || !/^\d{4}-\d{2}$/.test(value)) {
-    return undefined;
-  }
-
-  const [yearValue, monthValue] = value.split("-");
-  const year = Number(yearValue);
-  const month = Number(monthValue);
-
-  if (month < 1 || month > 12) {
-    return undefined;
-  }
-
-  return {
-    end: new Date(year, month, 1),
-    start: new Date(year, month - 1, 1),
-  };
-}
-
 export default async function PaymentsPage({
   searchParams,
 }: {
@@ -94,62 +69,32 @@ export default async function PaymentsPage({
   const { from, method, month, search, to } = await searchParams;
   const selectedMethod = getSelectedMethod(method);
   const searchQuery = search?.trim() ?? "";
-  const fromDate = getDateFromParam(from);
-  const toDate = getDateFromParam(to, true);
-  const monthRange = getMonthRangeFromParam(month);
-  const paymentDateFilter = monthRange
-    ? {
-        gte: monthRange.start,
-        lt: monthRange.end,
-      }
-    : fromDate || toDate
-      ? {
-          ...(fromDate ? { gte: fromDate } : {}),
-          ...(toDate ? { lte: toDate } : {}),
-        }
-      : undefined;
-  const where: Prisma.PaymentWhereInput = {
-    ...(selectedMethod ? { paymentMethod: selectedMethod } : {}),
-    ...(searchQuery
-      ? {
-          customer: {
-            OR: [
-              {
-                name: {
-                  contains: searchQuery,
-                  mode: "insensitive",
-                },
-              },
-              {
-                code: {
-                  contains: searchQuery,
-                  mode: "insensitive",
-                },
-              },
-            ],
-          },
-        }
-      : {}),
-    ...(paymentDateFilter
-      ? {
-          paymentDate: paymentDateFilter,
-        }
-      : {}),
-  };
-  const payments = await prisma.payment.findMany({
-    where,
-    include: {
-      customer: {
-        select: {
-          name: true,
-          code: true,
-        },
-      },
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-  });
+  const paymentParams = new URLSearchParams();
+
+  if (searchQuery) {
+    paymentParams.set("search", searchQuery);
+  }
+
+  if (selectedMethod) {
+    paymentParams.set("method", selectedMethod);
+  }
+
+  if (from) {
+    paymentParams.set("from", from);
+  }
+
+  if (to) {
+    paymentParams.set("to", to);
+  }
+
+  if (month) {
+    paymentParams.set("month", month);
+  }
+
+  const paymentsPath = paymentParams.toString()
+    ? `/payments?${paymentParams.toString()}`
+    : "/payments";
+  const payments = await apiGet<PaymentRow[]>(paymentsPath);
 
   return (
     <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
@@ -264,13 +209,13 @@ export default async function PaymentsPage({
                         {payment.customer.name} ({payment.customer.code})
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
-                        {formatDate(payment.paymentDate)}
+                        {formatDate(new Date(payment.paymentDate))}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-right text-zinc-600 font-medium">
                         {formatAmount(payment.amount)}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
-                        {formatDate(payment.createdAt)}
+                        {formatDate(new Date(payment.createdAt))}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-right">
                         <Link

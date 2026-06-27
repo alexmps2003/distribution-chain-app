@@ -107,6 +107,8 @@ export class PaymentsService {
 
         return (
           this.includesSearch(payment.id, searchQuery) ||
+          this.includesSearch(payment.customer?.name, searchQuery) ||
+          this.includesSearch(payment.customer?.code, searchQuery) ||
           this.includesSearch(
             this.formatPaymentReference(payment),
             searchQuery,
