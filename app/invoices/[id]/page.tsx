@@ -1,14 +1,47 @@
 import Link from "next/link";
-import { Prisma } from "@prisma/client";
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { apiGet } from "@/lib/api-client";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
 
-function formatAmount(value: { toString(): string }) {
+type InvoiceDetailsResponse = {
+  invoice: {
+    id: string;
+    invoiceNumber: string;
+    invoiceDate: string;
+    dueDate: string | null;
+    amount: string | number;
+  };
+  customer: {
+    code: string;
+    name: string;
+  };
+  allocations: {
+    id: string;
+    amount: string | number;
+    payment: {
+      id: string;
+      paymentDate: string;
+    };
+    paymentPart: {
+      method: string;
+      status: string;
+      chequeNumber: string | null;
+      chequeBank: string | null;
+      chequeDate: string | null;
+      bankReference: string | null;
+      cardReference: string | null;
+    } | null;
+  }[];
+  activePaidAmount: string | number;
+  outstanding: string | number;
+  displayStatus: string;
+};
+
+function formatAmount(value: string | number) {
   return numberFormatter.format(Number(value.toString()));
 }
 
@@ -24,25 +57,6 @@ function formatDate(date: Date | null) {
 
 function formatStatus(status: string) {
   return status.replace("_", " ");
-}
-
-function sumDecimals(values: Prisma.Decimal[]) {
-  return values.reduce(
-    (total, value) => total.plus(value),
-    new Prisma.Decimal(0),
-  );
-}
-
-function getDisplayStatus(invoiceTotal: Prisma.Decimal, paidAmount: Prisma.Decimal) {
-  if (paidAmount.gte(invoiceTotal)) {
-    return "PAID";
-  }
-
-  if (paidAmount.gt(0)) {
-    return "PARTIALLY_PAID";
-  }
-
-  return "UNPAID";
 }
 
 function getStatusBadgeClass(status: string) {
@@ -70,7 +84,7 @@ function getMethodDetails(allocation: {
     method: string;
     chequeNumber: string | null;
     chequeBank: string | null;
-    chequeDate: Date | null;
+    chequeDate: string | null;
     bankReference: string | null;
     cardReference: string | null;
   } | null;
@@ -85,7 +99,7 @@ function getMethodDetails(allocation: {
     return [
       part.chequeNumber ? `Cheque #${part.chequeNumber}` : "",
       part.chequeBank ? `Bank: ${part.chequeBank}` : "",
-      part.chequeDate ? formatDate(part.chequeDate) : "",
+      part.chequeDate ? formatDate(new Date(part.chequeDate)) : "",
     ]
       .filter(Boolean)
       .join(", ");
@@ -136,60 +150,32 @@ export default async function InvoiceDetailsPage({
       : selectedCustomerId
         ? `/invoices?customerId=${encodeURIComponent(selectedCustomerId)}`
         : "/invoices";
-  const invoice = await prisma.invoice.findUnique({
-    where: {
-      id,
-    },
-    include: {
-      customer: {
-        select: {
-          code: true,
-          name: true,
-        },
-      },
-      payments: {
-        include: {
-          payment: {
-            select: {
-              id: true,
-              paymentDate: true,
-            },
-          },
-          paymentPart: {
-            select: {
-              method: true,
-              status: true,
-              chequeNumber: true,
-              chequeBank: true,
-              chequeDate: true,
-              bankReference: true,
-              cardReference: true,
-            },
-          },
-        },
-        orderBy: {
-          id: "asc",
-        },
-      },
-    },
-  });
+  let invoiceDetails: InvoiceDetailsResponse | null;
 
-  if (!invoice) {
+  try {
+    invoiceDetails = await apiGet<InvoiceDetailsResponse | null>(
+      `/invoices/${encodeURIComponent(id)}`,
+    );
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("failed with 404")) {
+      notFound();
+    }
+
+    throw error;
+  }
+
+  if (!invoiceDetails) {
     notFound();
   }
 
-  const activePaidAmount = sumDecimals(
-    invoice.payments
-      .filter((allocation) => {
-        return (
-          allocation.paymentPart === null ||
-          allocation.paymentPart.status === "ACTIVE"
-        );
-      })
-      .map((allocation) => allocation.amount),
-  );
-  const outstandingAmount = invoice.amount.minus(activePaidAmount);
-  const displayStatus = getDisplayStatus(invoice.amount, activePaidAmount);
+  const {
+    activePaidAmount,
+    allocations,
+    customer,
+    displayStatus,
+    invoice,
+    outstanding: outstandingAmount,
+  } = invoiceDetails;
 
   return (
     <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
@@ -229,13 +215,18 @@ export default async function InvoiceDetailsPage({
             <DetailItem label="Invoice Number" value={invoice.invoiceNumber} />
             <DetailItem
               label="Customer"
-              value={`${invoice.customer.name} (${invoice.customer.code})`}
+              value={`${customer.name} (${customer.code})`}
             />
             <DetailItem
               label="Invoice Date"
-              value={formatDate(invoice.invoiceDate)}
+              value={formatDate(new Date(invoice.invoiceDate))}
             />
-            <DetailItem label="Due Date" value={formatDate(invoice.dueDate)} />
+            <DetailItem
+              label="Due Date"
+              value={formatDate(
+                invoice.dueDate ? new Date(invoice.dueDate) : null,
+              )}
+            />
             <DetailItem
               label="Invoice Total"
               value={formatAmount(invoice.amount)}
@@ -257,7 +248,7 @@ export default async function InvoiceDetailsPage({
             Payment History
           </h2>
 
-          {invoice.payments.length === 0 ? (
+          {allocations.length === 0 ? (
             <div className="mt-4 rounded-md border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-600">
               No payment allocations found for this invoice.
             </div>
@@ -288,7 +279,7 @@ export default async function InvoiceDetailsPage({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-200">
-                    {invoice.payments.map((allocation) => {
+                    {allocations.map((allocation) => {
                       const partStatus = getPaymentPartStatus(
                         allocation.paymentPart?.status,
                       );
@@ -296,7 +287,9 @@ export default async function InvoiceDetailsPage({
                       return (
                         <tr key={allocation.id}>
                           <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
-                            {formatDate(allocation.payment.paymentDate)}
+                            {formatDate(
+                              new Date(allocation.payment.paymentDate),
+                            )}
                           </td>
                           <td className="whitespace-nowrap px-4 py-3">
                             <Link
