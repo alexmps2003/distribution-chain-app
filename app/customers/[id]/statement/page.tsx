@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Prisma } from "@prisma/client";
 import { ReceiptText } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
-import { prisma } from "@/lib/prisma";
+import { apiGet } from "@/lib/api-client";
 import PrintStatementButton from "./PrintStatementButton";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
@@ -11,7 +10,49 @@ const numberFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 2,
 });
 
-function formatAmount(value: { toString(): string }) {
+type StatementResponse = {
+  customer: {
+    id: string;
+    name: string;
+    code: string;
+    area: string | null;
+    routeName: string | null;
+    contactPerson: string | null;
+    ownerName: string | null;
+    phone: string | null;
+    address: string | null;
+    assignedCollector: string | null;
+  };
+  summary: {
+    totalInvoiced: string | number;
+    totalPaid: string | number;
+    totalOutstanding: string | number;
+    unpaidInvoiceCount: number;
+  };
+  ledger: {
+    date: string;
+    type: "Invoice" | "Payment" | "Reversed Cheque";
+    reference: string;
+    description: string;
+    debit: string | number | null;
+    credit: string | number | null;
+    runningBalance: string | number;
+  }[];
+};
+
+type LedgerRow = {
+  balance: string | number;
+  credit: string | number | null;
+  date: Date;
+  debit: string | number | null;
+  description: string;
+  id: string;
+  referenceHref?: string;
+  referenceLabel: string;
+  type: "Invoice" | "Payment" | "Reversed Cheque";
+};
+
+function formatAmount(value: string | number) {
   return numberFormatter.format(Number(value.toString()));
 }
 
@@ -25,58 +66,6 @@ function formatDate(date: Date | null) {
   });
 }
 
-function formatMethod(method: string) {
-  return method
-    .replaceAll("_", " ")
-    .toLowerCase()
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function sumDecimals(values: Prisma.Decimal[]) {
-  return values.reduce(
-    (total, value) => total.plus(value),
-    new Prisma.Decimal(0),
-  );
-}
-
-function formatPaymentReference(payment: { id: string; paymentDate: Date }) {
-  const datePart = payment.paymentDate
-    .toISOString()
-    .slice(0, 10)
-    .replaceAll("-", "");
-  const idPart = payment.id.slice(-4).toUpperCase();
-
-  return `PAY-${datePart}-${idPart}`;
-}
-
-function getActivePaidAmount(payments: {
-  amount: Prisma.Decimal;
-  paymentPart: { status: string } | null;
-}[]) {
-  return sumDecimals(
-    payments
-      .filter((allocation) => {
-        return (
-          allocation.paymentPart === null ||
-          allocation.paymentPart.status === "ACTIVE"
-        );
-      })
-      .map((allocation) => allocation.amount),
-  );
-}
-
-function getInvoiceStatus(invoiceTotal: Prisma.Decimal, paidAmount: Prisma.Decimal) {
-  if (paidAmount.gte(invoiceTotal)) {
-    return "PAID";
-  }
-
-  if (paidAmount.gt(0)) {
-    return "PARTIALLY_PAID";
-  }
-
-  return "UNPAID";
-}
-
 function getTypeBadgeClass(type: string) {
   if (type === "Invoice") {
     return "bg-zinc-100 text-zinc-700 ring-zinc-500/20";
@@ -88,61 +77,6 @@ function getTypeBadgeClass(type: string) {
 
   return "bg-red-50 text-red-700 ring-red-600/20";
 }
-
-function getMethodDetails(allocation: {
-  payment: {
-    paymentMethod: string;
-  };
-  paymentPart: {
-    method: string;
-    chequeNumber: string | null;
-    chequeBank: string | null;
-    chequeDate: Date | null;
-    bankReference: string | null;
-    cardReference: string | null;
-  } | null;
-}) {
-  const part = allocation.paymentPart;
-
-  if (!part) {
-    return formatMethod(allocation.payment.paymentMethod || "Payment");
-  }
-
-  if (part.method === "CHEQUE") {
-    return [
-      "Cheque",
-      part.chequeNumber ? `#${part.chequeNumber}` : "",
-      part.chequeBank ? part.chequeBank : "",
-      part.chequeDate ? formatDate(part.chequeDate) : "",
-    ]
-      .filter(Boolean)
-      .join(" · ");
-  }
-
-  if (part.method === "BANK_TRANSFER") {
-    return part.bankReference
-      ? `Bank Transfer · Ref ${part.bankReference}`
-      : "Bank Transfer";
-  }
-
-  if (part.method === "CARD") {
-    return part.cardReference ? `Card · Ref ${part.cardReference}` : "Card";
-  }
-
-  return formatMethod(part.method);
-}
-
-type LedgerEntry = {
-  credit: Prisma.Decimal | null;
-  date: Date;
-  debit: Prisma.Decimal | null;
-  description: string;
-  id: string;
-  referenceHref?: string;
-  referenceLabel: string;
-  sortOrder: number;
-  type: "Invoice" | "Payment" | "Reversed Cheque";
-};
 
 function SummaryCard({
   label,
@@ -169,161 +103,31 @@ export default async function CustomerStatementPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const customer = await prisma.customer.findUnique({
-    where: { id },
-    include: {
-      invoices: {
-        include: {
-          payments: {
-            include: {
-              payment: {
-                select: {
-                  id: true,
-                  paymentDate: true,
-                  paymentMethod: true,
-                  createdAt: true,
-                },
-              },
-              paymentPart: {
-                select: {
-                  id: true,
-                  method: true,
-                  amount: true,
-                  status: true,
-                  chequeNumber: true,
-                  chequeBank: true,
-                  chequeDate: true,
-                  bankReference: true,
-                  cardReference: true,
-                  reversedAt: true,
-                  reversalReason: true,
-                  createdAt: true,
-                },
-              },
-            },
-          },
-        },
-        orderBy: {
-          invoiceDate: "asc",
-        },
-      },
-      payments: {
-        include: {
-          parts: true,
-          allocations: true,
-        },
-        orderBy: {
-          paymentDate: "asc",
-        },
-      },
-    },
-  });
+  let statement: StatementResponse;
 
-  if (!customer) {
-    notFound();
-  }
-
-  const totalInvoiced = sumDecimals(
-    customer.invoices.map((invoice) => invoice.amount),
-  );
-  const totalPaid = sumDecimals(
-    customer.invoices.map((invoice) => getActivePaidAmount(invoice.payments)),
-  );
-  const totalOutstanding = totalInvoiced.minus(totalPaid);
-  const unpaidOrPartialInvoiceCount = customer.invoices.filter((invoice) => {
-    const paidAmount = getActivePaidAmount(invoice.payments);
-    const status = getInvoiceStatus(invoice.amount, paidAmount);
-
-    return status === "UNPAID" || status === "PARTIALLY_PAID";
-  }).length;
-
-  const ledgerEntries: LedgerEntry[] = [];
-
-  for (const invoice of customer.invoices) {
-    ledgerEntries.push({
-      credit: null,
-      date: invoice.invoiceDate,
-      debit: invoice.amount,
-      description: `Invoice issued to ${customer.name}`,
-      id: `invoice-${invoice.id}`,
-      referenceHref: `/invoices/${invoice.id}?customerId=${customer.id}`,
-      referenceLabel: invoice.invoiceNumber,
-      sortOrder: 0,
-      type: "Invoice",
-    });
-
-    for (const allocation of invoice.payments) {
-      const paymentReference = formatPaymentReference(allocation.payment);
-      const part = allocation.paymentPart;
-
-      if (part === null || part.status === "ACTIVE") {
-        ledgerEntries.push({
-          credit: allocation.amount,
-          date: allocation.payment.paymentDate,
-          debit: null,
-          description: `${getMethodDetails(
-            allocation,
-          )} allocated to invoice ${invoice.invoiceNumber}`,
-          id: `payment-${allocation.id}`,
-          referenceHref: `/payments/${allocation.payment.id}`,
-          referenceLabel: paymentReference,
-          sortOrder: 1,
-          type: "Payment",
-        });
-
-        continue;
-      }
-
-      if (part.method === "CHEQUE" && part.status === "REVERSED") {
-        ledgerEntries.push({
-          credit: null,
-          date: part.reversedAt ?? allocation.payment.paymentDate,
-          debit: null,
-          description: `Reversed cheque allocation of ${formatAmount(
-            allocation.amount,
-          )} for invoice ${invoice.invoiceNumber}. ${
-            part.reversalReason
-              ? `Reason: ${part.reversalReason}`
-              : "This allocation no longer counts toward invoice payments."
-          }`,
-          id: `reversed-cheque-${allocation.id}`,
-          referenceHref: `/cheques/${part.id}`,
-          referenceLabel: part.chequeNumber
-            ? `Cheque #${part.chequeNumber}`
-            : "Cheque",
-          sortOrder: 2,
-          type: "Reversed Cheque",
-        });
-      }
+  try {
+    statement = await apiGet<StatementResponse>(
+      `/customers/${encodeURIComponent(id)}/statement`,
+    );
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("failed with 404")) {
+      notFound();
     }
+
+    throw error;
   }
 
-  const ledgerRows = ledgerEntries
-    .sort((left, right) => {
-      const byDate = left.date.getTime() - right.date.getTime();
-
-      if (byDate !== 0) {
-        return byDate;
-      }
-
-      return left.sortOrder - right.sortOrder;
-    })
-    .reduce<{
-      balance: Prisma.Decimal;
-      rows: (LedgerEntry & { balance: Prisma.Decimal })[];
-    }>(
-      (statement, entry) => {
-        const balance = statement.balance
-          .plus(entry.debit ?? new Prisma.Decimal(0))
-          .minus(entry.credit ?? new Prisma.Decimal(0));
-
-        return {
-          balance,
-          rows: [...statement.rows, { ...entry, balance }],
-        };
-      },
-      { balance: new Prisma.Decimal(0), rows: [] },
-    ).rows;
+  const { customer, ledger, summary } = statement;
+  const ledgerRows: LedgerRow[] = ledger.map((row, index) => ({
+    balance: row.runningBalance,
+    credit: row.credit,
+    date: new Date(row.date),
+    debit: row.debit,
+    description: row.description,
+    id: `${row.type}-${row.reference}-${row.date}-${index}`,
+    referenceLabel: row.reference,
+    type: row.type,
+  }));
 
   return (
     <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950 print:bg-white">
@@ -364,16 +168,19 @@ export default async function CustomerStatementPage({
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <SummaryCard
             label="Total Invoiced"
-            value={formatAmount(totalInvoiced)}
+            value={formatAmount(summary.totalInvoiced)}
           />
-          <SummaryCard label="Total Paid" value={formatAmount(totalPaid)} />
+          <SummaryCard
+            label="Total Paid"
+            value={formatAmount(summary.totalPaid)}
+          />
           <SummaryCard
             label="Total Outstanding"
-            value={formatAmount(totalOutstanding)}
+            value={formatAmount(summary.totalOutstanding)}
           />
           <SummaryCard
             label="Unpaid / Partial Invoices"
-            value={unpaidOrPartialInvoiceCount}
+            value={summary.unpaidInvoiceCount}
           />
         </section>
 
@@ -390,7 +197,7 @@ export default async function CustomerStatementPage({
               </p>
             </div>
             <p className="text-sm font-medium text-zinc-700">
-              Balance: {formatAmount(totalOutstanding)}
+              Balance: {formatAmount(summary.totalOutstanding)}
             </p>
           </div>
 
