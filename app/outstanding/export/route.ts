@@ -1,4 +1,51 @@
-import { getOutstandingReport } from "@/lib/outstanding-report";
+import { apiGet } from "@/lib/api-client";
+
+type MoneyValue = string | number;
+
+type OutstandingCustomer = {
+  area: string | null;
+  code: string;
+  id: string;
+  name: string;
+  routeName: string | null;
+};
+
+type GeneralOutstandingResponse = {
+  summary: {
+    customerCount: number;
+    totalOutstanding: MoneyValue;
+    overdueInvoiceCount: number;
+    highestOutstandingCustomer:
+      | (OutstandingCustomer & { totalOutstanding: MoneyValue })
+      | null;
+  };
+  customers: {
+    customer: OutstandingCustomer;
+    totalOutstanding: MoneyValue;
+    outstandingInvoiceCount: number;
+    oldestDueDate: string | null;
+  }[];
+};
+
+type CustomerOutstandingResponse = {
+  customer: OutstandingCustomer;
+  summary: {
+    totalOutstanding: MoneyValue;
+    outstandingInvoiceCount: number;
+    oldestDueDate: string | null;
+  };
+  invoices: {
+    invoice: {
+      amount: MoneyValue;
+      dueDate: string | null;
+      invoiceDate: string;
+      invoiceNumber: string;
+    };
+    activePaidAmount: MoneyValue;
+    outstanding: MoneyValue;
+    displayStatus: "PAID" | "PARTIALLY_PAID" | "UNPAID";
+  }[];
+};
 
 function formatDateForCsv(date: Date | null) {
   if (!date) return "";
@@ -35,20 +82,29 @@ function getSafeFilenamePart(value: string) {
   return value.trim().replace(/[^a-zA-Z0-9_-]+/g, "-") || "customer";
 }
 
+function formatAmountForCsv(value: MoneyValue) {
+  return Number(String(value)).toFixed(2);
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const customerId = url.searchParams.get("customerId");
-  const { customerRows, customers } = await getOutstandingReport();
 
   if (customerId) {
-    const customerRow = customerRows.find((row) => row.id === customerId);
-    const customer = customerRow ?? customers.find((row) => row.id === customerId);
+    let report: CustomerOutstandingResponse;
 
-    if (!customer) {
-      return new Response("Customer not found", { status: 404 });
+    try {
+      report = await apiGet<CustomerOutstandingResponse>(
+        `/outstanding?customerId=${encodeURIComponent(customerId)}`,
+      );
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("failed with 404")) {
+        return new Response("Customer not found", { status: 404 });
+      }
+
+      throw error;
     }
 
-    const outstandingInvoices = customerRow?.outstandingInvoices ?? [];
     const csv = toCsv([
       [
         "Invoice Number",
@@ -59,21 +115,22 @@ export async function GET(request: Request) {
         "Outstanding Amount",
         "Status",
       ],
-      ...outstandingInvoices.map((invoice) => [
+      ...report.invoices.map(({ activePaidAmount, displayStatus, invoice, outstanding }) => [
         invoice.invoiceNumber,
-        formatDateForCsv(invoice.invoiceDate),
-        formatDateForCsv(invoice.dueDate),
-        invoice.amount.toFixed(2),
-        invoice.paidAmount.toFixed(2),
-        invoice.outstandingAmount.toFixed(2),
-        invoice.displayStatus.replace("_", " "),
+        formatDateForCsv(new Date(invoice.invoiceDate)),
+        formatDateForCsv(invoice.dueDate ? new Date(invoice.dueDate) : null),
+        formatAmountForCsv(invoice.amount),
+        formatAmountForCsv(activePaidAmount),
+        formatAmountForCsv(outstanding),
+        displayStatus.replace("_", " "),
       ]),
     ]);
-    const filename = `outstanding-${getSafeFilenamePart(customer.code)}.csv`;
+    const filename = `outstanding-${getSafeFilenamePart(report.customer.code)}.csv`;
 
     return getCsvResponse(csv, filename);
   }
 
+  const report = await apiGet<GeneralOutstandingResponse>("/outstanding");
   const csv = toCsv([
     [
       "Customer Name",
@@ -84,14 +141,14 @@ export async function GET(request: Request) {
       "Total Outstanding",
       "Oldest Due Date",
     ],
-    ...customerRows.map((customer) => [
-      customer.name,
-      customer.code,
-      customer.area ?? "",
-      customer.routeName ?? "",
-      customer.outstandingInvoices.length,
-      customer.totalOutstanding.toFixed(2),
-      formatDateForCsv(customer.oldestDueDate),
+    ...report.customers.map((row) => [
+      row.customer.name,
+      row.customer.code,
+      row.customer.area ?? "",
+      row.customer.routeName ?? "",
+      row.outstandingInvoiceCount,
+      formatAmountForCsv(row.totalOutstanding),
+      formatDateForCsv(row.oldestDueDate ? new Date(row.oldestDueDate) : null),
     ]),
   ]);
 

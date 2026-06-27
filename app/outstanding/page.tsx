@@ -2,17 +2,72 @@ import Link from "next/link";
 import { CircleCheck } from "lucide-react";
 import { notFound } from "next/navigation";
 import EmptyState from "@/components/EmptyState";
-import {
-  getOutstandingReport,
-  sumDecimals,
-} from "@/lib/outstanding-report";
+import { apiGet } from "@/lib/api-client";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
 
-function formatAmount(value: { toString(): string }) {
+type MoneyValue = string | number;
+
+type OutstandingCustomer = {
+  area: string | null;
+  code: string;
+  id: string;
+  name: string;
+  routeName: string | null;
+};
+
+type OutstandingInvoice = {
+  amount: MoneyValue;
+  dueDate: string | null;
+  id: string;
+  invoiceDate: string;
+  invoiceNumber: string;
+};
+
+type OutstandingInvoiceSummary = OutstandingInvoice & {
+  activePaidAmount: MoneyValue;
+  displayStatus: "PAID" | "PARTIALLY_PAID" | "UNPAID";
+  outstanding?: MoneyValue;
+};
+
+type GeneralOutstandingResponse = {
+  summary: {
+    customerCount: number;
+    totalOutstanding: MoneyValue;
+    overdueInvoiceCount: number;
+    highestOutstandingCustomer:
+      | (OutstandingCustomer & { totalOutstanding: MoneyValue })
+      | null;
+  };
+  customers: {
+    customer: OutstandingCustomer;
+    totalOutstanding: MoneyValue;
+    outstandingInvoiceCount: number;
+    oldestDueDate: string | null;
+    invoices: OutstandingInvoiceSummary[];
+  }[];
+};
+
+type CustomerOutstandingResponse = {
+  customer: OutstandingCustomer;
+  summary: {
+    totalOutstanding: MoneyValue;
+    outstandingInvoiceCount: number;
+    oldestDueDate: string | null;
+  };
+  invoices: {
+    invoice: OutstandingInvoice;
+    activePaidAmount: MoneyValue;
+    outstanding: MoneyValue;
+    displayStatus: "PAID" | "PARTIALLY_PAID" | "UNPAID";
+    daysOverdue: number | null;
+  }[];
+};
+
+function formatAmount(value: MoneyValue) {
   return numberFormatter.format(Number(value.toString()));
 }
 
@@ -65,51 +120,56 @@ export default async function OutstandingPage({
   searchParams: Promise<{ customerId?: string }>;
 }) {
   const { customerId } = await searchParams;
-  const { customerRows, customers } = await getOutstandingReport();
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const totalOutstanding = sumDecimals(
-    customerRows.map((customer) => customer.totalOutstanding),
-  );
-  const overdueInvoiceCount = customerRows.reduce((count, customer) => {
-    return (
-      count +
-      customer.outstandingInvoices.filter((invoice) => {
-        return invoice.dueDate !== null && invoice.dueDate < today;
-      }).length
-    );
-  }, 0);
-  const highestOutstandingCustomer = [...customerRows].sort((left, right) => {
-    return right.totalOutstanding.comparedTo(left.totalOutstanding);
-  })[0];
 
   if (customerId) {
-    const customer = customerRows.find((row) => row.id === customerId);
+    let report: CustomerOutstandingResponse;
 
-    if (!customer) {
-      const existingCustomer = customers.find((row) => row.id === customerId);
-
-      if (!existingCustomer) {
+    try {
+      report = await apiGet<CustomerOutstandingResponse>(
+        `/outstanding?customerId=${encodeURIComponent(customerId)}`,
+      );
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("failed with 404")) {
         notFound();
       }
 
+      throw error;
+    }
+
+    const customer = {
+      ...report.customer,
+      oldestDueDate: report.summary.oldestDueDate
+        ? new Date(report.summary.oldestDueDate)
+        : null,
+      outstandingInvoices: report.invoices.map(
+        ({ activePaidAmount, displayStatus, invoice, outstanding }) => ({
+          ...invoice,
+          displayStatus,
+          dueDate: invoice.dueDate ? new Date(invoice.dueDate) : null,
+          invoiceDate: new Date(invoice.invoiceDate),
+          outstandingAmount: outstanding,
+          paidAmount: activePaidAmount,
+        }),
+      ),
+      totalOutstanding: report.summary.totalOutstanding,
+    };
+
+    if (customer.outstandingInvoices.length === 0) {
       return (
         <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
           <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h1 className="text-3xl font-semibold tracking-tight">
-                  Outstanding Invoices for {existingCustomer.name}
+                  Outstanding Invoices for {customer.name}
                 </h1>
                 <p className="mt-1 text-sm text-zinc-600">
-                  Customer code: {existingCustomer.code}
+                  Customer code: {customer.code}
                 </p>
               </div>
               <div className="flex flex-col gap-3 sm:flex-row">
                 <Link
-                  href={`/outstanding/export?customerId=${existingCustomer.id}`}
+                  href={`/outstanding/export?customerId=${customer.id}`}
                   className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
                 >
                   Export CSV
@@ -252,6 +312,18 @@ export default async function OutstandingPage({
     );
   }
 
+  const report = await apiGet<GeneralOutstandingResponse>("/outstanding");
+  const customerRows = report.customers.map((row) => ({
+    ...row.customer,
+    oldestDueDate: row.oldestDueDate ? new Date(row.oldestDueDate) : null,
+    outstandingInvoiceCount: row.outstandingInvoiceCount,
+    totalOutstanding: row.totalOutstanding,
+  }));
+  const customerCount = report.summary.customerCount;
+  const totalOutstanding = report.summary.totalOutstanding;
+  const overdueInvoiceCount = report.summary.overdueInvoiceCount;
+  const highestOutstandingCustomer = report.summary.highestOutstandingCustomer;
+
   return (
     <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
@@ -275,7 +347,7 @@ export default async function OutstandingPage({
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <SummaryCard
             label="Customers With Outstanding"
-            value={customerRows.length}
+            value={customerCount}
           />
           <SummaryCard
             label="Total Outstanding"
@@ -372,7 +444,7 @@ export default async function OutstandingPage({
                             href={customerHref}
                             className="block px-4 py-3"
                           >
-                            {customer.outstandingInvoices.length}
+                            {customer.outstandingInvoiceCount}
                           </Link>
                         </td>
                         <td className="whitespace-nowrap text-right font-medium text-zinc-600">
