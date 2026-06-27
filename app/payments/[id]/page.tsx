@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { apiGet } from "@/lib/api-client";
 import PrintReceiptButton from "./PrintReceiptButton";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
@@ -9,8 +8,58 @@ const numberFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 2,
 });
 
-function formatAmount(value: { toString(): string }) {
-  return `LKR ${numberFormatter.format(Number(value.toString()))}`;
+type MoneyValue = string | number;
+
+type PaymentPart = {
+  id: string;
+  method: string;
+  amount: MoneyValue;
+  chequeNumber: string | null;
+  chequeBank: string | null;
+  chequeDate: string | null;
+  bankReference: string | null;
+  cardReference: string | null;
+  createdAt: string;
+  paymentId: string;
+};
+
+type PaymentAllocation = {
+  id: string;
+  amount: MoneyValue;
+  paymentPartId: string | null;
+  invoice: {
+    id: string;
+    invoiceNumber: string;
+    amount: MoneyValue;
+  } | null;
+  paymentPart: PaymentPart | null;
+};
+
+type PaymentDetailsResponse = {
+  payment: {
+    id: string;
+    paymentDate: string;
+    amount: MoneyValue;
+    paymentMethod: string;
+    notes: string | null;
+    createdAt: string;
+    status?: string;
+    paymentNumber?: string;
+  };
+  receiptReference?: string;
+  customer: {
+    code: string;
+    name: string;
+    phone: string | null;
+    area: string | null;
+    routeName: string | null;
+  } | null;
+  parts: PaymentPart[];
+  allocations: PaymentAllocation[];
+};
+
+function formatAmount(value: MoneyValue) {
+  return `LKR ${numberFormatter.format(Number(String(value)))}`;
 }
 
 function formatDate(date: Date | null) {
@@ -27,22 +76,38 @@ function formatMethod(method: string) {
   return method.replace("_", " ");
 }
 
-function sumDecimals(values: Prisma.Decimal[]) {
-  return values.reduce(
-    (total, value) => total.plus(value),
-    new Prisma.Decimal(0),
-  );
+function toCents(value: MoneyValue) {
+  const text = String(value);
+  const sign = text.startsWith("-") ? -1 : 1;
+  const [wholePart, fractionPart = ""] = text.replace("-", "").split(".");
+  const wholeCents = Number(wholePart || "0") * 100;
+  const fractionCents = Number(fractionPart.padEnd(2, "0").slice(0, 2));
+
+  return sign * (wholeCents + fractionCents);
 }
 
-function minDecimal(left: Prisma.Decimal, right: Prisma.Decimal) {
-  return left.lte(right) ? left : right;
+function fromCents(value: number) {
+  const sign = value < 0 ? "-" : "";
+  const absoluteValue = Math.abs(value);
+  const whole = Math.floor(absoluteValue / 100);
+  const fraction = String(absoluteValue % 100).padStart(2, "0");
+
+  return `${sign}${whole}.${fraction}`;
+}
+
+function sumAmounts(values: MoneyValue[]) {
+  const totalCents = values.reduce<number>((total, value) => {
+    return total + toCents(value);
+  }, 0);
+
+  return fromCents(totalCents);
 }
 
 function getMethodDetails(part: {
   method: string;
   chequeNumber: string | null;
   chequeBank: string | null;
-  chequeDate: Date | null;
+  chequeDate: string | null;
   bankReference: string | null;
   cardReference: string | null;
 }) {
@@ -50,7 +115,7 @@ function getMethodDetails(part: {
     return [
       part.chequeNumber ? `Cheque #${part.chequeNumber}` : "",
       part.chequeBank ? `Bank: ${part.chequeBank}` : "",
-      part.chequeDate ? formatDate(part.chequeDate) : "",
+      part.chequeDate ? formatDate(new Date(part.chequeDate)) : "",
     ].filter(Boolean);
   }
 
@@ -140,16 +205,16 @@ function buildPaymentMethodRows(
   parts: {
     id: string;
     method: string;
-    amount: Prisma.Decimal;
+    amount: MoneyValue;
     chequeNumber: string | null;
     chequeBank: string | null;
-    chequeDate: Date | null;
+    chequeDate: string | null;
     bankReference: string | null;
     cardReference: string | null;
-    createdAt: Date;
+    createdAt: string;
     paymentId: string;
     allocations: {
-      amount: Prisma.Decimal;
+      amount: MoneyValue;
       invoice: {
         invoiceNumber: string;
       };
@@ -157,15 +222,16 @@ function buildPaymentMethodRows(
   }[],
   methodAllocationSource: {
     invoiceNumber: string;
-    amount: Prisma.Decimal;
+    amount: MoneyValue;
   }[],
 ) {
   let allocationIndex = 0;
-  let currentAllocationRemaining =
-    methodAllocationSource[allocationIndex]?.amount ?? new Prisma.Decimal(0);
+  let currentAllocationRemaining = toCents(
+    methodAllocationSource[allocationIndex]?.amount ?? 0,
+  );
 
   return parts.map((part) => {
-    let partRemaining = part.amount;
+    let partRemaining = toCents(part.amount);
     let allocations = part.allocations.map((allocation) => ({
       invoiceNumber: allocation.invoice.invoiceNumber,
       amount: allocation.amount,
@@ -175,31 +241,27 @@ function buildPaymentMethodRows(
       allocations = [];
 
       while (
-        partRemaining.gt(0) &&
+        partRemaining > 0 &&
         allocationIndex < methodAllocationSource.length
       ) {
         const allocation = methodAllocationSource[allocationIndex];
-        const allocatedAmount = minDecimal(
-          partRemaining,
-          currentAllocationRemaining,
-        );
+        const allocatedAmount = Math.min(partRemaining, currentAllocationRemaining);
 
-        if (allocatedAmount.gt(0)) {
+        if (allocatedAmount > 0) {
           allocations.push({
             invoiceNumber: allocation.invoiceNumber,
-            amount: allocatedAmount,
+            amount: fromCents(allocatedAmount),
           });
         }
 
-        partRemaining = partRemaining.minus(allocatedAmount);
-        currentAllocationRemaining =
-          currentAllocationRemaining.minus(allocatedAmount);
+        partRemaining -= allocatedAmount;
+        currentAllocationRemaining -= allocatedAmount;
 
-        if (currentAllocationRemaining.equals(0)) {
+        if (currentAllocationRemaining === 0) {
           allocationIndex += 1;
-          currentAllocationRemaining =
-            methodAllocationSource[allocationIndex]?.amount ??
-            new Prisma.Decimal(0);
+          currentAllocationRemaining = toCents(
+            methodAllocationSource[allocationIndex]?.amount ?? 0,
+          );
         }
       }
     }
@@ -229,74 +291,50 @@ export default async function PaymentDetailsPage({
   const backLabel = backHref.startsWith("/cheques")
     ? "Back to Cheques"
     : "Back to Payments";
-  const payment = await prisma.payment.findUnique({
-    where: { id },
-    include: {
-      customer: {
-        select: {
-          code: true,
-          name: true,
-          phone: true,
-          area: true,
-          routeName: true,
-        },
-      },
-      parts: {
-        include: {
-          allocations: {
-            include: {
-              invoice: {
-                select: {
-                  invoiceNumber: true,
-                },
-              },
-            },
-            orderBy: {
-              id: "asc",
-            },
-          },
-        },
-        orderBy: { createdAt: "asc" },
-      },
-      allocations: {
-        include: {
-          invoice: {
-            select: {
-              id: true,
-              invoiceNumber: true,
-              amount: true,
-              invoiceDate: true,
-              dueDate: true,
-              status: true,
-              payments: {
-                select: {
-                  paymentId: true,
-                  amount: true,
-                  payment: {
-                    select: {
-                      createdAt: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-        orderBy: { id: "asc" },
-      },
-    },
-  });
+  let paymentDetails: PaymentDetailsResponse | null;
 
-  if (!payment) {
+  try {
+    paymentDetails = await apiGet<PaymentDetailsResponse | null>(
+      `/payments/${encodeURIComponent(id)}`,
+    );
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("failed with 404")) {
+      notFound();
+    }
+
+    throw error;
+  }
+
+  if (!paymentDetails || !paymentDetails.customer) {
     notFound();
   }
 
-  const methodAllocationSource = payment.allocations.map((allocation) => ({
-    invoiceNumber: allocation.invoice.invoiceNumber,
+  const { allocations, customer, parts, receiptReference } = paymentDetails;
+  const payment = paymentDetails.payment;
+  const paymentDate = new Date(payment.paymentDate);
+  const paymentCreatedAt = new Date(payment.createdAt);
+  const sortedAllocations = [...allocations].sort((left, right) =>
+    left.id.localeCompare(right.id),
+  );
+  const sortedParts = [...parts].sort((left, right) =>
+    left.createdAt.localeCompare(right.createdAt),
+  );
+  const methodAllocationSource = sortedAllocations.map((allocation) => ({
+    invoiceNumber: allocation.invoice?.invoiceNumber ?? "-",
     amount: allocation.amount,
   }));
   const paymentMethods = buildPaymentMethodRows(
-    payment.parts,
+    sortedParts.map((part) => ({
+      ...part,
+      allocations: sortedAllocations
+        .filter((allocation) => allocation.paymentPart?.id === part.id)
+        .map((allocation) => ({
+          amount: allocation.amount,
+          invoice: {
+            invoiceNumber: allocation.invoice?.invoiceNumber ?? "-",
+          },
+        })),
+    })),
     methodAllocationSource,
   );
 
@@ -304,34 +342,31 @@ export default async function PaymentDetailsPage({
     string,
     {
       invoiceNumber: string;
-      invoiceTotal: Prisma.Decimal;
-      amountPaid: Prisma.Decimal;
-      outstandingBefore: Prisma.Decimal;
-      outstandingAfter: Prisma.Decimal;
+      invoiceTotal: MoneyValue;
+      amountPaid: MoneyValue;
+      outstandingBefore: MoneyValue;
+      outstandingAfter: MoneyValue;
       statusAfterPayment: string;
     }
   >();
 
-  for (const allocation of payment.allocations) {
+  for (const allocation of sortedAllocations) {
+    if (!allocation.invoice) {
+      continue;
+    }
+
     const existing = allocationsByInvoice.get(allocation.invoice.id);
-    const amountPaid = (existing?.amountPaid ?? new Prisma.Decimal(0)).plus(
+    const amountPaid = sumAmounts([
+      existing?.amountPaid ?? 0,
       allocation.amount,
+    ]);
+    const outstandingBefore = existing?.outstandingBefore ?? allocation.invoice.amount;
+    const outstandingAfter = fromCents(
+      toCents(outstandingBefore) - toCents(amountPaid),
     );
-    const previousAllocations = allocation.invoice.payments
-      .filter((invoiceAllocation) => {
-        return (
-          invoiceAllocation.paymentId !== payment.id &&
-          invoiceAllocation.payment.createdAt < payment.createdAt
-        );
-      })
-      .map((invoiceAllocation) => invoiceAllocation.amount);
-    const outstandingBefore = allocation.invoice.amount.minus(
-      sumDecimals(previousAllocations),
-    );
-    const outstandingAfter = outstandingBefore.minus(amountPaid);
-    const statusAfterPayment = outstandingAfter.lte(0)
+    const statusAfterPayment = toCents(outstandingAfter) <= 0
       ? "PAID"
-      : outstandingAfter.lt(allocation.invoice.amount)
+      : toCents(outstandingAfter) < toCents(allocation.invoice.amount)
         ? "PARTIALLY_PAID"
         : "UNPAID";
 
@@ -348,9 +383,12 @@ export default async function PaymentDetailsPage({
   const invoiceAllocations = Array.from(allocationsByInvoice.values());
   const paymentStatus = getPaymentStatus(payment) ?? "ACTIVE";
   const paymentNumber = getPaymentNumber(payment);
-  const paymentReference = paymentNumber ?? formatPaymentReference(payment);
+  const paymentReference =
+    paymentNumber ??
+    receiptReference ??
+    formatPaymentReference({ id: payment.id, paymentDate });
   const paymentNotes = payment.notes?.trim();
-  const totalOutstandingAfter = sumDecimals(
+  const totalOutstandingAfter = sumAmounts(
     invoiceAllocations.map((allocation) => allocation.outstandingAfter),
   );
 
@@ -373,7 +411,7 @@ export default async function PaymentDetailsPage({
                 Receipt No: {paymentReference}
               </p>
               <p className="mt-2 text-sm font-medium text-zinc-700">
-                {payment.customer.name} ({payment.customer.code})
+                {customer.name} ({customer.code})
               </p>
             </div>
             <div className="flex flex-col gap-3 print:hidden sm:flex-row">
@@ -387,23 +425,23 @@ export default async function PaymentDetailsPage({
             </div>
           </div>
           <dl className="mt-6 grid gap-4 border-t border-zinc-200 pt-5 sm:grid-cols-2 lg:grid-cols-4">
-            <DetailItem label="Customer Name" value={payment.customer.name} />
-            <DetailItem label="Customer Code" value={payment.customer.code} />
+            <DetailItem label="Customer Name" value={customer.name} />
+            <DetailItem label="Customer Code" value={customer.code} />
             <DetailItem
               label="Payment Date"
-              value={formatDate(payment.paymentDate)}
+              value={formatDate(paymentDate)}
             />
             <DetailItem
               label="Total Amount"
               value={formatAmount(payment.amount)}
             />
             <DetailItem label="Payment Method" value={payment.paymentMethod} />
-            <DetailItem label="Area" value={payment.customer.area ?? "-"} />
+            <DetailItem label="Area" value={customer.area ?? "-"} />
             <DetailItem
               label="Route"
-              value={payment.customer.routeName ?? "-"}
+              value={customer.routeName ?? "-"}
             />
-            <DetailItem label="Created" value={formatDate(payment.createdAt)} />
+            <DetailItem label="Created" value={formatDate(paymentCreatedAt)} />
           </dl>
           {paymentNotes && (
             <div className="mt-5 rounded-md border border-zinc-200 bg-zinc-50 p-4">
