@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { apiPost } from "@/lib/api-client";
 import { withToast } from "@/lib/toast";
 import { getValidationErrorMessage } from "@/lib/validation/errors";
 import { parseCustomerFormData } from "@/lib/validation/customer";
@@ -84,23 +84,21 @@ export default async function NewCustomerPage({
       );
     }
 
-    await prisma.customer.create({
-      data: {
-        code: customer.code,
-        name: customer.name,
-        ownerName: customer.ownerName,
-        contactPerson: customer.contactPerson,
-        phone: customer.phone,
-        whatsappNumber: customer.whatsappNumber,
-        email: customer.email,
-        address: customer.address,
-        area: customer.area,
-        routeName: customer.routeName,
-        assignedSalesRep: customer.assignedSalesRep,
-        assignedCollector: customer.assignedCollector,
-        creditLimit: customer.creditLimit,
-        paymentTermsDays: customer.paymentTermsDays,
-      },
+    await apiPost("/customers", {
+      code: customer.code,
+      name: customer.name,
+      ownerName: customer.ownerName,
+      contactPerson: customer.contactPerson,
+      phone: customer.phone,
+      whatsappNumber: customer.whatsappNumber,
+      email: customer.email,
+      address: customer.address,
+      area: customer.area,
+      routeName: customer.routeName,
+      assignedSalesRep: customer.assignedSalesRep,
+      assignedCollector: customer.assignedCollector,
+      creditLimit: customer.creditLimit,
+      paymentTermsDays: customer.paymentTermsDays,
     });
 
     redirect(withToast("/customers", "success", "Customer created"));

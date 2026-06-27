@@ -17,12 +17,18 @@ const sriLankanPhone = z
   .transform((value) => (value === "" ? undefined : value))
   .optional();
 
+const maxCurrencyAmount = 9_999_999_999.99;
+
 const decimalString = z
   .string()
   .trim()
   .transform((value) => (value === "" ? "0" : value))
   .refine((value) => Number.isFinite(Number(value)), "Amount must be valid")
-  .refine((value) => Number(value) >= 0, "Amount cannot be negative");
+  .refine((value) => Number(value) >= 0, "Amount cannot be negative")
+  .refine(
+    (value) => Number(value) <= maxCurrencyAmount,
+    "Amount is too large",
+  );
 
 const nonNegativeInteger = z
   .string()
