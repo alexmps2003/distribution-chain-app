@@ -1,15 +1,54 @@
 import Link from "next/link";
-import { Prisma } from "@prisma/client";
 import { FileText } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
-import { prisma } from "@/lib/prisma";
+import { apiGet } from "@/lib/api-client";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
 
-function formatAmount(value: { toString(): string }) {
+type CustomerDetailResponse = {
+  customer: {
+    id: string;
+    code: string;
+    name: string;
+    contactPerson: string | null;
+    ownerName: string | null;
+    phone: string | null;
+    whatsappNumber: string | null;
+    email: string | null;
+    address: string | null;
+    area: string | null;
+    routeName: string | null;
+    assignedSalesRep: string | null;
+    assignedCollector: string | null;
+    creditLimit: string | number;
+    paymentTermsDays: number;
+    isActive: boolean;
+    createdAt: string;
+  };
+  summary: {
+    totalInvoiced: string | number;
+    totalPaid: string | number;
+    totalOutstanding: string | number;
+    unpaidInvoiceCount: number;
+  };
+  invoices: {
+    invoice: {
+      id: string;
+      invoiceNumber: string;
+      invoiceDate: string;
+      dueDate: string | null;
+      amount: string | number;
+    };
+    activePaidAmount: string | number;
+    outstanding: string | number;
+    displayStatus: string;
+  }[];
+};
+
+function formatAmount(value: string | number) {
   return numberFormatter.format(Number(value.toString()));
 }
 
@@ -20,29 +59,6 @@ function formatDate(date: Date | null) {
     month: "short",
     day: "numeric",
   });
-}
-
-function sumDecimals(values: Prisma.Decimal[]) {
-  return values.reduce(
-    (total, value) => total.plus(value),
-    new Prisma.Decimal(0),
-  );
-}
-
-function getActivePaidAmount(payments: {
-  amount: Prisma.Decimal;
-  paymentPart: { status: string } | null;
-}[]) {
-  return sumDecimals(
-    payments
-      .filter((allocation) => {
-        return (
-          allocation.paymentPart === null ||
-          allocation.paymentPart.status === "ACTIVE"
-        );
-      })
-      .map((allocation) => allocation.amount),
-  );
 }
 
 interface CustomerDetailPageProps {
@@ -56,28 +72,11 @@ export default async function CustomerDetailPage({
 }: CustomerDetailPageProps) {
   const { id } = await params;
 
-  const customer = await prisma.customer.findUnique({
-    where: { id },
-    include: {
-      invoices: {
-        include: {
-          payments: {
-            select: {
-              amount: true,
-              paymentPart: {
-                select: {
-                  status: true,
-                },
-              },
-            },
-          },
-        },
-        orderBy: { invoiceDate: "desc" },
-      },
-    },
-  });
+  const customerDetail = await apiGet<CustomerDetailResponse | null>(
+    `/customers/${encodeURIComponent(id)}`,
+  );
 
-  if (!customer) {
+  if (!customerDetail) {
     return (
       <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-8">
@@ -97,13 +96,7 @@ export default async function CustomerDetailPage({
     );
   }
 
-  const totalInvoiced = sumDecimals(
-    customer.invoices.map((invoice) => invoice.amount),
-  );
-  const totalCollected = sumDecimals(
-    customer.invoices.map((invoice) => getActivePaidAmount(invoice.payments)),
-  );
-  const invoiceOutstanding = totalInvoiced.minus(totalCollected);
+  const { customer, invoices, summary } = customerDetail;
 
   return (
     <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
@@ -143,7 +136,7 @@ export default async function CustomerDetailPage({
                 Total Invoiced
               </label>
               <p className="mt-1 text-2xl font-semibold tracking-tight text-zinc-950">
-                {formatAmount(totalInvoiced)}
+                {formatAmount(summary.totalInvoiced)}
               </p>
             </div>
             <div>
@@ -151,7 +144,7 @@ export default async function CustomerDetailPage({
                 Total Paid
               </label>
               <p className="mt-1 text-2xl font-semibold tracking-tight text-zinc-950">
-                {formatAmount(totalCollected)}
+                {formatAmount(summary.totalPaid)}
               </p>
             </div>
             <div>
@@ -159,7 +152,7 @@ export default async function CustomerDetailPage({
                 Total Outstanding
               </label>
               <p className="mt-1 text-2xl font-semibold tracking-tight text-zinc-950">
-                {formatAmount(invoiceOutstanding)}
+                {formatAmount(summary.totalOutstanding)}
               </p>
             </div>
           </div>
@@ -169,7 +162,7 @@ export default async function CustomerDetailPage({
           <h2 className="mb-6 text-lg font-semibold text-zinc-950">
             Invoice History
           </h2>
-          {customer.invoices.length === 0 ? (
+          {invoices.length === 0 ? (
             <EmptyState
               icon={FileText}
               title="No invoices found"
@@ -201,16 +194,18 @@ export default async function CustomerDetailPage({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-200">
-                    {customer.invoices.map((invoice) => (
+                    {invoices.map(({ invoice, displayStatus }) => (
                       <tr key={invoice.id}>
                         <td className="whitespace-nowrap px-4 py-3 font-medium">
                           {invoice.invoiceNumber}
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
-                          {formatDate(invoice.invoiceDate)}
+                          {formatDate(new Date(invoice.invoiceDate))}
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
-                          {formatDate(invoice.dueDate)}
+                          {formatDate(
+                            invoice.dueDate ? new Date(invoice.dueDate) : null,
+                          )}
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-right text-zinc-600 font-medium">
                           {formatAmount(invoice.amount)}
@@ -218,16 +213,16 @@ export default async function CustomerDetailPage({
                         <td className="whitespace-nowrap px-4 py-3">
                           <span
                             className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
-                              invoice.status === "PAID"
+                              displayStatus === "PAID"
                                 ? "bg-emerald-100 text-emerald-800"
-                                : invoice.status === "UNPAID"
+                                : displayStatus === "UNPAID"
                                   ? "bg-rose-100 text-rose-800"
-                                  : invoice.status === "PARTIALLY_PAID"
+                                  : displayStatus === "PARTIALLY_PAID"
                                     ? "bg-amber-100 text-amber-800"
                                     : "bg-zinc-200 text-zinc-800"
                             }`}
                           >
-                            {invoice.status.replace("_", " ")}
+                            {displayStatus.replace("_", " ")}
                           </span>
                         </td>
                       </tr>
@@ -388,7 +383,7 @@ export default async function CustomerDetailPage({
                 Created Date
               </label>
               <p className="text-sm text-zinc-950">
-                {customer.createdAt.toLocaleDateString("en-US", {
+                {new Date(customer.createdAt).toLocaleDateString("en-US", {
                   year: "numeric",
                   month: "short",
                   day: "numeric",
