@@ -39,14 +39,18 @@ export const customers = pgTable('Customer', {
   routeName: text('routeName'),
   assignedSalesRep: text('assignedSalesRep'),
   assignedCollector: text('assignedCollector'),
-  creditLimit: numeric('creditLimit', { precision: 12, scale: 2 }).notNull(),
+  creditLimit: numeric('creditLimit', { precision: 12, scale: 2 })
+    .notNull()
+    .default('0'),
   openingOutstanding: numeric('openingOutstanding', {
     precision: 12,
     scale: 2,
-  }).notNull(),
-  paymentTermsDays: integer('paymentTermsDays').notNull(),
-  isActive: boolean('isActive').notNull(),
-  createdAt: timestamp('createdAt').notNull(),
+  })
+    .notNull()
+    .default('0'),
+  paymentTermsDays: integer('paymentTermsDays').notNull().default(0),
+  isActive: boolean('isActive').notNull().default(true),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
 });
 
 export const invoices = pgTable('Invoice', {
@@ -57,17 +61,20 @@ export const invoices = pgTable('Invoice', {
   dueDate: timestamp('dueDate'),
   status: invoiceStatus('status').notNull().default('UNPAID'),
   customerId: text('customerId').notNull(),
-  createdAt: timestamp('createdAt').notNull(),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
 });
 
 export const payments = pgTable('Payment', {
   id: text('id').primaryKey(),
-  customerId: text('customerId').notNull(),
-  paymentDate: timestamp('paymentDate').notNull(),
   amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
-  paymentMethod: text('paymentMethod').notNull(),
+  paymentDate: timestamp('paymentDate').notNull().defaultNow(),
   notes: text('notes'),
-  createdAt: timestamp('createdAt').notNull(),
+  status: paymentStatus('status').notNull().default('ACTIVE'),
+  reversedAt: timestamp('reversedAt'),
+  reversalReason: text('reversalReason'),
+  paymentMethod: text('paymentMethod').notNull(),
+  customerId: text('customerId').notNull(),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
 });
 
 export const paymentParts = pgTable('PaymentPart', {
@@ -75,12 +82,15 @@ export const paymentParts = pgTable('PaymentPart', {
   paymentId: text('paymentId').notNull(),
   method: paymentMethod('method').notNull(),
   amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
-  status: paymentStatus('status').default('ACTIVE'),
+  status: paymentStatus('status').notNull().default('ACTIVE'),
   chequeNumber: text('chequeNumber'),
   chequeBank: text('chequeBank'),
   chequeDate: timestamp('chequeDate'),
   bankReference: text('bankReference'),
   cardReference: text('cardReference'),
+  reversedAt: timestamp('reversedAt'),
+  reversalReason: text('reversalReason'),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
 });
 
 export const paymentAllocations = pgTable('PaymentAllocation', {
@@ -89,13 +99,4 @@ export const paymentAllocations = pgTable('PaymentAllocation', {
   invoiceId: text('invoiceId').notNull(),
   paymentPartId: text('paymentPartId'),
   amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
-});
-
-export const collections = pgTable('Collection', {
-  id: text('id').primaryKey(),
-  collectorId: text('collectorId').notNull(),
-  customerId: text('customerId').notNull(),
-  collectionDate: timestamp('collectionDate').notNull(),
-  status: text('status').notNull(),
-  createdAt: timestamp('createdAt').notNull(),
 });
