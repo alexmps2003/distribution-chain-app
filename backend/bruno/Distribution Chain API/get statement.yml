@@ -1,0 +1,15 @@
+info:
+  name: get statement
+  type: http
+  seq: 20
+
+http:
+  method: GET
+  url: http://localhost:3000/api/customers/cust_ebfdc070-324b-45ab-8c62-54f81e567357/statement
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

@@ -7,6 +7,7 @@ import { InvoicesModule } from './invoices/invoices.module';
 import { PaymentsModule } from './payments/payments.module';
 import { ChequesModule } from './cheques/cheques.module';
 import { OutstandingModule } from './outstanding/outstanding.module';
+import { StatementsModule } from './statements/statements.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { OutstandingModule } from './outstanding/outstanding.module';
     PaymentsModule,
     ChequesModule,
     OutstandingModule,
+    StatementsModule,
   ],
 })
 export class AppModule {}
