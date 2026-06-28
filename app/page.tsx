@@ -2,7 +2,6 @@ import Link from "next/link";
 import { CircleCheck, CreditCard } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import { apiGet } from "@/lib/api-client";
-import { prisma } from "@/lib/prisma";
 import DashboardCharts from "./DashboardCharts";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
@@ -56,6 +55,10 @@ type DashboardResponse = {
     monthKey: string;
     receiptCount: number;
   }[];
+  filterOptions: {
+    areaOptions: string[];
+    routeOptions: string[];
+  };
 };
 
 function formatDate(date: Date | null) {
@@ -272,18 +275,7 @@ export default async function Home({
   const outstandingStatus = getOutstandingStatus(outstandingStatusParam);
   const invoiceStatusRange = getInvoiceStatusRange(invoiceStatusRangeParam);
   const collectionsRange = getCollectionsRange(collectionsRangeParam);
-  const [dashboard, customerFilterOptions] = await Promise.all([
-      apiGet<DashboardResponse>("/dashboard"),
-      prisma.customer.findMany({
-        select: {
-          area: true,
-          routeName: true,
-        },
-        orderBy: {
-          name: "asc",
-        },
-      }),
-    ]);
+  const dashboard = await apiGet<DashboardResponse>("/dashboard");
   const {
     activeCheques,
     reversedCheques,
@@ -307,20 +299,8 @@ export default async function Home({
     amount: Number(month.amount),
   }));
 
-  const routeOptions = Array.from(
-    new Set(
-      customerFilterOptions
-        .map((customer) => customer.routeName?.trim())
-        .filter((route): route is string => Boolean(route)),
-    ),
-  ).sort((left, right) => left.localeCompare(right));
-  const areaOptions = Array.from(
-    new Set(
-      customerFilterOptions
-        .map((customer) => customer.area?.trim())
-        .filter((area): area is string => Boolean(area)),
-    ),
-  ).sort((left, right) => left.localeCompare(right));
+  const routeOptions = dashboard.filterOptions.routeOptions;
+  const areaOptions = dashboard.filterOptions.areaOptions;
   const selectedOutstandingRoute = routeOptions.includes(outstandingRoute)
     ? outstandingRoute
     : "all";

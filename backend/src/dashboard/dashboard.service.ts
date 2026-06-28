@@ -139,6 +139,20 @@ export class DashboardService {
         overdueOutstanding: this.fromCents(customer.overdueOutstandingCents),
         routeName: customer.routeName,
       }));
+    const areaOptions = Array.from(
+      new Set(
+        customerRows
+          .map((customer) => customer.area?.trim())
+          .filter((area): area is string => Boolean(area)),
+      ),
+    ).sort((left, right) => left.localeCompare(right));
+    const routeOptions = Array.from(
+      new Set(
+        customerRows
+          .map((customer) => customer.routeName?.trim())
+          .filter((route): route is string => Boolean(route)),
+      ),
+    ).sort((left, right) => left.localeCompare(right));
 
     const invoiceStatus = invoiceSummaries.reduce(
       (counts, invoice) => {
@@ -241,6 +255,10 @@ export class DashboardService {
         totalOutstanding: this.fromCents(totalInvoicedCents - totalPaidCents),
         activeCheques,
         reversedCheques,
+      },
+      filterOptions: {
+        areaOptions,
+        routeOptions,
       },
       recentPayments,
       highOutstandingCustomers,
