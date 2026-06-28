@@ -1,9 +1,7 @@
 import Link from "next/link";
-import { Prisma } from "@prisma/client";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { apiGet } from "@/lib/api-client";
-import { prisma } from "@/lib/prisma";
+import { apiGet, apiPost } from "@/lib/api-client";
 import { withToast } from "@/lib/toast";
 import { getValidationErrorMessage } from "@/lib/validation/errors";
 import { parsePaymentFormData } from "@/lib/validation/payment";
@@ -17,6 +15,28 @@ import PaymentMethodEntry, {
 const PAYMENT_FORM_COOKIE = "last-invalid-payment-form";
 
 type MoneyValue = string | number;
+type ParsedMoneyValue = { toString(): string };
+type MoneyInput = MoneyValue | ParsedMoneyValue;
+
+type CreatePaymentPayload = {
+  customerId: string;
+  paymentDate: string;
+  notes?: string;
+  amount: string;
+  methods: {
+    method: PaymentMethod;
+    amount: string;
+    chequeNumber?: string;
+    chequeBank?: string;
+    chequeDate?: string;
+    bankReference?: string;
+    cardReference?: string;
+    allocations: {
+      invoiceId: string;
+      amount: string;
+    }[];
+  }[];
+};
 
 type CustomerListResponse = {
   customer: {
@@ -230,19 +250,39 @@ function buildInitialPaymentMethodState(
   };
 }
 
-function sumDecimals(values: Prisma.Decimal[]) {
-  return values.reduce(
-    (total, value) => total.plus(value),
-    new Prisma.Decimal(0),
-  );
+function toCents(value: MoneyInput): number {
+  const text = String(value);
+  const sign = text.startsWith("-") ? -1 : 1;
+  const [wholePart, fractionPart = ""] = text.replace("-", "").split(".");
+  const wholeCents = Number(wholePart || "0") * 100;
+  const fractionCents = Number(fractionPart.padEnd(2, "0").slice(0, 2));
+
+  return sign * (wholeCents + fractionCents);
 }
 
-function addToDecimalMap(
-  map: Map<string, Prisma.Decimal>,
+function sumCents(values: MoneyInput[]): number {
+  return values.reduce<number>((total, value) => total + toCents(value), 0);
+}
+
+function addToCentMap(
+  map: Map<string, number>,
   key: string,
-  amount: Prisma.Decimal,
+  amount: MoneyInput,
 ) {
-  map.set(key, (map.get(key) ?? new Prisma.Decimal(0)).plus(amount));
+  map.set(key, (map.get(key) ?? 0) + toCents(amount));
+}
+
+function formatCents(cents: number): string {
+  const sign = cents < 0 ? "-" : "";
+  const absoluteCents = Math.abs(cents);
+
+  return `${sign}${Math.floor(absoluteCents / 100)}.${String(
+    absoluteCents % 100,
+  ).padStart(2, "0")}`;
+}
+
+function formatMoneyInput(value: MoneyInput): string {
+  return formatCents(toCents(value));
 }
 
 async function createPayment(formData: FormData) {
@@ -274,23 +314,26 @@ async function createPayment(formData: FormData) {
   const notes = paymentInput.notes;
   const paymentParts = paymentInput.methods;
   const allocations = paymentInput.allocations;
-  const paymentTotal = sumDecimals(paymentParts.map((part) => part.amount));
-  const allocationTotal = sumDecimals(
+  const paymentTotal = sumCents(paymentParts.map((part) => part.amount));
+  const allocationTotal = sumCents(
     allocations.map((allocation) => allocation.amount),
   );
 
-  if (!paymentTotal.gt(0)) {
+  if (paymentTotal <= 0) {
     throw new Error("Payment total must be greater than 0");
   }
 
-  if (!paymentTotal.equals(allocationTotal)) {
+  if (paymentTotal !== allocationTotal) {
     throw new Error("Payment total must equal allocation total");
   }
 
   const allocationByInvoice = new Map(
-    allocations.map((allocation) => [allocation.invoiceId, allocation.amount]),
+    allocations.map((allocation) => [
+      allocation.invoiceId,
+      toCents(allocation.amount),
+    ]),
   );
-  const methodAllocationByInvoice = new Map<string, Prisma.Decimal>();
+  const methodAllocationByInvoice = new Map<string, number>();
 
   for (const part of paymentParts) {
     for (const allocation of part.allocations) {
@@ -298,7 +341,7 @@ async function createPayment(formData: FormData) {
         throw new Error("Method allocation must match a selected invoice");
       }
 
-      addToDecimalMap(
+      addToCentMap(
         methodAllocationByInvoice,
         allocation.invoiceId,
         allocation.amount,
@@ -308,126 +351,33 @@ async function createPayment(formData: FormData) {
 
   for (const allocation of allocations) {
     const methodAllocationTotal =
-      methodAllocationByInvoice.get(allocation.invoiceId) ??
-      new Prisma.Decimal(0);
+      methodAllocationByInvoice.get(allocation.invoiceId) ?? 0;
 
-    if (!methodAllocationTotal.equals(allocation.amount)) {
+    if (methodAllocationTotal !== toCents(allocation.amount)) {
       throw new Error(
         "Method allocations for each invoice must equal the overall invoice allocation",
       );
     }
   }
 
-  await prisma.$transaction(async (tx) => {
-    const invoices = await tx.invoice.findMany({
-      where: {
-        customerId,
-        id: {
-          in: allocations.map((allocation) => allocation.invoiceId),
-        },
-      },
-      include: {
-        payments: {
-          select: {
-            amount: true,
-            paymentPart: {
-              select: {
-                status: true,
-              },
-            },
-          },
-        },
-      },
-    });
-
-    if (invoices.length !== allocations.length) {
-      throw new Error("One or more selected invoices could not be found");
-    }
-
-    const invoiceById = new Map(invoices.map((invoice) => [invoice.id, invoice]));
-
-    for (const allocation of allocations) {
-      const invoice = invoiceById.get(allocation.invoiceId);
-
-      if (!invoice) {
-        throw new Error("Selected invoice could not be found");
-      }
-
-      const previouslyAllocated = sumDecimals(
-        invoice.payments.map((payment) => payment.amount),
-      );
-      const outstanding = invoice.amount.minus(previouslyAllocated);
-
-      if (allocation.amount.gt(outstanding)) {
-        throw new Error(
-          `Allocation exceeds outstanding amount for invoice ${invoice.invoiceNumber}`,
-        );
-      }
-    }
-
-    const payment = await tx.payment.create({
-      data: {
-        customerId,
-        paymentDate,
-        notes,
-        amount: paymentTotal,
-        paymentMethod:
-          paymentParts.length === 1 ? paymentParts[0].method : "MIXED",
-      },
-    });
-
-    for (const part of paymentParts) {
-      const paymentPart = await tx.paymentPart.create({
-        data: {
-          paymentId: payment.id,
-          method: part.method,
-          amount: part.amount,
-          chequeNumber: part.chequeNumber,
-          chequeBank: part.chequeBank,
-          chequeDate: part.chequeDate,
-          bankReference: part.bankReference,
-          cardReference: part.cardReference,
-        },
-      });
-
-      for (const allocation of part.allocations) {
-        await tx.paymentAllocation.create({
-          data: {
-            paymentId: payment.id,
-            invoiceId: allocation.invoiceId,
-            amount: allocation.amount,
-            paymentPartId: paymentPart.id,
-          },
-        });
-      }
-    }
-
-    for (const allocation of allocations) {
-      const invoice = invoiceById.get(allocation.invoiceId);
-
-      if (!invoice) {
-        continue;
-      }
-
-      const previouslyAllocated = sumDecimals(
-        invoice.payments.map((payment) => payment.amount),
-      );
-      const paidTotal = previouslyAllocated.plus(allocation.amount);
-      const status = paidTotal.gte(invoice.amount)
-        ? "PAID"
-        : paidTotal.gt(0)
-          ? "PARTIALLY_PAID"
-          : "UNPAID";
-
-      await tx.invoice.update({
-        where: {
-          id: invoice.id,
-        },
-        data: {
-          status,
-        },
-      });
-    }
+  await apiPost<unknown, CreatePaymentPayload>("/payments", {
+    customerId,
+    paymentDate: paymentDate.toISOString(),
+    notes,
+    amount: formatCents(paymentTotal),
+    methods: paymentParts.map((part) => ({
+      method: part.method,
+      amount: formatMoneyInput(part.amount),
+      chequeNumber: part.chequeNumber,
+      chequeBank: part.chequeBank,
+      chequeDate: part.chequeDate?.toISOString(),
+      bankReference: part.bankReference,
+      cardReference: part.cardReference,
+      allocations: part.allocations.map((allocation) => ({
+        invoiceId: allocation.invoiceId,
+        amount: formatMoneyInput(allocation.amount),
+      })),
+    })),
   });
 
   const cookieStore = await cookies();
