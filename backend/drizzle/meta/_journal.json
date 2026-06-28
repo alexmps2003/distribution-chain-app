@@ -29,6 +29,13 @@
       "when": 1782546025374,
       "tag": "0003_bored_luke_cage",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1782671066358,
+      "tag": "0004_plain_zaran",
+      "breakpoints": true
     }
   ]
 }

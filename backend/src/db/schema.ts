@@ -25,6 +25,18 @@ export const paymentMethod = pgEnum('PaymentMethod', [
 
 export const paymentStatus = pgEnum('PaymentStatus', ['ACTIVE', 'REVERSED']);
 
+export const userRole = pgEnum('UserRole', ['ADMIN', 'SALES_REP', 'COLLECTOR']);
+
+export const users = pgTable('User', {
+  id: text('id').primaryKey(),
+  supabaseUserId: text('supabaseUserId').notNull().unique(),
+  email: text('email').notNull().unique(),
+  name: text('name').notNull(),
+  role: userRole('role').notNull(),
+  isActive: boolean('isActive').notNull().default(true),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+});
+
 export const customers = pgTable('Customer', {
   id: text('id').primaryKey(),
   code: text('code').notNull().unique(),
