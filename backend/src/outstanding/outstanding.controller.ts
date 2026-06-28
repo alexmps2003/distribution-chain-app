@@ -11,8 +11,8 @@ export class OutstandingController {
     'Content-Disposition',
     'attachment; filename="outstanding-invoices.csv"',
   )
-  exportCsv() {
-    return this.outstandingService.exportCsv();
+  exportCsv(@Query('customerId') customerId?: string) {
+    return this.outstandingService.exportCsv(customerId);
   }
 
   @Get()

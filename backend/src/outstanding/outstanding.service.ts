@@ -186,13 +186,10 @@ export class OutstandingService {
     };
   }
 
-  async exportCsv() {
-    const report = await this.findAll();
+  async exportCsv(customerId?: string) {
+    const report = await this.findAll(customerId);
 
-    const reportCustomers =
-      'customers' in report ? report.customers : undefined;
-
-    if (!reportCustomers) {
+    if (!('customers' in report)) {
       return this.toCsv([
         [
           'Customer Code',
@@ -205,8 +202,21 @@ export class OutstandingService {
           'Outstanding',
           'Days Overdue',
         ],
+        ...report.invoices.map((invoice) => [
+          report.customer.code,
+          report.customer.name,
+          invoice.invoice.invoiceNumber,
+          this.formatDateForCsv(invoice.invoice.invoiceDate),
+          this.formatDateForCsv(invoice.invoice.dueDate),
+          invoice.invoice.amount,
+          invoice.activePaidAmount,
+          invoice.outstanding,
+          invoice.daysOverdue ?? '',
+        ]),
       ]);
     }
+
+    const reportCustomers = report.customers ?? [];
 
     return this.toCsv([
       [
