@@ -1,7 +1,14 @@
-import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 const paymentMethodSchema = z.enum(["CASH", "CHEQUE", "BANK_TRANSFER", "CARD"]);
+
+class MoneyAmount {
+  constructor(readonly cents: number) {}
+
+  toString() {
+    return formatCents(this.cents);
+  }
+}
 
 function getString(formData: FormData, name: string) {
   const value = formData.get(name);
@@ -9,21 +16,52 @@ function getString(formData: FormData, name: string) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function getDecimal(value: string, message: string) {
-  try {
-    const amount = new Prisma.Decimal(value || "0");
+function getInvalidMoneyError(value: string, message: string) {
+  return new z.ZodError([
+    {
+      code: "custom",
+      input: value,
+      message,
+      path: [],
+    },
+  ]);
+}
 
-    return amount;
-  } catch {
-    throw new z.ZodError([
-      {
-        code: "custom",
-        input: value,
-        message,
-        path: [],
-      },
-    ]);
+function parseMoneyCents(value: string, message: string) {
+  const text = value || "0";
+
+  if (!/^-?(?:(?:\d+)(?:\.\d*)?|\.\d+)$/.test(text)) {
+    throw getInvalidMoneyError(value, message);
   }
+
+  const sign = text.startsWith("-") ? -1 : 1;
+  const [wholePart, fractionPart = ""] = text.replace("-", "").split(".");
+  const wholeCents = Number(wholePart || "0") * 100;
+  const fractionCents = Number(fractionPart.padEnd(2, "0").slice(0, 2));
+  const cents = wholeCents + fractionCents;
+
+  if (!Number.isSafeInteger(cents)) {
+    throw getInvalidMoneyError(value, message);
+  }
+
+  return sign * cents;
+}
+
+function formatCents(cents: number) {
+  const sign = cents < 0 ? "-" : "";
+  const absoluteCents = Math.abs(cents);
+
+  return `${sign}${Math.floor(absoluteCents / 100)}.${String(
+    absoluteCents % 100,
+  ).padStart(2, "0")}`;
+}
+
+function getMoneyAmount(value: string, message: string) {
+  return new MoneyAmount(parseMoneyCents(value, message));
+}
+
+function sumMoneyCents(values: MoneyAmount[]) {
+  return values.reduce((total, value) => total + value.cents, 0);
 }
 
 function isValidDateString(value: string) {
@@ -35,7 +73,7 @@ export const paymentValidationSchema = z
     allocations: z
       .array(
         z.object({
-          amount: z.instanceof(Prisma.Decimal),
+          amount: z.instanceof(MoneyAmount),
           invoiceId: z.string().min(1, "Invoice is required"),
         }),
       )
@@ -47,12 +85,12 @@ export const paymentValidationSchema = z
           allocations: z
             .array(
               z.object({
-                amount: z.instanceof(Prisma.Decimal),
+                amount: z.instanceof(MoneyAmount),
                 invoiceId: z.string().min(1, "Invoice is required"),
               }),
             )
             .min(1, "Each payment method needs at least one allocation"),
-          amount: z.instanceof(Prisma.Decimal),
+          amount: z.instanceof(MoneyAmount),
           bankReference: z.string().optional(),
           cardReference: z.string().optional(),
           chequeBank: z.string().optional(),
@@ -67,16 +105,14 @@ export const paymentValidationSchema = z
     paymentDate: z.date(),
   })
   .superRefine((value, context) => {
-    const paymentTotal = value.methods.reduce(
-      (total, method) => total.plus(method.amount),
-      new Prisma.Decimal(0),
+    const paymentTotal = sumMoneyCents(
+      value.methods.map((method) => method.amount),
     );
-    const allocationTotal = value.allocations.reduce(
-      (total, allocation) => total.plus(allocation.amount),
-      new Prisma.Decimal(0),
+    const allocationTotal = sumMoneyCents(
+      value.allocations.map((allocation) => allocation.amount),
     );
 
-    if (!paymentTotal.gt(0)) {
+    if (paymentTotal <= 0) {
       context.addIssue({
         code: "custom",
         message: "Payment amount must be greater than zero",
@@ -84,7 +120,7 @@ export const paymentValidationSchema = z
       });
     }
 
-    if (allocationTotal.gt(paymentTotal)) {
+    if (allocationTotal > paymentTotal) {
       context.addIssue({
         code: "custom",
         message: "Total allocated amount cannot exceed payment amount",
@@ -93,7 +129,7 @@ export const paymentValidationSchema = z
     }
 
     for (const allocation of value.allocations) {
-      if (!allocation.amount.gt(0)) {
+      if (allocation.amount.cents <= 0) {
         context.addIssue({
           code: "custom",
           message: "Allocation amounts must be greater than zero",
@@ -103,12 +139,11 @@ export const paymentValidationSchema = z
     }
 
     for (const [index, method] of value.methods.entries()) {
-      const methodAllocationTotal = method.allocations.reduce(
-        (total, allocation) => total.plus(allocation.amount),
-        new Prisma.Decimal(0),
+      const methodAllocationTotal = sumMoneyCents(
+        method.allocations.map((allocation) => allocation.amount),
       );
 
-      if (!method.amount.gt(0)) {
+      if (method.amount.cents <= 0) {
         context.addIssue({
           code: "custom",
           message: "Payment method amount must be greater than zero",
@@ -116,7 +151,7 @@ export const paymentValidationSchema = z
         });
       }
 
-      if (!method.amount.equals(methodAllocationTotal)) {
+      if (method.amount.cents !== methodAllocationTotal) {
         context.addIssue({
           code: "custom",
           message: "Each method amount must equal its method allocations",
@@ -125,7 +160,7 @@ export const paymentValidationSchema = z
       }
 
       for (const allocation of method.allocations) {
-        if (!allocation.amount.gt(0)) {
+        if (allocation.amount.cents <= 0) {
           context.addIssue({
             code: "custom",
             message: "Allocation amounts must be greater than zero",
@@ -192,7 +227,7 @@ export function parsePaymentFormData(formData: FormData) {
     .getAll("invoiceIds")
     .filter((value): value is string => typeof value === "string");
   const allocations = invoiceIds.map((invoiceId) => ({
-    amount: getDecimal(
+    amount: getMoneyAmount(
       getString(formData, `allocationAmount:${invoiceId}`),
       "Allocation amount must be valid",
     ),
@@ -211,13 +246,13 @@ export function parsePaymentFormData(formData: FormData) {
 
     return {
       allocations: invoiceIdsForMethod.map((invoiceId) => ({
-        amount: getDecimal(
+        amount: getMoneyAmount(
           getString(formData, `addedMethod:${clientId}:allocation:${invoiceId}`),
           "Method allocation amount must be valid",
         ),
         invoiceId,
       })),
-      amount: getDecimal(
+      amount: getMoneyAmount(
         getString(formData, `addedMethod:${clientId}:amount`),
         "Payment method amount must be valid",
       ),
@@ -248,7 +283,10 @@ export function parsePaymentFormData(formData: FormData) {
     customerId: getString(formData, "customerId"),
     methods,
     notes: getString(formData, "notes") || undefined,
-    paymentDate: parseDate(getString(formData, "paymentDate"), "Payment date is required"),
+    paymentDate: parseDate(
+      getString(formData, "paymentDate"),
+      "Payment date is required",
+    ),
   });
 }
 
