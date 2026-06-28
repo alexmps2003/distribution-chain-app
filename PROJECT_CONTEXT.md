@@ -1,8 +1,9 @@
 # Project Context
 
-This document describes what the existing web app does today, based on the
-current Prisma schema and application code. It is intended to keep future
-backend rebuild work aligned with the real product behavior.
+This document describes what the distribution chain app does today, based on the
+current backend API, Drizzle schema, and confirmed application behavior. It is
+intended to keep future backend, frontend, and mobile work aligned with the real
+product behavior.
 
 ## 1. App Purpose
 
@@ -28,59 +29,53 @@ Invoices, Payments, Cheques, Outstanding, Aging, and creation flows.
 
 ## 1.1 Current Project Phase
 
-Phase 1 / backend rebuild work is considered complete at this point:
+Phase 4 and Phase 5 migration work is complete at this point:
 
 - NestJS backend was built separately under `backend/src`.
 - Backend behavior was aligned with the existing Next.js web app behavior.
 - Critical parity issues were fixed, especially cheque reversal as
   `PaymentPart` reversal instead of whole `Payment` reversal.
-- Nice-to-have parity and cleanup/polish were completed.
-- Builds and lint checks were clean before starting frontend integration.
+- The Next.js frontend has been migrated away from direct Prisma database
+  access for active application code.
+- Frontend pages now load and mutate application data through the NestJS API.
+- Payment creation is handled by `POST /api/payments` instead of a frontend
+  Prisma transaction.
+- Dashboard, search, aging, outstanding, payments read pages, cheque pages,
+  customer pages, invoice pages, and statements are API-backed.
+- Outstanding CSV export is owned by the backend and the Next.js route is only
+  a thin CSV download proxy.
+- Frontend payment validation no longer imports `@prisma/client` or
+  `Prisma.Decimal`.
+- Unused frontend Prisma helper files were removed.
+- Root frontend lint/build checks ignore the backend project, and the backend is
+  checked separately from inside `backend/`.
 
-The next active phase is frontend integration.
+The next active phase is authentication and route protection.
 
-Frontend integration goal:
+Phase 6 goals:
 
-- Replace the existing frontend's direct Prisma/server-action data access with
-  calls to the NestJS API.
-- Preserve the current UI behavior unless a future request explicitly changes
-  the product behavior.
-- Migrate one module at a time and test after each module before moving on.
-
-Recommended frontend integration order:
-
-1. Customers
-2. Invoices
-3. Payments read pages
-4. Outstanding
-5. Aging
-6. Dashboard
-7. Search
-8. Cheques
-9. Statements
-10. Payment creation/edit flows
-
-Reason for this order:
-
-- Start with lower-risk read-only or simpler pages.
-- Establish a stable API-client pattern before touching complex financial
-  write flows.
-- Leave payment creation/edit flows until last because mixed-method payments,
-  invoice allocations, and cheque metadata are the most complex parts of the
-  app.
+- Add backend authentication endpoints.
+- Add frontend login/logout and session persistence.
+- Protect authenticated pages.
+- Update the API client to attach auth credentials where needed.
+- Prepare the architecture for future mobile collector access to the same API.
 
 ## 1.2 Tech Stack And Architecture
 
-Current existing web app stack:
+Current frontend stack:
 
 - Frontend: Next.js, React, TypeScript.
-- UI behavior: existing pages, components, server actions, validation, and toast
-  flows should be preserved during migration.
-- Current web app ORM: Prisma.
-- Current database source of truth: `prisma/schema.prisma`.
+- UI behavior: existing pages, components, validation, toast flows, filters, and
+  route URLs should be preserved unless a future request explicitly changes the
+  product behavior.
+- Frontend API access: `lib/api-client.ts` for JSON API calls.
+- Frontend CSV download: `app/outstanding/export/route.ts` proxies backend CSV
+  output because `apiGet` expects JSON.
+- Frontend database rule: active frontend code should not import Prisma or talk
+  directly to the database.
 - Database: PostgreSQL.
 
-Backend rebuild stack:
+Backend stack:
 
 - Backend framework: NestJS.
 - Language: TypeScript.
@@ -104,10 +99,12 @@ Next.js frontend
 
 Important architectural rule:
 
-- The frontend should not directly access Prisma for migrated modules.
-- Prisma remains the source of truth for understanding the existing app model,
-  but the migrated frontend should talk to the backend API.
+- The frontend should not directly access Prisma or Drizzle.
+- The frontend should communicate with the backend through API helpers or thin
+  proxy routes when raw files are needed.
 - Drizzle belongs inside the backend, not in the frontend.
+- Prisma was the original source of truth for understanding the legacy app
+  model, but active frontend code has been migrated away from Prisma.
 - The API layer should protect future clients such as a mobile app from needing
   to know database or ORM details.
 
@@ -142,23 +139,27 @@ Next.js page/client helper/server action wrapper -> NestJS API -> Drizzle -> Pos
 
 ## 1.4 Git And Branching Notes
 
-The backend cleanup milestone was reached on branch `phase-3-backend-clean`.
+Completed milestone branches:
 
-Recommended transition into frontend integration:
+- `phase-3-backend-clean`: backend parity and cleanup milestone.
+- `phase-4-frontend-integration`: frontend API migration milestone.
+- `phase-5-backend-cleanup`: cleanup milestone that removed remaining active
+  frontend Prisma coupling and moved CSV export ownership to the backend.
+
+Current stable branch:
+
+- `dev`
+
+Recommended next branch:
 
 ```bash
 git checkout dev
 git pull origin dev
-git merge phase-3-backend-clean
-git push origin dev
-
-git checkout -b phase-4-frontend-integration
-git push -u origin phase-4-frontend-integration
+git checkout -b phase-6-auth
 ```
 
-Frontend API migration work should happen on a dedicated branch such as
-`phase-4-frontend-integration` so the completed backend milestone stays easy to
-recover or compare against.
+Future work should continue in small dedicated branches and be merged back into
+`dev` after lint/build checks and browser smoke tests pass.
 
 ## 1.5 Documentation Rules For Future Chats
 
@@ -180,11 +181,12 @@ When continuing work in a new chat or with a new AI assistant:
 
 ## 2. Source Of Truth
 
-`prisma/schema.prisma` is the current data-model source of truth.
+The active runtime data model is now represented by the backend Drizzle schema
+under `backend/src/db/schema.ts` and the confirmed backend service behavior.
 
-The backend Drizzle schema should mirror Prisma unless a future request
-explicitly changes the Prisma model first or explicitly authorizes a schema
-change.
+`prisma/schema.prisma` remains useful as legacy model reference material, but
+active frontend code should not depend on Prisma. Future schema changes should
+be made deliberately in the backend/database layer and reflected in project docs.
 
 Important rebuild rule:
 
@@ -470,64 +472,40 @@ Routes:
 
 The payment creation page has a client UI plus a server action.
 
-Client UI:
-
-- User selects an active customer.
-- App loads outstanding invoices for that customer.
-- User selects invoices and enters overall invoice allocation amounts.
-- User adds one or more payment methods:
-  - Cash
-  - Cheque
-  - Bank Transfer
-  - Card
-- For each method, user enters method amount and per-invoice method
-  allocations.
-- Cheque method shows cheque number, bank dropdown, and cheque date.
-- Bank transfer and card show reference number fields.
-- The UI prevents adding a method if method amount does not equal that method's
-  allocations.
-- The final Save Payment button is enabled only when:
-  - at least one method exists,
-  - total overall invoice allocation is greater than zero,
-  - added method total equals overall invoice allocation total,
-  - per-invoice sum of method allocations equals the selected overall invoice
-    allocation.
-
-Server action:
+Frontend submit wrapper:
 
 - Parses form data through `parsePaymentFormData`.
-- Validates with Zod:
+- Preserves invalid form data in a short-lived cookie so the form can be
+  restored after validation errors.
+- Keeps frontend consistency checks for totals and per-invoice method
+  allocation matching.
+- Sends the payment payload to `POST /api/payments` through `apiPost`.
+- Redirects to `/payments` with a success toast after the backend confirms the
+  payment was recorded.
+
+Backend payment creation:
+
+- Implemented by `POST /api/payments`.
+- Validates:
   - customer required,
-  - payment date required,
+  - payment amount greater than zero,
   - at least one method,
-  - payment total greater than zero,
-  - allocation amounts greater than zero,
+  - each method amount greater than zero,
   - each method amount equals its own method allocations,
-  - cheque number, cheque bank, and cheque date are required for cheque methods.
-- Additional server rules:
-  - payment total must be greater than zero,
-  - payment total must equal allocation total,
-  - every method allocation invoice must match a selected invoice,
-  - method allocations per invoice must equal the overall invoice allocation.
-- Uses `prisma.$transaction`.
-- Loads selected invoices for the selected customer.
-- If the selected invoice count does not match loaded invoices, throws an error.
+  - payment amount equals payment method total,
+  - payment amount equals total allocations,
+  - cheque number, cheque bank, and cheque date are required for cheque methods,
+  - selected invoice exists,
+  - selected invoice belongs to the paying customer,
+  - allocation does not exceed invoice outstanding balance.
+- Uses a backend transaction.
 - Creates a `Payment`.
 - Sets `paymentMethod` to the single method if only one method exists,
   otherwise `MIXED`.
 - Creates one `PaymentPart` per method.
 - Creates `PaymentAllocation` records linked to both `paymentId` and
   `paymentPartId`.
-- Updates affected invoice statuses.
-
-Important current-code nuance:
-
-- The invoice allocation table displayed on `/payments/new` calculates
-  outstanding from active allocations only, ignoring reversed payment parts.
-- Inside the payment creation transaction, the outstanding validation currently
-  sums `invoice.payments.map((payment) => payment.amount)` without filtering
-  reversed payment parts. This may be an implementation inconsistency. Confirm
-  before copying this behavior to a backend rebuild.
+- Updates affected invoice statuses from active allocation totals.
 
 ### Mixed Payment Methods
 
@@ -728,13 +706,16 @@ Routes:
 - `/outstanding?customerId=...`
 - `/outstanding/export`
 
-Shared helper:
+Backend/API behavior:
 
-- `lib/outstanding-report.ts`
+- Outstanding report data is served by the backend outstanding API.
+- CSV export is generated by the backend.
+- The Next.js `/outstanding/export` route is a thin proxy that forwards raw CSV
+  and download headers from the backend.
 
 Behavior:
 
-- Fetches customers with invoices and payment allocations.
+- Fetches customers with invoices and payment allocations in the backend.
 - Calculates paid amount from active allocations only.
 - Calculates invoice outstanding as `invoice.amount - activePaidAmount`.
 - Includes only invoices with outstanding greater than zero.
@@ -1056,9 +1037,6 @@ confirmed before backend behavior is finalized:
   current UI calculations collapse invoice display status to `PAID`,
   `PARTIALLY_PAID`, or `UNPAID`.
 
-- The current backend under `backend/src` is being rebuilt separately from the
-  Next.js web app. The web app still uses Prisma directly.
-- During frontend integration, confirm whether each module should receive fully
-  calculated view models from the API or whether some display-only calculations
-  should remain in the Next.js frontend. Prefer backend-calculated financial
-  totals for consistency, but preserve UI behavior during migration.
+- Authentication and route protection are not yet implemented in the current
+  app. Phase 6 should define the backend auth model, frontend session handling,
+  protected routes, and API-client auth behavior.
