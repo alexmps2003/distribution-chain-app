@@ -29,7 +29,6 @@ type DashboardResponse = {
     amount: MoneyValue;
     customer: {
       code: string;
-      id: string;
       name: string;
     } | null;
     id: string;
