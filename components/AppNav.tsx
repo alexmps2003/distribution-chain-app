@@ -12,6 +12,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  type AuthenticatedUser,
+  getAuthenticatedUser,
+  isAuthMeUnauthorizedError,
+} from "@/lib/auth-user";
 import { supabase } from "@/lib/supabase-client";
 
 const navItems = [
@@ -32,21 +37,46 @@ function isActivePath(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+function formatRole(role: AuthenticatedUser["role"]) {
+  return role
+    .split("_")
+    .map((part) => part.charAt(0) + part.slice(1).toLowerCase())
+    .join(" ");
+}
+
 export default function AppNav() {
   const pathname = usePathname();
   const router = useRouter();
-  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [user, setUser] = useState<AuthenticatedUser | null>(null);
+  const [isUserLoading, setIsUserLoading] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadUser() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
       if (isMounted) {
-        setUserEmail(user?.email ?? null);
+        setIsUserLoading(true);
+      }
+
+      try {
+        const authenticatedUser = await getAuthenticatedUser();
+
+        if (isMounted) {
+          setUser(authenticatedUser);
+        }
+      } catch (error) {
+        if (isAuthMeUnauthorizedError(error)) {
+          router.push("/login");
+          return;
+        }
+
+        if (isMounted) {
+          setUser(null);
+        }
+      } finally {
+        if (isMounted) {
+          setIsUserLoading(false);
+        }
       }
     }
 
@@ -55,14 +85,21 @@ export default function AppNav() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUserEmail(session?.user.email ?? null);
+      if (!session) {
+        setUser(null);
+        setIsUserLoading(false);
+        router.push("/login");
+        return;
+      }
+
+      void loadUser();
     });
 
     return () => {
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [router]);
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -111,8 +148,28 @@ export default function AppNav() {
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-64">
-                <DropdownMenuLabel className="truncate">
-                  {userEmail ?? "Signed in"}
+                <DropdownMenuLabel>
+                  {isUserLoading ? (
+                    <span className="block text-sm font-medium">
+                      Loading profile...
+                    </span>
+                  ) : user ? (
+                    <span className="grid gap-1">
+                      <span className="truncate text-sm font-medium">
+                        {user.name}
+                      </span>
+                      <span className="truncate text-xs font-normal text-zinc-500">
+                        {user.email}
+                      </span>
+                      <span className="text-xs font-normal text-zinc-500">
+                        Role: {formatRole(user.role)}
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="block text-sm font-medium">
+                      Signed in
+                    </span>
+                  )}
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout}>
