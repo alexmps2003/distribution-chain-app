@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { Landmark } from "lucide-react";
+import FilterBar from "@/components/distribio/FilterBar";
+import PageContainer from "@/components/distribio/PageContainer";
+import PageHeader from "@/components/distribio/PageHeader";
 import EmptyState from "@/components/EmptyState";
 import { apiGet } from "@/lib/api-client-server";
 import { getAuthenticatedUserServer } from "@/lib/auth-user-server";
@@ -114,22 +117,21 @@ export default async function ChequesPage({
   const canCreatePayments = canCreatePayment(authenticatedUser.role);
 
   return (
-    <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className="text-3xl font-semibold tracking-tight">Cheques</h1>
+    <PageContainer>
+      <PageHeader
+        title="Cheques"
+        actions={
           <Link
             href="/payments"
             className="inline-flex h-10 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium hover:bg-zinc-100"
           >
             Back to Payments
           </Link>
-        </div>
+        }
+      />
 
-        <form
-          action="/cheques"
-          className="grid gap-4 rounded-md border border-zinc-200 bg-white p-4"
-        >
+      <form action="/cheques">
+        <FilterBar>
           <div className="grid gap-4 lg:grid-cols-[1fr_1fr_180px_auto_auto] lg:items-end">
             <label className="flex flex-col gap-2 text-sm font-medium text-zinc-800">
               Search cheque number
@@ -181,117 +183,117 @@ export default async function ChequesPage({
               Clear Filters
             </Link>
           </div>
-        </form>
+        </FilterBar>
+      </form>
 
-        {cheques.length === 0 ? (
-          <EmptyState
-            icon={Landmark}
-            title="No cheques available"
-            description="Cheque payments will appear here after they are recorded."
-            actionHref={canCreatePayments ? "/payments/new" : undefined}
-            actionLabel={canCreatePayments ? "Record Payment" : undefined}
-          />
-        ) : (
-          <div className="overflow-hidden rounded-md border border-zinc-200 bg-white">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-zinc-200 text-sm">
-                <thead className="bg-zinc-100 text-left text-xs font-semibold uppercase text-zinc-600">
-                  <tr>
-                    <th scope="col" className="px-4 py-3">
-                      Cheque Number
-                    </th>
-                    <th scope="col" className="px-4 py-3">
-                      Bank
-                    </th>
-                    <th scope="col" className="px-4 py-3">
-                      Cheque Date
-                    </th>
-                    <th scope="col" className="px-4 py-3 text-right">
-                      Amount
-                    </th>
-                    <th scope="col" className="px-4 py-3">
-                      Customer
-                    </th>
-                    <th scope="col" className="px-4 py-3">
-                      Payment Date
-                    </th>
-                    <th scope="col" className="px-4 py-3">
-                      Status
-                    </th>
-                    <th scope="col" className="px-4 py-3 text-right">
-                      Payment Receipt
-                    </th>
-                    <th scope="col" className="px-4 py-3 text-right">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-200">
-                  {cheques.map((cheque) => (
-                    <tr key={cheque.id}>
-                      <td className="whitespace-nowrap px-4 py-3 font-medium text-zinc-950">
-                        {cheque.chequeNumber ?? "-"}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
-                        {cheque.chequeBank ?? "-"}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
-                        {formatDate(
-                          cheque.chequeDate ? new Date(cheque.chequeDate) : null,
-                        )}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-zinc-600">
-                        {formatAmount(cheque.amount)}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
-                        {cheque.payment?.customer
-                          ? `${cheque.payment.customer.name} (${cheque.payment.customer.code})`
-                          : "Customer not found"}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
-                        {formatDate(
+      {cheques.length === 0 ? (
+        <EmptyState
+          icon={Landmark}
+          title="No cheques available"
+          description="Cheque payments will appear here after they are recorded."
+          actionHref={canCreatePayments ? "/payments/new" : undefined}
+          actionLabel={canCreatePayments ? "Record Payment" : undefined}
+        />
+      ) : (
+        <div className="overflow-hidden rounded-md border border-zinc-200 bg-white">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-zinc-200 text-sm">
+              <thead className="bg-zinc-100 text-left text-xs font-semibold uppercase text-zinc-600">
+                <tr>
+                  <th scope="col" className="px-4 py-3">
+                    Cheque Number
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    Bank
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    Cheque Date
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-right">
+                    Amount
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    Customer
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    Payment Date
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    Status
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-right">
+                    Payment Receipt
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-right">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-200">
+                {cheques.map((cheque) => (
+                  <tr key={cheque.id}>
+                    <td className="whitespace-nowrap px-4 py-3 font-medium text-zinc-950">
+                      {cheque.chequeNumber ?? "-"}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
+                      {cheque.chequeBank ?? "-"}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
+                      {formatDate(
+                        cheque.chequeDate ? new Date(cheque.chequeDate) : null,
+                      )}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-zinc-600">
+                      {formatAmount(cheque.amount)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
+                      {cheque.payment?.customer
+                        ? `${cheque.payment.customer.name} (${cheque.payment.customer.code})`
+                        : "Customer not found"}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
+                      {formatDate(
+                        cheque.payment
+                          ? new Date(cheque.payment.paymentDate)
+                          : null,
+                      )}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      <span
+                        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getStatusBadgeClass(
+                          cheque.status,
+                        )}`}
+                      >
+                        {formatStatus(cheque.status)}
+                      </span>
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-right">
+                      <Link
+                        href={
                           cheque.payment
-                            ? new Date(cheque.payment.paymentDate)
-                            : null,
-                        )}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3">
-                        <span
-                          className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getStatusBadgeClass(
-                            cheque.status,
-                          )}`}
-                        >
-                          {formatStatus(cheque.status)}
-                        </span>
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-right">
-                        <Link
-                          href={
-                            cheque.payment
-                              ? `/payments/${cheque.payment.id}?returnTo=/cheques`
-                              : "/payments"
-                          }
-                          className="inline-flex h-8 items-center justify-center rounded-md border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
-                        >
-                          Receipt
-                        </Link>
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-right">
-                        <Link
-                          href={`/cheques/${cheque.id}`}
-                          className="inline-flex h-8 items-center justify-center rounded-md bg-zinc-950 px-3 text-xs font-medium text-white hover:bg-zinc-800"
-                        >
-                          View
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                            ? `/payments/${cheque.payment.id}?returnTo=/cheques`
+                            : "/payments"
+                        }
+                        className="inline-flex h-8 items-center justify-center rounded-md border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
+                      >
+                        Receipt
+                      </Link>
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-right">
+                      <Link
+                        href={`/cheques/${cheque.id}`}
+                        className="inline-flex h-8 items-center justify-center rounded-md bg-zinc-950 px-3 text-xs font-medium text-white hover:bg-zinc-800"
+                      >
+                        View
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        )}
-      </div>
-    </main>
+        </div>
+      )}
+    </PageContainer>
   );
 }
