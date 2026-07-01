@@ -4,6 +4,10 @@ import Link from "next/link";
 import { CircleCheck, CreditCard } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import PageContainer from "@/components/distribio/PageContainer";
+import PageHeader from "@/components/distribio/PageHeader";
+import StatCard from "@/components/distribio/StatCard";
+import StatsGrid from "@/components/distribio/StatsGrid";
 import EmptyState from "@/components/EmptyState";
 import { apiGet } from "@/lib/api-client";
 import {
@@ -178,30 +182,6 @@ function getCollectionsRange(
   return "thisYear";
 }
 
-function KpiCard({
-  href,
-  label,
-  value,
-}: {
-  href: string;
-  label: string;
-  value: string | number;
-}) {
-  return (
-    <Link
-      href={href}
-      className="group rounded-2xl border border-zinc-200/80 bg-white/90 p-5 shadow-sm shadow-zinc-950/[0.03] transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:bg-white hover:shadow-md hover:shadow-zinc-950/[0.06]"
-    >
-      <p className="text-xs font-medium uppercase tracking-[0.08em] text-zinc-500">
-        {label}
-      </p>
-      <p className="mt-2 text-2xl font-medium tracking-tight text-zinc-950">
-        {value}
-      </p>
-    </Link>
-  );
-}
-
 const moduleCards = [
   {
     cta: "Open Customers",
@@ -337,43 +317,35 @@ export default function Home() {
 
   if (errorMessage) {
     return (
-      <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
-        <div className="mx-auto flex w-full max-w-7xl flex-col gap-9">
-          <div>
-            <h1 className="text-3xl font-medium tracking-tight">
-              Distribution Chain Dashboard
-            </h1>
-            <p className="mt-2 text-sm leading-6 text-zinc-600">
-              Monitor customers, invoices, payments, cheques, and outstanding
-              balances.
-            </p>
-          </div>
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm font-medium text-red-700">
-            {errorMessage}
-          </div>
+      <PageContainer contentClassName="gap-9">
+        <PageHeader
+          title="Distribution Chain Dashboard"
+          subtitle="Monitor customers, invoices, payments, cheques, and outstanding balances."
+          className="block"
+          titleClassName="font-medium"
+          subtitleClassName="mt-2 leading-6"
+        />
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm font-medium text-red-700">
+          {errorMessage}
         </div>
-      </main>
+      </PageContainer>
     );
   }
 
   if (!dashboard) {
     return (
-      <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
-        <div className="mx-auto flex w-full max-w-7xl flex-col gap-9">
-          <div>
-            <h1 className="text-3xl font-medium tracking-tight">
-              Distribution Chain Dashboard
-            </h1>
-            <p className="mt-2 text-sm leading-6 text-zinc-600">
-              Monitor customers, invoices, payments, cheques, and outstanding
-              balances.
-            </p>
-          </div>
-          <div className="rounded-2xl border border-zinc-200/80 bg-white/90 p-5 text-sm font-medium text-zinc-600 shadow-sm shadow-zinc-950/[0.03]">
-            Loading dashboard...
-          </div>
+      <PageContainer contentClassName="gap-9">
+        <PageHeader
+          title="Distribution Chain Dashboard"
+          subtitle="Monitor customers, invoices, payments, cheques, and outstanding balances."
+          className="block"
+          titleClassName="font-medium"
+          subtitleClassName="mt-2 leading-6"
+        />
+        <div className="rounded-2xl border border-zinc-200/80 bg-white/90 p-5 text-sm font-medium text-zinc-600 shadow-sm shadow-zinc-950/[0.03]">
+          Loading dashboard...
         </div>
-      </main>
+      </PageContainer>
     );
   }
 
@@ -456,50 +428,65 @@ export default function Home() {
     }));
 
   return (
-    <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-9">
-        <div>
-          <h1 className="text-3xl font-medium tracking-tight">
-            Distribution Chain Dashboard
-          </h1>
-          <p className="mt-2 text-sm leading-6 text-zinc-600">
-            Monitor customers, invoices, payments, cheques, and outstanding
-            balances.
-          </p>
-        </div>
+    <PageContainer contentClassName="gap-9">
+      <PageHeader
+        title="Distribution Chain Dashboard"
+        subtitle="Monitor customers, invoices, payments, cheques, and outstanding balances."
+        className="block"
+        titleClassName="font-medium"
+        subtitleClassName="mt-2 leading-6"
+      />
 
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-          <KpiCard
-            href="/customers"
-            label="Total Customers"
-            value={totalCustomers}
-          />
-          <KpiCard
-            href="/outstanding"
-            label="Total Outstanding"
-            value={formatAmount(totalOutstanding)}
-          />
-          <KpiCard
-            href="/cheques?status=ACTIVE"
-            label="Active Cheques"
-            value={activeCheques}
-          />
-          <KpiCard
-            href="/cheques?status=REVERSED"
-            label="Reversed Cheques"
-            value={reversedCheques}
-          />
-          <KpiCard
-            href="/invoices"
-            label="Total Invoiced"
-            value={formatAmount(totalInvoiced)}
-          />
-          <KpiCard
-            href="/payments"
-            label="Total Paid"
-            value={formatAmount(totalPaid)}
-          />
-        </section>
+      <StatsGrid className="lg:grid-cols-3 xl:grid-cols-6">
+        <StatCard
+          href="/customers"
+          title="Total Customers"
+          value={totalCustomers}
+          className="group rounded-2xl border-zinc-200/80 bg-white/90 shadow-sm shadow-zinc-950/[0.03] transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:bg-white hover:shadow-md hover:shadow-zinc-950/[0.06]"
+          titleClassName="font-medium tracking-[0.08em]"
+          valueClassName="font-medium"
+        />
+        <StatCard
+          href="/outstanding"
+          title="Total Outstanding"
+          value={formatAmount(totalOutstanding)}
+          className="group rounded-2xl border-zinc-200/80 bg-white/90 shadow-sm shadow-zinc-950/[0.03] transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:bg-white hover:shadow-md hover:shadow-zinc-950/[0.06]"
+          titleClassName="font-medium tracking-[0.08em]"
+          valueClassName="font-medium"
+        />
+        <StatCard
+          href="/cheques?status=ACTIVE"
+          title="Active Cheques"
+          value={activeCheques}
+          className="group rounded-2xl border-zinc-200/80 bg-white/90 shadow-sm shadow-zinc-950/[0.03] transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:bg-white hover:shadow-md hover:shadow-zinc-950/[0.06]"
+          titleClassName="font-medium tracking-[0.08em]"
+          valueClassName="font-medium"
+        />
+        <StatCard
+          href="/cheques?status=REVERSED"
+          title="Reversed Cheques"
+          value={reversedCheques}
+          className="group rounded-2xl border-zinc-200/80 bg-white/90 shadow-sm shadow-zinc-950/[0.03] transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:bg-white hover:shadow-md hover:shadow-zinc-950/[0.06]"
+          titleClassName="font-medium tracking-[0.08em]"
+          valueClassName="font-medium"
+        />
+        <StatCard
+          href="/invoices"
+          title="Total Invoiced"
+          value={formatAmount(totalInvoiced)}
+          className="group rounded-2xl border-zinc-200/80 bg-white/90 shadow-sm shadow-zinc-950/[0.03] transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:bg-white hover:shadow-md hover:shadow-zinc-950/[0.06]"
+          titleClassName="font-medium tracking-[0.08em]"
+          valueClassName="font-medium"
+        />
+        <StatCard
+          href="/payments"
+          title="Total Paid"
+          value={formatAmount(totalPaid)}
+          className="group rounded-2xl border-zinc-200/80 bg-white/90 shadow-sm shadow-zinc-950/[0.03] transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:bg-white hover:shadow-md hover:shadow-zinc-950/[0.06]"
+          titleClassName="font-medium tracking-[0.08em]"
+          valueClassName="font-medium"
+        />
+      </StatsGrid>
 
         <DashboardCharts
           customerOutstanding={topOutstandingCustomers}
@@ -688,7 +675,6 @@ export default function Home() {
             )}
           </section>
         </div>
-      </div>
-    </main>
+    </PageContainer>
   );
 }
