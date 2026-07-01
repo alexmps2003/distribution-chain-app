@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { FileText, Users } from "lucide-react";
 import { notFound } from "next/navigation";
+import FilterBar from "@/components/distribio/FilterBar";
+import PageContainer from "@/components/distribio/PageContainer";
+import PageHeader from "@/components/distribio/PageHeader";
 import EmptyState from "@/components/EmptyState";
 import { apiGet } from "@/lib/api-client-server";
 import { getAuthenticatedUserServer } from "@/lib/auth-user-server";
@@ -135,7 +138,7 @@ function InvoiceStatusFilters({
   selectedStatus: string;
 }) {
   return (
-    <section className="rounded-md border border-zinc-200 bg-white p-4">
+    <FilterBar>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm font-medium text-zinc-800">Filter by status</p>
         <div className="flex flex-wrap gap-2">
@@ -161,7 +164,7 @@ function InvoiceStatusFilters({
           })}
         </div>
       </div>
-    </section>
+    </FilterBar>
   );
 }
 
@@ -209,17 +212,11 @@ export default async function InvoicesPage({
       });
 
     return (
-      <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
-        <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 className="text-3xl font-semibold tracking-tight">
-                {customer.name} Invoices
-              </h1>
-              <p className="mt-1 text-sm text-zinc-600">
-                Customer code: {customer.code}
-              </p>
-            </div>
+      <PageContainer>
+        <PageHeader
+          title={`${customer.name} Invoices`}
+          subtitle={`Customer code: ${customer.code}`}
+          actions={
             <div className="flex gap-3">
               <Link
                 href="/invoices"
@@ -236,7 +233,8 @@ export default async function InvoicesPage({
                 </Link>
               ) : null}
             </div>
-          </div>
+          }
+        />
 
           <InvoiceStatusFilters
             customerId={customerId}
@@ -367,8 +365,7 @@ export default async function InvoicesPage({
               </div>
             </div>
           )}
-        </div>
-      </main>
+      </PageContainer>
     );
   }
 
@@ -388,24 +385,21 @@ export default async function InvoicesPage({
   });
 
   return (
-    <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight">Invoices</h1>
-            <p className="mt-1 text-sm text-zinc-600">
-              Select a customer to view their invoices.
-            </p>
-          </div>
-          {canCreateInvoices ? (
+    <PageContainer>
+      <PageHeader
+        title="Invoices"
+        subtitle="Select a customer to view their invoices."
+        actions={
+          canCreateInvoices ? (
             <Link
               href="/invoices/new"
               className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
             >
               New Invoice
             </Link>
-          ) : null}
-        </div>
+          ) : null
+        }
+      />
 
         <InvoiceStatusFilters selectedStatus={selectedStatus} />
 
@@ -501,7 +495,6 @@ export default async function InvoicesPage({
             </div>
           </div>
         )}
-      </div>
-    </main>
+    </PageContainer>
   );
 }
