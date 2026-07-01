@@ -5,6 +5,12 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  app.enableCors({
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    origin: ['http://localhost:3000', 'http://localhost:3001'],
+  });
+
   app.setGlobalPrefix('api');
 
   const configService = app.get(ConfigService);

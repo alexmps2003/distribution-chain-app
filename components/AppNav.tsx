@@ -1,8 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { Search } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { LogOut, Search, UserCircle } from "lucide-react";
+import { useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { supabase } from "@/lib/supabase-client";
 
 const navItems = [
   { href: "/", label: "Dashboard" },
@@ -24,6 +34,44 @@ function isActivePath(pathname: string, href: string) {
 
 export default function AppNav() {
   const pathname = usePathname();
+  const router = useRouter();
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadUser() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (isMounted) {
+        setUserEmail(user?.email ?? null);
+      }
+    }
+
+    void loadUser();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUserEmail(session?.user.email ?? null);
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    router.push("/login");
+  }
+
+  if (pathname === "/login") {
+    return null;
+  }
 
   return (
     <header className="border-b border-zinc-200/80 bg-white/85 backdrop-blur-xl print:hidden">
@@ -35,22 +83,45 @@ export default function AppNav() {
           >
             Distribution Chain
           </Link>
-          <form
-            action="/search"
-            className="relative w-full lg:max-w-sm"
-            role="search"
-          >
-            <Search
-              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-400"
-              aria-hidden="true"
-            />
-            <input
-              type="search"
-              name="q"
-              placeholder="Search customers, invoices, payments..."
-              className="h-10 w-full rounded-full border border-zinc-200 bg-zinc-50/80 pl-9 pr-4 text-sm text-zinc-950 outline-none transition-colors placeholder:text-zinc-400 focus:border-zinc-400 focus:bg-white focus:ring-2 focus:ring-zinc-200"
-            />
-          </form>
+          <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center lg:max-w-md">
+            <form
+              action="/search"
+              className="relative w-full"
+              role="search"
+            >
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-400"
+                aria-hidden="true"
+              />
+              <input
+                type="search"
+                name="q"
+                placeholder="Search customers, invoices, payments..."
+                className="h-10 w-full rounded-full border border-zinc-200 bg-zinc-50/80 pl-9 pr-4 text-sm text-zinc-950 outline-none transition-colors placeholder:text-zinc-400 focus:border-zinc-400 focus:bg-white focus:ring-2 focus:ring-zinc-200"
+              />
+            </form>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="Open profile menu"
+                  className="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-700 shadow-sm shadow-zinc-950/5 transition-colors hover:bg-zinc-50 hover:text-zinc-950"
+                >
+                  <UserCircle className="size-5" aria-hidden="true" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuLabel className="truncate">
+                  {userEmail ?? "Signed in"}
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleLogout}>
+                  <LogOut className="size-4" aria-hidden="true" />
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
         <nav aria-label="Primary navigation" className="flex flex-wrap gap-1.5">
           {navItems.map((item) => {

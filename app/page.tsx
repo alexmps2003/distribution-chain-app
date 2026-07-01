@@ -1,5 +1,9 @@
+"use client";
+
 import Link from "next/link";
 import { CircleCheck, CreditCard } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import EmptyState from "@/components/EmptyState";
 import { apiGet } from "@/lib/api-client";
 import DashboardCharts from "./DashboardCharts";
@@ -246,28 +250,53 @@ const moduleCards = [
   },
 ];
 
-export default async function Home({
-  searchParams,
-}: {
-  searchParams: Promise<{
-    collectionsRange?: string | string[];
-    invoiceStatusRange?: string | string[];
-    outstandingArea?: string | string[];
-    outstandingLimit?: string | string[];
-    outstandingMin?: string | string[];
-    outstandingRoute?: string | string[];
-    outstandingStatus?: string | string[];
-  }>;
-}) {
-  const {
-    collectionsRange: collectionsRangeParam,
-    invoiceStatusRange: invoiceStatusRangeParam,
-    outstandingArea: outstandingAreaParam,
-    outstandingLimit: outstandingLimitParam,
-    outstandingMin: outstandingMinParam,
-    outstandingRoute: outstandingRouteParam,
-    outstandingStatus: outstandingStatusParam,
-  } = await searchParams;
+export default function Home() {
+  const searchParams = useSearchParams();
+  const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
+  const [errorMessage, setErrorMessage] = useState("");
+  const collectionsRangeParam =
+    searchParams.get("collectionsRange") ?? undefined;
+  const invoiceStatusRangeParam =
+    searchParams.get("invoiceStatusRange") ?? undefined;
+  const outstandingAreaParam =
+    searchParams.get("outstandingArea") ?? undefined;
+  const outstandingLimitParam =
+    searchParams.get("outstandingLimit") ?? undefined;
+  const outstandingMinParam = searchParams.get("outstandingMin") ?? undefined;
+  const outstandingRouteParam =
+    searchParams.get("outstandingRoute") ?? undefined;
+  const outstandingStatusParam =
+    searchParams.get("outstandingStatus") ?? undefined;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadDashboard() {
+      try {
+        const dashboardResponse = await apiGet<DashboardResponse>("/dashboard");
+
+        if (isMounted) {
+          setDashboard(dashboardResponse);
+          setErrorMessage("");
+        }
+      } catch (error) {
+        if (isMounted) {
+          setErrorMessage(
+            error instanceof Error
+              ? error.message
+              : "Unable to load dashboard",
+          );
+        }
+      }
+    }
+
+    void loadDashboard();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const outstandingLimit = getOutstandingLimit(outstandingLimitParam);
   const outstandingMin = getOutstandingMin(outstandingMinParam);
   const outstandingArea = getOutstandingTextFilter(outstandingAreaParam);
@@ -275,7 +304,49 @@ export default async function Home({
   const outstandingStatus = getOutstandingStatus(outstandingStatusParam);
   const invoiceStatusRange = getInvoiceStatusRange(invoiceStatusRangeParam);
   const collectionsRange = getCollectionsRange(collectionsRangeParam);
-  const dashboard = await apiGet<DashboardResponse>("/dashboard");
+
+  if (errorMessage) {
+    return (
+      <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
+        <div className="mx-auto flex w-full max-w-7xl flex-col gap-9">
+          <div>
+            <h1 className="text-3xl font-medium tracking-tight">
+              Distribution Chain Dashboard
+            </h1>
+            <p className="mt-2 text-sm leading-6 text-zinc-600">
+              Monitor customers, invoices, payments, cheques, and outstanding
+              balances.
+            </p>
+          </div>
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm font-medium text-red-700">
+            {errorMessage}
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (!dashboard) {
+    return (
+      <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
+        <div className="mx-auto flex w-full max-w-7xl flex-col gap-9">
+          <div>
+            <h1 className="text-3xl font-medium tracking-tight">
+              Distribution Chain Dashboard
+            </h1>
+            <p className="mt-2 text-sm leading-6 text-zinc-600">
+              Monitor customers, invoices, payments, cheques, and outstanding
+              balances.
+            </p>
+          </div>
+          <div className="rounded-2xl border border-zinc-200/80 bg-white/90 p-5 text-sm font-medium text-zinc-600 shadow-sm shadow-zinc-950/[0.03]">
+            Loading dashboard...
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   const {
     activeCheques,
     reversedCheques,

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { apiPost } from "@/lib/api-client";
+import { apiPost } from "@/lib/api-client-server";
 import { withToast } from "@/lib/toast";
 import { getValidationErrorMessage } from "@/lib/validation/errors";
 import { parseCustomerFormData } from "@/lib/validation/customer";

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { apiGet, apiPatch } from "@/lib/api-client";
+import { apiGet, apiPatch } from "@/lib/api-client-server";
 import { withToast } from "@/lib/toast";
 import ReverseChequeButton from "./ReverseChequeButton";
 import UndoChequeReversalButton from "./UndoChequeReversalButton";

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ReceiptText } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
-import { apiGet } from "@/lib/api-client";
+import { apiGet } from "@/lib/api-client-server";
 import PrintStatementButton from "./PrintStatementButton";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {

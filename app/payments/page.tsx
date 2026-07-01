@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { CreditCard } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
-import { apiGet } from "@/lib/api-client";
+import { apiGet } from "@/lib/api-client-server";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,

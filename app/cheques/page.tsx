@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Landmark } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
-import { apiGet } from "@/lib/api-client";
+import { apiGet } from "@/lib/api-client-server";
 import { BANK_OPTIONS } from "@/lib/bank-options";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {

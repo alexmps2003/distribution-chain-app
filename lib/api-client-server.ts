@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase-client";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 const apiBaseUrl = process.env.API_BASE_URL;
 
@@ -8,6 +8,7 @@ if (!apiBaseUrl) {
 
 async function getRequestHeaders(headersInit?: HeadersInit) {
   const headers = new Headers(headersInit);
+  const supabase = await createSupabaseServerClient();
   const {
     data: { session },
   } = await supabase.auth.getSession();

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { apiGet, apiPost } from "@/lib/api-client";
+import { apiGet, apiPost } from "@/lib/api-client-server";
 import { withToast } from "@/lib/toast";
 import { getValidationErrorMessage } from "@/lib/validation/errors";
 import { parsePaymentFormData } from "@/lib/validation/payment";

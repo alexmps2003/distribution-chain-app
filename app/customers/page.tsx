@@ -1,5 +1,9 @@
+"use client";
+
 import Link from "next/link";
 import { Users } from "lucide-react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import EmptyState from "@/components/EmptyState";
 import { apiGet } from "@/lib/api-client";
 
@@ -88,22 +92,97 @@ function getUniqueOptions(values: (string | null)[]) {
   ).sort((left, right) => left.localeCompare(right));
 }
 
-export default async function CustomersPage({
-  searchParams,
-}: {
-  searchParams: Promise<{
-    area?: string;
-    outstanding?: string;
-    route?: string;
-    search?: string;
-  }>;
-}) {
-  const { area, outstanding, route, search } = await searchParams;
+function CustomersLoading() {
+  return (
+    <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <h1 className="text-3xl font-semibold tracking-tight">Customers</h1>
+          <Link
+            href="/customers/new"
+            className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
+          >
+            New Customer
+          </Link>
+        </div>
+
+        <div className="rounded-md border border-zinc-200 bg-white p-5 text-sm font-medium text-zinc-600">
+          Loading customers...
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function CustomersContent() {
+  const searchParams = useSearchParams();
+  const [customers, setCustomers] = useState<CustomerListRow[] | null>(null);
+  const [errorMessage, setErrorMessage] = useState("");
+  const filterKey = searchParams.toString();
+  const area = searchParams.get("area") ?? undefined;
+  const outstanding = searchParams.get("outstanding") ?? undefined;
+  const route = searchParams.get("route") ?? undefined;
+  const search = searchParams.get("search") ?? undefined;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadCustomers() {
+      try {
+        const customerRows = await apiGet<CustomerListRow[]>("/customers");
+
+        if (isMounted) {
+          setCustomers(customerRows);
+          setErrorMessage("");
+        }
+      } catch (error) {
+        if (isMounted) {
+          setErrorMessage(
+            error instanceof Error ? error.message : "Unable to load customers",
+          );
+        }
+      }
+    }
+
+    void loadCustomers();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  if (errorMessage) {
+    return (
+      <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
+        <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <h1 className="text-3xl font-semibold tracking-tight">
+              Customers
+            </h1>
+            <Link
+              href="/customers/new"
+              className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
+            >
+              New Customer
+            </Link>
+          </div>
+
+          <div className="rounded-md border border-red-200 bg-red-50 p-5 text-sm font-medium text-red-700">
+            {errorMessage}
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (!customers) {
+    return <CustomersLoading />;
+  }
+
   const searchQuery = search?.trim().toLowerCase() ?? "";
   const selectedArea = area?.trim() ?? "";
   const selectedRoute = route?.trim() ?? "";
   const outstandingOnly = outstanding === "true";
-  const customers = await apiGet<CustomerListRow[]>("/customers");
   const areaOptions = getUniqueOptions(
     customers.map(({ customer }) => customer.area),
   );
@@ -151,6 +230,7 @@ export default async function CustomersPage({
         </div>
 
         <form
+          key={filterKey}
           action="/customers"
           className="grid gap-4 rounded-md border border-zinc-200 bg-white p-4"
         >
@@ -350,5 +430,13 @@ export default async function CustomersPage({
         )}
       </div>
     </main>
+  );
+}
+
+export default function CustomersPage() {
+  return (
+    <Suspense fallback={<CustomersLoading />}>
+      <CustomersContent />
+    </Suspense>
   );
 }

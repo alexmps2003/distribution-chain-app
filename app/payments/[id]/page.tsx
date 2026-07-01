@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { apiGet } from "@/lib/api-client";
+import { apiGet } from "@/lib/api-client-server";
 import PrintReceiptButton from "./PrintReceiptButton";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
