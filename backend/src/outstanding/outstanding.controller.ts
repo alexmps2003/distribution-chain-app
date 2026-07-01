@@ -1,11 +1,16 @@
-import { Controller, Get, Header, Query } from '@nestjs/common';
+import { Controller, Get, Header, Query, UseGuards } from '@nestjs/common';
+import { AuthGuard } from '../auth/auth/auth.guard';
+import { Roles } from '../auth/roles.decorator';
+import { RolesGuard } from '../auth/roles.guard';
 import { OutstandingService } from './outstanding.service';
 
 @Controller('outstanding')
+@UseGuards(AuthGuard, RolesGuard)
 export class OutstandingController {
   constructor(private readonly outstandingService: OutstandingService) {}
 
   @Get('export')
+  @Roles('ADMIN', 'SALES_REP', 'COLLECTOR')
   @Header('Content-Type', 'text/csv; charset=utf-8')
   @Header(
     'Content-Disposition',
@@ -16,6 +21,7 @@ export class OutstandingController {
   }
 
   @Get()
+  @Roles('ADMIN', 'SALES_REP', 'COLLECTOR')
   findAll(@Query('customerId') customerId?: string) {
     return this.outstandingService.findAll(customerId);
   }
