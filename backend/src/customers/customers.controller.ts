@@ -42,7 +42,7 @@ export class CustomersController {
   }
 
   @Post()
-  @Roles('ADMIN')
+  @Roles('ADMIN', 'SALES_REP')
   async create(@Body() body: CreateCustomerDto) {
     return this.customersService.create(body);
   }
