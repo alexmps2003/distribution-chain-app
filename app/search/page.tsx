@@ -7,6 +7,8 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
+import PageContainer from "@/components/distribio/PageContainer";
+import PageHeader from "@/components/distribio/PageHeader";
 import EmptyState from "@/components/EmptyState";
 import { apiGet } from "@/lib/api-client-server";
 
@@ -153,22 +155,19 @@ export default async function SearchPage({
 
   if (!query) {
     return (
-      <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
-        <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight">Search</h1>
-            <p className="mt-2 text-sm leading-6 text-zinc-600">
-              Find customers, invoices, payment receipts, and cheques from one
-              place.
-            </p>
-          </div>
-          <EmptyState
-            icon={Search}
-            title="Search the distribution app"
-            description="Enter a customer name, customer code, invoice number, payment receipt, reference, or cheque number in the navigation search box."
-          />
-        </div>
-      </main>
+      <PageContainer>
+        <PageHeader
+          title="Search"
+          subtitle="Find customers, invoices, payment receipts, and cheques from one place."
+          className="block"
+          subtitleClassName="mt-2 leading-6"
+        />
+        <EmptyState
+          icon={Search}
+          title="Search the distribution app"
+          description="Enter a customer name, customer code, invoice number, payment receipt, reference, or cheque number in the navigation search box."
+        />
+      </PageContainer>
     );
   }
 
@@ -240,46 +239,49 @@ export default async function SearchPage({
     0;
 
   return (
-    <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Search</h1>
-          <p className="mt-2 text-sm leading-6 text-zinc-600">
-            Results for <span className="font-medium text-zinc-950">{query}</span>
-          </p>
-        </div>
+    <PageContainer>
+      <PageHeader
+        title="Search"
+        subtitle={
+          <>
+            Results for{" "}
+            <span className="font-medium text-zinc-950">{query}</span>
+          </>
+        }
+        className="block"
+        subtitleClassName="mt-2 leading-6"
+      />
 
-        {!hasResults ? (
-          <EmptyState
-            icon={Search}
-            title="No results found"
-            description="Try a customer name, customer code, invoice number, payment receipt, reference, or cheque number."
+      {!hasResults ? (
+        <EmptyState
+          icon={Search}
+          title="No results found"
+          description="Try a customer name, customer code, invoice number, payment receipt, reference, or cheque number."
+        />
+      ) : (
+        <div className="grid gap-6">
+          <ResultSection
+            icon={Users}
+            title="Customers"
+            results={customerResults}
           />
-        ) : (
-          <div className="grid gap-6">
-            <ResultSection
-              icon={Users}
-              title="Customers"
-              results={customerResults}
-            />
-            <ResultSection
-              icon={FileText}
-              title="Invoices"
-              results={invoiceResults}
-            />
-            <ResultSection
-              icon={CreditCard}
-              title="Payments"
-              results={paymentResults}
-            />
-            <ResultSection
-              icon={Landmark}
-              title="Cheques"
-              results={chequeResults}
-            />
-          </div>
-        )}
-      </div>
-    </main>
+          <ResultSection
+            icon={FileText}
+            title="Invoices"
+            results={invoiceResults}
+          />
+          <ResultSection
+            icon={CreditCard}
+            title="Payments"
+            results={paymentResults}
+          />
+          <ResultSection
+            icon={Landmark}
+            title="Cheques"
+            results={chequeResults}
+          />
+        </div>
+      )}
+    </PageContainer>
   );
 }
