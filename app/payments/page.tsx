@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { CreditCard } from "lucide-react";
+import FilterBar from "@/components/distribio/FilterBar";
+import PageContainer from "@/components/distribio/PageContainer";
+import PageHeader from "@/components/distribio/PageHeader";
 import EmptyState from "@/components/EmptyState";
 import { apiGet } from "@/lib/api-client-server";
 import { getAuthenticatedUserServer } from "@/lib/auth-user-server";
@@ -103,24 +106,23 @@ export default async function PaymentsPage({
   const canCreatePayments = canCreatePayment(authenticatedUser.role);
 
   return (
-    <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className="text-3xl font-semibold tracking-tight">Payments</h1>
-          {canCreatePayments ? (
+    <PageContainer>
+      <PageHeader
+        title="Payments"
+        actions={
+          canCreatePayments ? (
             <Link
               href="/payments/new"
               className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
             >
               New Payment
             </Link>
-          ) : null}
-        </div>
+          ) : null
+        }
+      />
 
-        <form
-          action="/payments"
-          className="grid gap-4 rounded-md border border-zinc-200 bg-white p-4"
-        >
+      <form action="/payments">
+        <FilterBar>
           <div className="grid gap-4 lg:grid-cols-[1fr_220px_170px_170px_auto_auto] lg:items-end">
             <label className="flex flex-col gap-2 text-sm font-medium text-zinc-800">
               Search customer
@@ -177,70 +179,70 @@ export default async function PaymentsPage({
               Clear Filters
             </Link>
           </div>
-        </form>
+        </FilterBar>
+      </form>
 
-        {payments.length === 0 ? (
-          <EmptyState
-            icon={CreditCard}
-            title="No payments recorded"
-            description="Record a customer payment once invoices have been issued."
-            actionHref={canCreatePayments ? "/payments/new" : undefined}
-            actionLabel={canCreatePayments ? "Record Payment" : undefined}
-          />
-        ) : (
-          <div className="overflow-hidden rounded-md border border-zinc-200 bg-white">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-zinc-200 text-sm">
-                <thead className="bg-zinc-100 text-left text-xs font-semibold uppercase text-zinc-600">
-                  <tr>
-                    <th scope="col" className="px-4 py-3">
-                      Customer
-                    </th>
-                    <th scope="col" className="px-4 py-3">
-                      Payment Date
-                    </th>
-                    <th scope="col" className="px-4 py-3 text-right">
-                      Amount
-                    </th>
-                    <th scope="col" className="px-4 py-3">
-                      Created Date
-                    </th>
-                    <th scope="col" className="px-4 py-3 text-right">
-                      Actions
-                    </th>
+      {payments.length === 0 ? (
+        <EmptyState
+          icon={CreditCard}
+          title="No payments recorded"
+          description="Record a customer payment once invoices have been issued."
+          actionHref={canCreatePayments ? "/payments/new" : undefined}
+          actionLabel={canCreatePayments ? "Record Payment" : undefined}
+        />
+      ) : (
+        <div className="overflow-hidden rounded-md border border-zinc-200 bg-white">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-zinc-200 text-sm">
+              <thead className="bg-zinc-100 text-left text-xs font-semibold uppercase text-zinc-600">
+                <tr>
+                  <th scope="col" className="px-4 py-3">
+                    Customer
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    Payment Date
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-right">
+                    Amount
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    Created Date
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-right">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-200">
+                {payments.map((payment) => (
+                  <tr key={payment.id}>
+                    <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
+                      {payment.customer.name} ({payment.customer.code})
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
+                      {formatDate(new Date(payment.paymentDate))}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-right text-zinc-600 font-medium">
+                      {formatAmount(payment.amount)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
+                      {formatDate(new Date(payment.createdAt))}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-right">
+                      <Link
+                        href={`/payments/${payment.id}`}
+                        className="inline-flex h-8 items-center justify-center rounded-md border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
+                      >
+                        View
+                      </Link>
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-200">
-                  {payments.map((payment) => (
-                    <tr key={payment.id}>
-                      <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
-                        {payment.customer.name} ({payment.customer.code})
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
-                        {formatDate(new Date(payment.paymentDate))}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-right text-zinc-600 font-medium">
-                        {formatAmount(payment.amount)}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
-                        {formatDate(new Date(payment.createdAt))}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-right">
-                        <Link
-                          href={`/payments/${payment.id}`}
-                          className="inline-flex h-8 items-center justify-center rounded-md border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
-                        >
-                          View
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
-        )}
-      </div>
-    </main>
+        </div>
+      )}
+    </PageContainer>
   );
 }
