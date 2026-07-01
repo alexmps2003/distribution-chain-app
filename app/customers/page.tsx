@@ -4,6 +4,11 @@ import Link from "next/link";
 import { Users } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import FilterBar from "@/components/distribio/FilterBar";
+import PageContainer from "@/components/distribio/PageContainer";
+import PageHeader from "@/components/distribio/PageHeader";
+import StatCard from "@/components/distribio/StatCard";
+import StatsGrid from "@/components/distribio/StatsGrid";
 import EmptyState from "@/components/EmptyState";
 import { apiGet } from "@/lib/api-client";
 import {
@@ -70,23 +75,6 @@ function subtractAmounts(left: string | number, right: string | number) {
   return fromCents(toCents(left) - toCents(right));
 }
 
-function SummaryCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: string | number;
-}) {
-  return (
-    <div className="rounded-md border border-zinc-200 bg-white p-5">
-      <p className="text-xs font-semibold uppercase text-zinc-500">{label}</p>
-      <p className="mt-2 text-2xl font-semibold tracking-tight text-zinc-950">
-        {value}
-      </p>
-    </div>
-  );
-}
-
 function getUniqueOptions(values: (string | null)[]) {
   return Array.from(
     new Set(
@@ -99,17 +87,13 @@ function getUniqueOptions(values: (string | null)[]) {
 
 function CustomersLoading() {
   return (
-    <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className="text-3xl font-semibold tracking-tight">Customers</h1>
-        </div>
+    <PageContainer>
+      <PageHeader title="Customers" />
 
-        <div className="rounded-md border border-zinc-200 bg-white p-5 text-sm font-medium text-zinc-600">
-          Loading customers...
-        </div>
+      <div className="rounded-md border border-zinc-200 bg-white p-5 text-sm font-medium text-zinc-600">
+        Loading customers...
       </div>
-    </main>
+    </PageContainer>
   );
 }
 
@@ -157,19 +141,13 @@ function CustomersContent() {
 
   if (errorMessage) {
     return (
-      <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
-        <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <h1 className="text-3xl font-semibold tracking-tight">
-              Customers
-            </h1>
-          </div>
+      <PageContainer>
+        <PageHeader title="Customers" />
 
-          <div className="rounded-md border border-red-200 bg-red-50 p-5 text-sm font-medium text-red-700">
-            {errorMessage}
-          </div>
+        <div className="rounded-md border border-red-200 bg-red-50 p-5 text-sm font-medium text-red-700">
+          {errorMessage}
         </div>
-      </main>
+      </PageContainer>
     );
   }
 
@@ -217,25 +195,23 @@ function CustomersContent() {
   const canEditCustomers = canEditCustomer(userRole);
 
   return (
-    <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className="text-3xl font-semibold tracking-tight">Customers</h1>
-          {canCreateCustomers ? (
+    <PageContainer>
+      <PageHeader
+        title="Customers"
+        actions={
+          canCreateCustomers ? (
             <Link
               href="/customers/new"
               className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
             >
               New Customer
             </Link>
-          ) : null}
-        </div>
+          ) : null
+        }
+      />
 
-        <form
-          key={filterKey}
-          action="/customers"
-          className="grid gap-4 rounded-md border border-zinc-200 bg-white p-4"
-        >
+      <form key={filterKey} action="/customers">
+        <FilterBar>
           <div className="grid gap-4 lg:grid-cols-[1fr_220px_220px_auto_auto] lg:items-end">
             <label className="flex flex-col gap-2 text-sm font-medium text-zinc-800">
               Search customer
@@ -302,138 +278,135 @@ function CustomersContent() {
               </Link>
             </div>
           </div>
-        </form>
+        </FilterBar>
+      </form>
 
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <SummaryCard
-            label="Total Customers"
-            value={filteredCustomerRows.length}
-          />
-          <SummaryCard label="Total Invoiced" value={formatAmount(totalInvoiced)} />
-          <SummaryCard label="Total Paid" value={formatAmount(totalPaid)} />
-          <SummaryCard
-            label="Total Outstanding"
-            value={formatAmount(totalOutstanding)}
-          />
-        </section>
+      <StatsGrid>
+        <StatCard title="Total Customers" value={filteredCustomerRows.length} />
+        <StatCard title="Total Invoiced" value={formatAmount(totalInvoiced)} />
+        <StatCard title="Total Paid" value={formatAmount(totalPaid)} />
+        <StatCard
+          title="Total Outstanding"
+          value={formatAmount(totalOutstanding)}
+        />
+      </StatsGrid>
 
-        {filteredCustomerRows.length === 0 ? (
-          <EmptyState
-            icon={Users}
-            title="No customers yet"
-            description="Create your first customer to begin recording invoices and payments."
-            actionHref={canCreateCustomers ? "/customers/new" : undefined}
-            actionLabel={canCreateCustomers ? "Add Customer" : undefined}
-          />
-        ) : (
-          <div className="overflow-hidden rounded-md border border-zinc-200 bg-white">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-zinc-200 text-sm">
-                <thead className="bg-zinc-100 text-left text-xs font-semibold uppercase text-zinc-600">
-                  <tr>
-                    <th scope="col" className="px-4 py-3">
-                      Code
-                    </th>
-                    <th scope="col" className="px-4 py-3">
-                      Shop Name
-                    </th>
-                    <th scope="col" className="px-4 py-3">
-                      Area
-                    </th>
-                    <th scope="col" className="px-4 py-3">
-                      Route
-                    </th>
-                    <th scope="col" className="px-4 py-3">
-                      Assigned Collector
-                    </th>
-                    <th scope="col" className="px-4 py-3 text-right">
-                      Total Invoiced
-                    </th>
-                    <th scope="col" className="px-4 py-3 text-right">
-                      Total Paid
-                    </th>
-                    <th scope="col" className="px-4 py-3 text-right">
-                      Total Outstanding
-                    </th>
-                    <th scope="col" className="px-4 py-3 text-right">
-                      Unpaid/Partial Invoices
-                    </th>
-                    <th scope="col" className="px-4 py-3">
-                      Status
-                    </th>
-                    <th scope="col" className="px-4 py-3 text-right">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-200">
-                  {filteredCustomerRows.map((customer) => (
-                    <tr key={customer.id}>
-                      <td className="whitespace-nowrap px-4 py-3 font-medium">
-                        {customer.code}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
-                        {customer.name}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
-                        {customer.area ?? "-"}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
-                        {customer.routeName ?? "-"}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
-                        {customer.assignedCollector ?? "-"}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-zinc-600">
-                        {formatAmount(customer.totalInvoiced)}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-zinc-600">
-                        {formatAmount(customer.totalPaid)}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-zinc-600">
-                        {formatAmount(customer.invoiceOutstanding)}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-right text-zinc-600">
-                        {customer.openInvoiceCount}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3">
-                        <span
-                          className={
-                            customer.isActive
-                              ? "inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700"
-                              : "inline-flex rounded-full bg-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-700"
-                          }
+      {filteredCustomerRows.length === 0 ? (
+        <EmptyState
+          icon={Users}
+          title="No customers yet"
+          description="Create your first customer to begin recording invoices and payments."
+          actionHref={canCreateCustomers ? "/customers/new" : undefined}
+          actionLabel={canCreateCustomers ? "Add Customer" : undefined}
+        />
+      ) : (
+        <div className="overflow-hidden rounded-md border border-zinc-200 bg-white">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-zinc-200 text-sm">
+              <thead className="bg-zinc-100 text-left text-xs font-semibold uppercase text-zinc-600">
+                <tr>
+                  <th scope="col" className="px-4 py-3">
+                    Code
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    Shop Name
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    Area
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    Route
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    Assigned Collector
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-right">
+                    Total Invoiced
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-right">
+                    Total Paid
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-right">
+                    Total Outstanding
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-right">
+                    Unpaid/Partial Invoices
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    Status
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-right">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-200">
+                {filteredCustomerRows.map((customer) => (
+                  <tr key={customer.id}>
+                    <td className="whitespace-nowrap px-4 py-3 font-medium">
+                      {customer.code}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
+                      {customer.name}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
+                      {customer.area ?? "-"}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
+                      {customer.routeName ?? "-"}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-zinc-600">
+                      {customer.assignedCollector ?? "-"}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-zinc-600">
+                      {formatAmount(customer.totalInvoiced)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-zinc-600">
+                      {formatAmount(customer.totalPaid)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-zinc-600">
+                      {formatAmount(customer.invoiceOutstanding)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-right text-zinc-600">
+                      {customer.openInvoiceCount}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      <span
+                        className={
+                          customer.isActive
+                            ? "inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700"
+                            : "inline-flex rounded-full bg-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-700"
+                        }
+                      >
+                        {customer.isActive ? "Active" : "Inactive"}
+                      </span>
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      <div className="flex justify-end gap-2">
+                        <Link
+                          href={`/customers/${customer.id}`}
+                          className="inline-flex h-8 items-center justify-center rounded-md border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
                         >
-                          {customer.isActive ? "Active" : "Inactive"}
-                        </span>
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3">
-                        <div className="flex justify-end gap-2">
+                          View
+                        </Link>
+                        {canEditCustomers ? (
                           <Link
-                            href={`/customers/${customer.id}`}
-                            className="inline-flex h-8 items-center justify-center rounded-md border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
+                            href={`/customers/${customer.id}/edit`}
+                            className="inline-flex h-8 items-center justify-center rounded-md bg-zinc-950 px-3 text-xs font-medium text-white hover:bg-zinc-800"
                           >
-                            View
+                            Edit
                           </Link>
-                          {canEditCustomers ? (
-                            <Link
-                              href={`/customers/${customer.id}/edit`}
-                              className="inline-flex h-8 items-center justify-center rounded-md bg-zinc-950 px-3 text-xs font-medium text-white hover:bg-zinc-800"
-                            >
-                              Edit
-                            </Link>
-                          ) : null}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        )}
-      </div>
-    </main>
+        </div>
+      )}
+    </PageContainer>
   );
 }
 
