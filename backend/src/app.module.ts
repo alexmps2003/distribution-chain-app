@@ -12,6 +12,7 @@ import { AgingModule } from './aging/aging.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { SearchModule } from './search/search.module';
 import { AuthModule } from './auth/auth.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { AuthModule } from './auth/auth.module';
     DashboardModule,
     SearchModule,
     AuthModule,
+    NotificationsModule,
   ],
 })
 export class AppModule {}
