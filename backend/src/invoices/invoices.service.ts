@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { asc, eq } from 'drizzle-orm';
 import * as crypto from 'node:crypto';
 import { DatabaseService } from '../database/database.service';
@@ -211,6 +215,17 @@ export class InvoicesService {
   }
 
   async remove(id: string) {
+    const allocationRows = await this.databaseService.db
+      .select()
+      .from(paymentAllocations)
+      .where(eq(paymentAllocations.invoiceId, id));
+
+    if (allocationRows.length > 0) {
+      throw new BadRequestException(
+        'Invoice cannot be deleted because it has payment allocations',
+      );
+    }
+
     const [invoice] = await this.databaseService.db
       .delete(invoices)
       .where(eq(invoices.id, id))

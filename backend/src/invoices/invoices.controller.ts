@@ -46,7 +46,7 @@ export class InvoicesController {
   }
 
   @Delete(':id')
-  @Roles('ADMIN', 'SALES_REP')
+  @Roles('ADMIN')
   async remove(@Param('id') id: string) {
     return this.invoicesService.remove(id);
   }
