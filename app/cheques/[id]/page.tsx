@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { apiGet, apiPatch } from "@/lib/api-client-server";
+import { getAuthenticatedUserServer } from "@/lib/auth-user-server";
+import { canReverseCheque, canUndoChequeReversal } from "@/lib/permissions";
 import { withToast } from "@/lib/toast";
 import ReverseChequeButton from "./ReverseChequeButton";
 import UndoChequeReversalButton from "./UndoChequeReversalButton";
@@ -168,6 +170,9 @@ export default async function ChequeDetailsPage({
 
   const chequeStatus = normalizePaymentPartStatus(cheque.status);
   const isReversed = chequeStatus === "REVERSED";
+  const authenticatedUser = await getAuthenticatedUserServer();
+  const canReverseCheques = canReverseCheque(authenticatedUser.role);
+  const canUndoChequeReversals = canUndoChequeReversal(authenticatedUser.role);
 
   return (
     <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
@@ -297,54 +302,58 @@ export default async function ChequeDetailsPage({
           )}
         </section>
 
-        <section className="rounded-md border border-zinc-200 bg-white p-6">
-          <h2 className="text-lg font-medium tracking-tight">
-            Cheque Reversal
-          </h2>
-          {isReversed ? (
-            <div className="mt-4 grid gap-4">
-              <span
-                className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-medium ${getStatusBadgeClass(
-                  chequeStatus,
-                )}`}
-              >
-                Reversed
-              </span>
-              <dl className="grid gap-4 sm:grid-cols-2">
-                <DetailItem
-                  label="Reversed Date"
-                  value={formatDate(
-                    cheque.reversedAt ? new Date(cheque.reversedAt) : null,
-                  )}
-                />
-                <DetailItem
-                  label="Reversal Reason"
-                  value={cheque.reversalReason ?? "-"}
-                />
-              </dl>
-              <form action={undoChequeReversal}>
-                <input type="hidden" name="chequeId" value={cheque.id} />
-                <UndoChequeReversalButton />
-              </form>
-            </div>
-          ) : (
-            <form action={reverseCheque} className="mt-4 grid gap-4">
-              <input type="hidden" name="chequeId" value={cheque.id} />
-              <label className="flex flex-col gap-2 text-sm font-medium text-zinc-800">
-                Reason
-                <textarea
-                  name="reversalReason"
-                  required
-                  placeholder="Reason for reversing this cheque"
-                  className="h-24 resize-none rounded-md border border-zinc-300 bg-white p-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
-                />
-              </label>
-              <div>
-                <ReverseChequeButton />
+        {isReversed || canReverseCheques ? (
+          <section className="rounded-md border border-zinc-200 bg-white p-6">
+            <h2 className="text-lg font-medium tracking-tight">
+              Cheque Reversal
+            </h2>
+            {isReversed ? (
+              <div className="mt-4 grid gap-4">
+                <span
+                  className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-medium ${getStatusBadgeClass(
+                    chequeStatus,
+                  )}`}
+                >
+                  Reversed
+                </span>
+                <dl className="grid gap-4 sm:grid-cols-2">
+                  <DetailItem
+                    label="Reversed Date"
+                    value={formatDate(
+                      cheque.reversedAt ? new Date(cheque.reversedAt) : null,
+                    )}
+                  />
+                  <DetailItem
+                    label="Reversal Reason"
+                    value={cheque.reversalReason ?? "-"}
+                  />
+                </dl>
+                {canUndoChequeReversals ? (
+                  <form action={undoChequeReversal}>
+                    <input type="hidden" name="chequeId" value={cheque.id} />
+                    <UndoChequeReversalButton />
+                  </form>
+                ) : null}
               </div>
-            </form>
-          )}
-        </section>
+            ) : (
+              <form action={reverseCheque} className="mt-4 grid gap-4">
+                <input type="hidden" name="chequeId" value={cheque.id} />
+                <label className="flex flex-col gap-2 text-sm font-medium text-zinc-800">
+                  Reason
+                  <textarea
+                    name="reversalReason"
+                    required
+                    placeholder="Reason for reversing this cheque"
+                    className="h-24 resize-none rounded-md border border-zinc-300 bg-white p-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
+                  />
+                </label>
+                <div>
+                  <ReverseChequeButton />
+                </div>
+              </form>
+            )}
+          </section>
+        ) : null}
       </div>
     </main>
   );

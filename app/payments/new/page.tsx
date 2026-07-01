@@ -2,6 +2,8 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { apiGet, apiPost } from "@/lib/api-client-server";
+import { getAuthenticatedUserServer } from "@/lib/auth-user-server";
+import { canCreatePayment } from "@/lib/permissions";
 import { withToast } from "@/lib/toast";
 import { getValidationErrorMessage } from "@/lib/validation/errors";
 import { parsePaymentFormData } from "@/lib/validation/payment";
@@ -398,7 +400,11 @@ export default async function NewPaymentPage(props: {
     ? parsePreservedPaymentForm(cookieStore.get(PAYMENT_FORM_COOKIE)?.value)
     : undefined;
 
-  const customerRows = await apiGet<CustomerListResponse>("/customers");
+  const [customerRows, authenticatedUser] = await Promise.all([
+    apiGet<CustomerListResponse>("/customers"),
+    getAuthenticatedUserServer(),
+  ]);
+  const canCreatePayments = canCreatePayment(authenticatedUser.role);
   const customers = customerRows
     .filter((row) => row.customer.isActive)
     .sort((left, right) =>
@@ -509,6 +515,7 @@ export default async function NewPaymentPage(props: {
           </div>
 
           <PaymentMethodEntry
+            canSavePayment={canCreatePayments}
             customerId={customerId}
             initialState={initialPaymentMethodState}
             invoices={allocationInvoices}

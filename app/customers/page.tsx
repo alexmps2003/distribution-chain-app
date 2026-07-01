@@ -6,6 +6,11 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import EmptyState from "@/components/EmptyState";
 import { apiGet } from "@/lib/api-client";
+import {
+  getAuthenticatedUser,
+  type AuthenticatedUserRole,
+} from "@/lib/auth-user";
+import { canCreateCustomer, canEditCustomer } from "@/lib/permissions";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
@@ -98,12 +103,6 @@ function CustomersLoading() {
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-3xl font-semibold tracking-tight">Customers</h1>
-          <Link
-            href="/customers/new"
-            className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
-          >
-            New Customer
-          </Link>
         </div>
 
         <div className="rounded-md border border-zinc-200 bg-white p-5 text-sm font-medium text-zinc-600">
@@ -118,6 +117,7 @@ function CustomersContent() {
   const searchParams = useSearchParams();
   const [customers, setCustomers] = useState<CustomerListRow[] | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
+  const [userRole, setUserRole] = useState<AuthenticatedUserRole | null>(null);
   const filterKey = searchParams.toString();
   const area = searchParams.get("area") ?? undefined;
   const outstanding = searchParams.get("outstanding") ?? undefined;
@@ -129,10 +129,14 @@ function CustomersContent() {
 
     async function loadCustomers() {
       try {
-        const customerRows = await apiGet<CustomerListRow[]>("/customers");
+        const [customerRows, authenticatedUser] = await Promise.all([
+          apiGet<CustomerListRow[]>("/customers"),
+          getAuthenticatedUser(),
+        ]);
 
         if (isMounted) {
           setCustomers(customerRows);
+          setUserRole(authenticatedUser.role);
           setErrorMessage("");
         }
       } catch (error) {
@@ -159,12 +163,6 @@ function CustomersContent() {
             <h1 className="text-3xl font-semibold tracking-tight">
               Customers
             </h1>
-            <Link
-              href="/customers/new"
-              className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
-            >
-              New Customer
-            </Link>
           </div>
 
           <div className="rounded-md border border-red-200 bg-red-50 p-5 text-sm font-medium text-red-700">
@@ -215,18 +213,22 @@ function CustomersContent() {
     filteredCustomerRows.map((customer) => customer.totalPaid),
   );
   const totalOutstanding = subtractAmounts(totalInvoiced, totalPaid);
+  const canCreateCustomers = canCreateCustomer(userRole);
+  const canEditCustomers = canEditCustomer(userRole);
 
   return (
     <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-3xl font-semibold tracking-tight">Customers</h1>
-          <Link
-            href="/customers/new"
-            className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
-          >
-            New Customer
-          </Link>
+          {canCreateCustomers ? (
+            <Link
+              href="/customers/new"
+              className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
+            >
+              New Customer
+            </Link>
+          ) : null}
         </div>
 
         <form
@@ -320,8 +322,8 @@ function CustomersContent() {
             icon={Users}
             title="No customers yet"
             description="Create your first customer to begin recording invoices and payments."
-            actionHref="/customers/new"
-            actionLabel="Add Customer"
+            actionHref={canCreateCustomers ? "/customers/new" : undefined}
+            actionLabel={canCreateCustomers ? "Add Customer" : undefined}
           />
         ) : (
           <div className="overflow-hidden rounded-md border border-zinc-200 bg-white">
@@ -413,12 +415,14 @@ function CustomersContent() {
                           >
                             View
                           </Link>
-                          <Link
-                            href={`/customers/${customer.id}/edit`}
-                            className="inline-flex h-8 items-center justify-center rounded-md bg-zinc-950 px-3 text-xs font-medium text-white hover:bg-zinc-800"
-                          >
-                            Edit
-                          </Link>
+                          {canEditCustomers ? (
+                            <Link
+                              href={`/customers/${customer.id}/edit`}
+                              className="inline-flex h-8 items-center justify-center rounded-md bg-zinc-950 px-3 text-xs font-medium text-white hover:bg-zinc-800"
+                            >
+                              Edit
+                            </Link>
+                          ) : null}
                         </div>
                       </td>
                     </tr>

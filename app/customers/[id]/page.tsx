@@ -2,6 +2,8 @@ import Link from "next/link";
 import { FileText } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import { apiGet } from "@/lib/api-client-server";
+import { getAuthenticatedUserServer } from "@/lib/auth-user-server";
+import { canCreateInvoice } from "@/lib/permissions";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
@@ -72,9 +74,11 @@ export default async function CustomerDetailPage({
 }: CustomerDetailPageProps) {
   const { id } = await params;
 
-  const customerDetail = await apiGet<CustomerDetailResponse | null>(
-    `/customers/${encodeURIComponent(id)}`,
-  );
+  const [customerDetail, authenticatedUser] = await Promise.all([
+    apiGet<CustomerDetailResponse | null>(`/customers/${encodeURIComponent(id)}`),
+    getAuthenticatedUserServer(),
+  ]);
+  const canCreateInvoices = canCreateInvoice(authenticatedUser.role);
 
   if (!customerDetail) {
     return (
@@ -167,8 +171,8 @@ export default async function CustomerDetailPage({
               icon={FileText}
               title="No invoices found"
               description="Create an invoice to start building this customer's transaction history."
-              actionHref="/invoices/new"
-              actionLabel="Create Invoice"
+              actionHref={canCreateInvoices ? "/invoices/new" : undefined}
+              actionLabel={canCreateInvoices ? "Create Invoice" : undefined}
             />
           ) : (
             <div className="overflow-hidden rounded-md border border-zinc-200 bg-white">

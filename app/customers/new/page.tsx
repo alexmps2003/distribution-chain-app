@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { apiPost } from "@/lib/api-client-server";
+import { getAuthenticatedUserServer } from "@/lib/auth-user-server";
+import { canCreateCustomer } from "@/lib/permissions";
 import { withToast } from "@/lib/toast";
 import { getValidationErrorMessage } from "@/lib/validation/errors";
 import { parseCustomerFormData } from "@/lib/validation/customer";
@@ -67,6 +69,8 @@ export default async function NewCustomerPage({
 }) {
   const submittedValues = await searchParams;
   const error = getFormValue(submittedValues, "error");
+  const authenticatedUser = await getAuthenticatedUserServer();
+  const canCreateCustomers = canCreateCustomer(authenticatedUser.role);
 
   async function createCustomer(formData: FormData) {
     "use server";
@@ -216,12 +220,14 @@ export default async function NewCustomerPage({
             >
               Cancel
             </Link>
-            <button
-              type="submit"
-              className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
-            >
-              Create Customer
-            </button>
+            {canCreateCustomers ? (
+              <button
+                type="submit"
+                className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
+              >
+                Create Customer
+              </button>
+            ) : null}
           </div>
         </form>
       </div>

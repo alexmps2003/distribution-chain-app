@@ -1,6 +1,7 @@
 import { apiGet } from "@/lib/api-client";
+import type { AuthenticatedUserRole } from "@/lib/roles";
 
-export type AuthenticatedUserRole = "ADMIN" | "SALES_REP" | "COLLECTOR";
+export type { AuthenticatedUserRole } from "@/lib/roles";
 
 export type AuthenticatedUser = {
   email: string;

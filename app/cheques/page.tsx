@@ -2,7 +2,9 @@ import Link from "next/link";
 import { Landmark } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import { apiGet } from "@/lib/api-client-server";
+import { getAuthenticatedUserServer } from "@/lib/auth-user-server";
 import { BANK_OPTIONS } from "@/lib/bank-options";
+import { canCreatePayment } from "@/lib/permissions";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
@@ -103,9 +105,13 @@ export default async function ChequesPage({
     apiParams.set("status", selectedStatus);
   }
 
-  const cheques = await apiGet<ChequeRow[]>(
-    `/cheques${apiParams.size > 0 ? `?${apiParams.toString()}` : ""}`,
-  );
+  const [cheques, authenticatedUser] = await Promise.all([
+    apiGet<ChequeRow[]>(
+      `/cheques${apiParams.size > 0 ? `?${apiParams.toString()}` : ""}`,
+    ),
+    getAuthenticatedUserServer(),
+  ]);
+  const canCreatePayments = canCreatePayment(authenticatedUser.role);
 
   return (
     <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
@@ -182,8 +188,8 @@ export default async function ChequesPage({
             icon={Landmark}
             title="No cheques available"
             description="Cheque payments will appear here after they are recorded."
-            actionHref="/payments/new"
-            actionLabel="Record Payment"
+            actionHref={canCreatePayments ? "/payments/new" : undefined}
+            actionLabel={canCreatePayments ? "Record Payment" : undefined}
           />
         ) : (
           <div className="overflow-hidden rounded-md border border-zinc-200 bg-white">

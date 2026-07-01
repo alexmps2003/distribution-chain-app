@@ -6,6 +6,15 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import EmptyState from "@/components/EmptyState";
 import { apiGet } from "@/lib/api-client";
+import {
+  getAuthenticatedUser,
+  type AuthenticatedUserRole,
+} from "@/lib/auth-user";
+import {
+  canCreateCustomer,
+  canCreateInvoice,
+  canCreatePayment,
+} from "@/lib/permissions";
 import DashboardCharts from "./DashboardCharts";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
@@ -250,10 +259,27 @@ const moduleCards = [
   },
 ];
 
+function canShowModuleCard(href: string, role: AuthenticatedUserRole | null) {
+  if (href === "/payments/new") {
+    return canCreatePayment(role);
+  }
+
+  if (href === "/invoices/new") {
+    return canCreateInvoice(role);
+  }
+
+  if (href === "/customers/new") {
+    return canCreateCustomer(role);
+  }
+
+  return true;
+}
+
 export default function Home() {
   const searchParams = useSearchParams();
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
+  const [userRole, setUserRole] = useState<AuthenticatedUserRole | null>(null);
   const collectionsRangeParam =
     searchParams.get("collectionsRange") ?? undefined;
   const invoiceStatusRangeParam =
@@ -273,10 +299,14 @@ export default function Home() {
 
     async function loadDashboard() {
       try {
-        const dashboardResponse = await apiGet<DashboardResponse>("/dashboard");
+        const [dashboardResponse, authenticatedUser] = await Promise.all([
+          apiGet<DashboardResponse>("/dashboard"),
+          getAuthenticatedUser(),
+        ]);
 
         if (isMounted) {
           setDashboard(dashboardResponse);
+          setUserRole(authenticatedUser.role);
           setErrorMessage("");
         }
       } catch (error) {
@@ -378,6 +408,10 @@ export default function Home() {
   const selectedOutstandingArea = areaOptions.includes(outstandingArea)
     ? outstandingArea
     : "all";
+  const canRecordPayment = canCreatePayment(userRole);
+  const visibleModuleCards = moduleCards.filter((card) =>
+    canShowModuleCard(card.href, userRole),
+  );
 
   const filteredOutstandingCustomers = highOutstandingCustomers
     .filter((customer) => Number(customer.outstanding) >= outstandingMin)
@@ -487,7 +521,7 @@ export default function Home() {
             Quick Actions
           </h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {moduleCards.map((card) => (
+            {visibleModuleCards.map((card) => (
               <div
                 key={card.href}
                 className="flex flex-col justify-between rounded-2xl border border-zinc-200/80 bg-white/90 p-5 shadow-sm shadow-zinc-950/[0.03]"
@@ -531,8 +565,8 @@ export default function Home() {
                   icon={CreditCard}
                   title="No payments recorded"
                   description="Record a payment to start seeing recent activity here."
-                  actionHref="/payments/new"
-                  actionLabel="Record Payment"
+                  actionHref={canRecordPayment ? "/payments/new" : undefined}
+                  actionLabel={canRecordPayment ? "Record Payment" : undefined}
                 />
               </div>
             ) : (

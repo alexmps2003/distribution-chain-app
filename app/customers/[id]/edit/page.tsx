@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { apiGet, apiPatch } from "@/lib/api-client-server";
+import { getAuthenticatedUserServer } from "@/lib/auth-user-server";
+import { canEditCustomer } from "@/lib/permissions";
 import { withToast } from "@/lib/toast";
 import { getValidationErrorMessage } from "@/lib/validation/errors";
 import { parseCustomerFormData } from "@/lib/validation/customer";
@@ -101,6 +103,8 @@ export default async function EditCustomerPage({
   const customerDetail = await apiGet<CustomerDetailResponse | null>(
     `/customers/${encodeURIComponent(id)}`,
   );
+  const authenticatedUser = await getAuthenticatedUserServer();
+  const canEditCustomers = canEditCustomer(authenticatedUser.role);
 
   if (!customerDetail) {
     notFound();
@@ -312,12 +316,14 @@ export default async function EditCustomerPage({
             >
               Cancel
             </Link>
-            <button
-              type="submit"
-              className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
-            >
-              Save Customer
-            </button>
+            {canEditCustomers ? (
+              <button
+                type="submit"
+                className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
+              >
+                Save Customer
+              </button>
+            ) : null}
           </div>
         </form>
       </div>

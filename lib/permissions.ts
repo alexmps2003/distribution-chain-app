@@ -1,17 +1,21 @@
-import type { AuthenticatedUserRole } from "@/lib/auth-user";
+import { USER_ROLES, type AuthenticatedUserRole } from "@/lib/roles";
 
 type MaybeRole = AuthenticatedUserRole | null | undefined;
 
-const ROLES = {
-  ADMIN: "ADMIN",
-  COLLECTOR: "COLLECTOR",
-  SALES_REP: "SALES_REP",
-} as const satisfies Record<string, AuthenticatedUserRole>;
-
-const ALL_ROLES = [ROLES.ADMIN, ROLES.SALES_REP, ROLES.COLLECTOR] as const;
-const ADMIN_ONLY = [ROLES.ADMIN] as const;
-const ADMIN_OR_SALES_REP = [ROLES.ADMIN, ROLES.SALES_REP] as const;
-const ADMIN_OR_COLLECTOR = [ROLES.ADMIN, ROLES.COLLECTOR] as const;
+const ALL_ROLES = [
+  USER_ROLES.ADMIN,
+  USER_ROLES.SALES_REP,
+  USER_ROLES.COLLECTOR,
+] as const;
+const ADMIN_ONLY = [USER_ROLES.ADMIN] as const;
+const ADMIN_OR_SALES_REP = [
+  USER_ROLES.ADMIN,
+  USER_ROLES.SALES_REP,
+] as const;
+const ADMIN_OR_COLLECTOR = [
+  USER_ROLES.ADMIN,
+  USER_ROLES.COLLECTOR,
+] as const;
 
 function hasRole(
   role: MaybeRole,

@@ -3,6 +3,8 @@ import { FileText, Users } from "lucide-react";
 import { notFound } from "next/navigation";
 import EmptyState from "@/components/EmptyState";
 import { apiGet } from "@/lib/api-client-server";
+import { getAuthenticatedUserServer } from "@/lib/auth-user-server";
+import { canCreateCustomer, canCreateInvoice } from "@/lib/permissions";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
@@ -170,6 +172,9 @@ export default async function InvoicesPage({
 }) {
   const { customerId, status } = await searchParams;
   const selectedStatus = getSelectedStatus(status);
+  const authenticatedUser = await getAuthenticatedUserServer();
+  const canCreateCustomers = canCreateCustomer(authenticatedUser.role);
+  const canCreateInvoices = canCreateInvoice(authenticatedUser.role);
 
   if (customerId) {
     let invoiceResponse: CustomerInvoiceResponse;
@@ -222,12 +227,14 @@ export default async function InvoicesPage({
               >
                 Back to Customers
               </Link>
-              <Link
-                href="/invoices/new"
-                className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
-              >
-                New Invoice
-              </Link>
+              {canCreateInvoices ? (
+                <Link
+                  href="/invoices/new"
+                  className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
+                >
+                  New Invoice
+                </Link>
+              ) : null}
             </div>
           </div>
 
@@ -241,8 +248,8 @@ export default async function InvoicesPage({
               icon={FileText}
               title="No invoices found"
               description="Create an invoice for this customer or adjust the current status filter."
-              actionHref="/invoices/new"
-              actionLabel="Create Invoice"
+              actionHref={canCreateInvoices ? "/invoices/new" : undefined}
+              actionLabel={canCreateInvoices ? "Create Invoice" : undefined}
             />
           ) : (
             <div className="overflow-hidden rounded-md border border-zinc-200 bg-white">
@@ -390,12 +397,14 @@ export default async function InvoicesPage({
               Select a customer to view their invoices.
             </p>
           </div>
-          <Link
-            href="/invoices/new"
-            className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
-          >
-            New Invoice
-          </Link>
+          {canCreateInvoices ? (
+            <Link
+              href="/invoices/new"
+              className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
+            >
+              New Invoice
+            </Link>
+          ) : null}
         </div>
 
         <InvoiceStatusFilters selectedStatus={selectedStatus} />
@@ -405,8 +414,8 @@ export default async function InvoicesPage({
             icon={Users}
             title="No customers yet"
             description="Add a customer before creating and reviewing invoices."
-            actionHref="/customers/new"
-            actionLabel="Add Customer"
+            actionHref={canCreateCustomers ? "/customers/new" : undefined}
+            actionLabel={canCreateCustomers ? "Add Customer" : undefined}
           />
         ) : (
           <div className="overflow-hidden rounded-md border border-zinc-200 bg-white">

@@ -2,6 +2,8 @@ import Link from "next/link";
 import { CreditCard } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import { apiGet } from "@/lib/api-client-server";
+import { getAuthenticatedUserServer } from "@/lib/auth-user-server";
+import { canCreatePayment } from "@/lib/permissions";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
@@ -94,19 +96,25 @@ export default async function PaymentsPage({
   const paymentsPath = paymentParams.toString()
     ? `/payments?${paymentParams.toString()}`
     : "/payments";
-  const payments = await apiGet<PaymentRow[]>(paymentsPath);
+  const [payments, authenticatedUser] = await Promise.all([
+    apiGet<PaymentRow[]>(paymentsPath),
+    getAuthenticatedUserServer(),
+  ]);
+  const canCreatePayments = canCreatePayment(authenticatedUser.role);
 
   return (
     <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-3xl font-semibold tracking-tight">Payments</h1>
-          <Link
-            href="/payments/new"
-            className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
-          >
-            New Payment
-          </Link>
+          {canCreatePayments ? (
+            <Link
+              href="/payments/new"
+              className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
+            >
+              New Payment
+            </Link>
+          ) : null}
         </div>
 
         <form
@@ -176,8 +184,8 @@ export default async function PaymentsPage({
             icon={CreditCard}
             title="No payments recorded"
             description="Record a customer payment once invoices have been issued."
-            actionHref="/payments/new"
-            actionLabel="Record Payment"
+            actionHref={canCreatePayments ? "/payments/new" : undefined}
+            actionLabel={canCreatePayments ? "Record Payment" : undefined}
           />
         ) : (
           <div className="overflow-hidden rounded-md border border-zinc-200 bg-white">

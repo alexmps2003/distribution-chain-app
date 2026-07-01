@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { ReceiptText } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import { apiGet } from "@/lib/api-client-server";
+import { getAuthenticatedUserServer } from "@/lib/auth-user-server";
+import { canCreateInvoice } from "@/lib/permissions";
 import PrintStatementButton from "./PrintStatementButton";
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
@@ -104,6 +106,8 @@ export default async function CustomerStatementPage({
 }) {
   const { id } = await params;
   let statement: StatementResponse;
+  const authenticatedUser = await getAuthenticatedUserServer();
+  const canCreateInvoices = canCreateInvoice(authenticatedUser.role);
 
   try {
     statement = await apiGet<StatementResponse>(
@@ -207,8 +211,8 @@ export default async function CustomerStatementPage({
                 icon={ReceiptText}
                 title="No transactions"
                 description="This customer has no invoices or payments yet."
-                actionHref="/invoices/new"
-                actionLabel="Create Invoice"
+                actionHref={canCreateInvoices ? "/invoices/new" : undefined}
+                actionLabel={canCreateInvoices ? "Create Invoice" : undefined}
               />
             </div>
           ) : (

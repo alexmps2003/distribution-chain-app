@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { apiGet, apiPost } from "@/lib/api-client-server";
+import { getAuthenticatedUserServer } from "@/lib/auth-user-server";
+import { canCreateInvoice } from "@/lib/permissions";
 import { withToast } from "@/lib/toast";
 import { getValidationErrorMessage } from "@/lib/validation/errors";
 import { parseInvoiceFormData } from "@/lib/validation/invoice";
@@ -67,7 +69,12 @@ export default async function NewInvoicePage({
 }) {
   const submittedValues = await searchParams;
   const error = getFormValue(submittedValues, "error");
-  const customers = (await apiGet<CustomerListRow[]>("/customers"))
+  const [customerRows, authenticatedUser] = await Promise.all([
+    apiGet<CustomerListRow[]>("/customers"),
+    getAuthenticatedUserServer(),
+  ]);
+  const canCreateInvoices = canCreateInvoice(authenticatedUser.role);
+  const customers = customerRows
     .map(({ customer }) => customer)
     .filter((customer) => customer.isActive)
     .sort((left, right) => left.name.localeCompare(right.name));
@@ -178,12 +185,14 @@ export default async function NewInvoicePage({
             >
               Cancel
             </Link>
-            <button
-              type="submit"
-              className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
-            >
-              Create Invoice
-            </button>
+            {canCreateInvoices ? (
+              <button
+                type="submit"
+                className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
+              >
+                Create Invoice
+              </button>
+            ) : null}
           </div>
         </form>
       </div>

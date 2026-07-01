@@ -80,11 +80,13 @@ function getMethodLabel(method: PaymentMethod) {
 }
 
 export default function PaymentMethodEntry({
+  canSavePayment = true,
   customerId,
   initialState,
   invoices,
   saveAction,
 }: {
+  canSavePayment?: boolean;
   customerId?: string;
   initialState?: InitialPaymentMethodEntryState;
   invoices: AllocationInvoice[];
@@ -576,20 +578,22 @@ export default function PaymentMethodEntry({
               {methodMessage}
             </p>
           )}
-          <div className="mt-4 flex justify-end">
-            <button
-              type="button"
-              onClick={addMethod}
-              disabled={!canAddMethod}
-              className={
-                canAddMethod
-                  ? "inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
-                  : "inline-flex h-10 cursor-not-allowed items-center justify-center rounded-md bg-zinc-300 px-4 text-sm font-medium text-zinc-600"
-              }
-            >
-              Add Method
-            </button>
-          </div>
+          {canSavePayment ? (
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={addMethod}
+                disabled={!canAddMethod}
+                className={
+                  canAddMethod
+                    ? "inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
+                    : "inline-flex h-10 cursor-not-allowed items-center justify-center rounded-md bg-zinc-300 px-4 text-sm font-medium text-zinc-600"
+                }
+              >
+                Add Method
+              </button>
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -734,18 +738,20 @@ export default function PaymentMethodEntry({
           >
             Cancel
           </Link>
-          <button
-            type="submit"
-            formAction={saveAction}
-            disabled={!finalTotalsMatch}
-            className={
-              finalTotalsMatch
-                ? "inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
-                : "inline-flex h-10 cursor-not-allowed items-center justify-center rounded-md bg-zinc-300 px-4 text-sm font-medium text-zinc-600"
-            }
-          >
-            Save Payment
-          </button>
+          {canSavePayment ? (
+            <button
+              type="submit"
+              formAction={saveAction}
+              disabled={!finalTotalsMatch}
+              className={
+                finalTotalsMatch
+                  ? "inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
+                  : "inline-flex h-10 cursor-not-allowed items-center justify-center rounded-md bg-zinc-300 px-4 text-sm font-medium text-zinc-600"
+              }
+            >
+              Save Payment
+            </button>
+          ) : null}
         </div>
       </div>
     </>
