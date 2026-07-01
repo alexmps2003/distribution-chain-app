@@ -1,5 +1,9 @@
 import Link from "next/link";
 import { Clock3 } from "lucide-react";
+import PageContainer from "@/components/distribio/PageContainer";
+import PageHeader from "@/components/distribio/PageHeader";
+import StatCard from "@/components/distribio/StatCard";
+import StatsGrid from "@/components/distribio/StatsGrid";
 import EmptyState from "@/components/EmptyState";
 import { apiGet } from "@/lib/api-client-server";
 
@@ -132,25 +136,6 @@ function addAmounts(left: MoneyValue, right: MoneyValue) {
   return fromCents(toCents(left) + toCents(right));
 }
 
-function SummaryCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: string | number;
-}) {
-  return (
-    <div className="rounded-2xl border border-zinc-200/80 bg-white/90 p-5 shadow-sm shadow-zinc-950/[0.03]">
-      <p className="text-xs font-medium uppercase tracking-[0.08em] text-zinc-500">
-        {label}
-      </p>
-      <p className="mt-2 text-2xl font-medium tracking-tight text-zinc-950">
-        {value}
-      </p>
-    </div>
-  );
-}
-
 export default async function AgingPage() {
   const report = await apiGet<AgingReportResponse>("/aging");
   const outstandingInvoices = report.invoices.map((row) => ({
@@ -210,36 +195,45 @@ export default async function AgingPage() {
   const overdueInvoiceCount = report.summary.overdueInvoiceCount;
 
   return (
-    <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-9">
-        <div>
-          <h1 className="text-3xl font-medium tracking-tight">
-            Aging Report
-          </h1>
-          <p className="mt-2 text-sm leading-6 text-zinc-600">
-            See which customer balances are current, recently overdue, or
-            seriously overdue.
-          </p>
-        </div>
+    <PageContainer contentClassName="gap-9">
+      <PageHeader
+        title="Aging Report"
+        subtitle="See which customer balances are current, recently overdue, or seriously overdue."
+        className="block"
+        titleClassName="font-medium"
+        subtitleClassName="mt-2 leading-6"
+      />
 
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <SummaryCard
-            label="Total Outstanding"
-            value={formatAmount(totalOutstanding)}
-          />
-          <SummaryCard
-            label="Overdue Outstanding"
-            value={formatAmount(overdueOutstanding)}
-          />
-          <SummaryCard
-            label="90+ Days Outstanding"
-            value={formatAmount(days90PlusOutstanding)}
-          />
-          <SummaryCard
-            label="Overdue Invoice Count"
-            value={overdueInvoiceCount}
-          />
-        </section>
+      <StatsGrid>
+        <StatCard
+          title="Total Outstanding"
+          value={formatAmount(totalOutstanding)}
+          className="rounded-2xl border-zinc-200/80 bg-white/90 shadow-sm shadow-zinc-950/[0.03]"
+          titleClassName="font-medium tracking-[0.08em]"
+          valueClassName="font-medium"
+        />
+        <StatCard
+          title="Overdue Outstanding"
+          value={formatAmount(overdueOutstanding)}
+          className="rounded-2xl border-zinc-200/80 bg-white/90 shadow-sm shadow-zinc-950/[0.03]"
+          titleClassName="font-medium tracking-[0.08em]"
+          valueClassName="font-medium"
+        />
+        <StatCard
+          title="90+ Days Outstanding"
+          value={formatAmount(days90PlusOutstanding)}
+          className="rounded-2xl border-zinc-200/80 bg-white/90 shadow-sm shadow-zinc-950/[0.03]"
+          titleClassName="font-medium tracking-[0.08em]"
+          valueClassName="font-medium"
+        />
+        <StatCard
+          title="Overdue Invoice Count"
+          value={overdueInvoiceCount}
+          className="rounded-2xl border-zinc-200/80 bg-white/90 shadow-sm shadow-zinc-950/[0.03]"
+          titleClassName="font-medium tracking-[0.08em]"
+          valueClassName="font-medium"
+        />
+      </StatsGrid>
 
         <section className="rounded-2xl border border-zinc-200/80 bg-white/90 p-6 shadow-sm shadow-zinc-950/[0.03]">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -488,7 +482,6 @@ export default async function AgingPage() {
             </div>
           )}
         </section>
-      </div>
-    </main>
+    </PageContainer>
   );
 }
