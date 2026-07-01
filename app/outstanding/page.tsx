@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { CircleCheck } from "lucide-react";
 import { notFound } from "next/navigation";
+import PageContainer from "@/components/distribio/PageContainer";
+import PageHeader from "@/components/distribio/PageHeader";
+import StatCard from "@/components/distribio/StatCard";
+import StatsGrid from "@/components/distribio/StatsGrid";
 import EmptyState from "@/components/EmptyState";
 import { apiGet } from "@/lib/api-client-server";
 
@@ -97,23 +101,6 @@ function getStatusBadgeClass(status: string) {
   return "bg-zinc-200 text-zinc-800";
 }
 
-function SummaryCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: string | number;
-}) {
-  return (
-    <div className="rounded-md border border-zinc-200 bg-white p-5">
-      <p className="text-xs font-semibold uppercase text-zinc-500">{label}</p>
-      <p className="mt-2 text-2xl font-semibold tracking-tight text-zinc-950">
-        {value}
-      </p>
-    </div>
-  );
-}
-
 export default async function OutstandingPage({
   searchParams,
 }: {
@@ -156,17 +143,11 @@ export default async function OutstandingPage({
 
     if (customer.outstandingInvoices.length === 0) {
       return (
-        <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
-          <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h1 className="text-3xl font-semibold tracking-tight">
-                  Outstanding Invoices for {customer.name}
-                </h1>
-                <p className="mt-1 text-sm text-zinc-600">
-                  Customer code: {customer.code}
-                </p>
-              </div>
+        <PageContainer>
+          <PageHeader
+            title={`Outstanding Invoices for ${customer.name}`}
+            subtitle={`Customer code: ${customer.code}`}
+            actions={
               <div className="flex flex-col gap-3 sm:flex-row">
                 <Link
                   href={`/outstanding/export?customerId=${customer.id}`}
@@ -181,29 +162,23 @@ export default async function OutstandingPage({
                   Back to Outstanding
                 </Link>
               </div>
-            </div>
-            <EmptyState
-              icon={CircleCheck}
-              title="No outstanding balances"
-              description="All invoices are fully paid for this customer."
-            />
-          </div>
-        </main>
+            }
+          />
+          <EmptyState
+            icon={CircleCheck}
+            title="No outstanding balances"
+            description="All invoices are fully paid for this customer."
+          />
+        </PageContainer>
       );
     }
 
     return (
-      <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
-        <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 className="text-3xl font-semibold tracking-tight">
-                Outstanding Invoices for {customer.name}
-              </h1>
-              <p className="mt-1 text-sm text-zinc-600">
-                Customer code: {customer.code}
-              </p>
-            </div>
+      <PageContainer>
+        <PageHeader
+          title={`Outstanding Invoices for ${customer.name}`}
+          subtitle={`Customer code: ${customer.code}`}
+          actions={
             <div className="flex flex-col gap-3 sm:flex-row">
               <Link
                 href={`/outstanding/export?customerId=${customer.id}`}
@@ -218,7 +193,8 @@ export default async function OutstandingPage({
                 Back to Outstanding
               </Link>
             </div>
-          </div>
+          }
+        />
 
           <div className="overflow-hidden rounded-md border border-zinc-200 bg-white">
             <div className="overflow-x-auto">
@@ -307,8 +283,7 @@ export default async function OutstandingPage({
               </table>
             </div>
           </div>
-        </div>
-      </main>
+      </PageContainer>
     );
   }
 
@@ -325,153 +300,126 @@ export default async function OutstandingPage({
   const highestOutstandingCustomer = report.summary.highestOutstandingCustomer;
 
   return (
-    <main className="min-h-screen bg-zinc-50 px-6 py-10 text-zinc-950">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight">
-              Customer Outstanding
-            </h1>
-            <p className="mt-1 text-sm text-zinc-600">
-              Customers with invoice balances still due.
-            </p>
-          </div>
+    <PageContainer>
+      <PageHeader
+        title="Customer Outstanding"
+        subtitle="Customers with invoice balances still due."
+        actions={
           <Link
             href="/outstanding/export"
             className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
           >
             Export CSV
           </Link>
-        </div>
+        }
+      />
 
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <SummaryCard
-            label="Customers With Outstanding"
-            value={customerCount}
-          />
-          <SummaryCard
-            label="Total Outstanding"
-            value={formatAmount(totalOutstanding)}
-          />
-          <SummaryCard label="Overdue Invoices" value={overdueInvoiceCount} />
-          <SummaryCard
-            label="Highest Outstanding Customer"
-            value={
-              highestOutstandingCustomer
-                ? `${highestOutstandingCustomer.name} (${formatAmount(
-                    highestOutstandingCustomer.totalOutstanding,
-                  )})`
-                : "-"
-            }
-          />
-        </section>
+      <StatsGrid>
+        <StatCard title="Customers With Outstanding" value={customerCount} />
+        <StatCard
+          title="Total Outstanding"
+          value={formatAmount(totalOutstanding)}
+        />
+        <StatCard title="Overdue Invoices" value={overdueInvoiceCount} />
+        <StatCard
+          title="Highest Outstanding Customer"
+          value={
+            highestOutstandingCustomer
+              ? `${highestOutstandingCustomer.name} (${formatAmount(
+                  highestOutstandingCustomer.totalOutstanding,
+                )})`
+              : "-"
+          }
+        />
+      </StatsGrid>
 
-        {customerRows.length === 0 ? (
-          <EmptyState
-            icon={CircleCheck}
-            title="No outstanding balances"
-            description="All invoices are fully paid."
-          />
-        ) : (
-          <div className="overflow-hidden rounded-md border border-zinc-200 bg-white">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-zinc-200 text-sm">
-                <thead className="bg-zinc-100 text-left text-xs font-semibold uppercase text-zinc-600">
-                  <tr>
-                    <th scope="col" className="px-4 py-3">
-                      Customer
-                    </th>
-                    <th scope="col" className="px-4 py-3">
-                      Customer Code
-                    </th>
-                    <th scope="col" className="px-4 py-3">
-                      Area
-                    </th>
-                    <th scope="col" className="px-4 py-3">
-                      Route
-                    </th>
-                    <th scope="col" className="px-4 py-3 text-right">
-                      Outstanding Invoice Count
-                    </th>
-                    <th scope="col" className="px-4 py-3 text-right">
-                      Total Outstanding
-                    </th>
-                    <th scope="col" className="px-4 py-3">
-                      Oldest Due Date
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-200">
-                  {customerRows.map((customer) => {
-                    const customerHref = `/outstanding?customerId=${customer.id}`;
+      {customerRows.length === 0 ? (
+        <EmptyState
+          icon={CircleCheck}
+          title="No outstanding balances"
+          description="All invoices are fully paid."
+        />
+      ) : (
+        <div className="overflow-hidden rounded-md border border-zinc-200 bg-white">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-zinc-200 text-sm">
+              <thead className="bg-zinc-100 text-left text-xs font-semibold uppercase text-zinc-600">
+                <tr>
+                  <th scope="col" className="px-4 py-3">
+                    Customer
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    Customer Code
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    Area
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    Route
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-right">
+                    Outstanding Invoice Count
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-right">
+                    Total Outstanding
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    Oldest Due Date
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-200">
+                {customerRows.map((customer) => {
+                  const customerHref = `/outstanding?customerId=${customer.id}`;
 
-                    return (
-                      <tr key={customer.id} className="hover:bg-zinc-50">
-                        <td className="whitespace-nowrap font-medium">
-                          <Link
-                            href={customerHref}
-                            className="block px-4 py-3 font-semibold text-zinc-950"
-                          >
-                            {customer.name}
-                          </Link>
-                        </td>
-                        <td className="whitespace-nowrap text-zinc-600">
-                          <Link
-                            href={customerHref}
-                            className="block px-4 py-3"
-                          >
-                            {customer.code}
-                          </Link>
-                        </td>
-                        <td className="whitespace-nowrap text-zinc-600">
-                          <Link
-                            href={customerHref}
-                            className="block px-4 py-3"
-                          >
-                            {customer.area ?? "-"}
-                          </Link>
-                        </td>
-                        <td className="whitespace-nowrap text-zinc-600">
-                          <Link
-                            href={customerHref}
-                            className="block px-4 py-3"
-                          >
-                            {customer.routeName ?? "-"}
-                          </Link>
-                        </td>
-                        <td className="whitespace-nowrap text-right font-medium text-zinc-600">
-                          <Link
-                            href={customerHref}
-                            className="block px-4 py-3"
-                          >
-                            {customer.outstandingInvoiceCount}
-                          </Link>
-                        </td>
-                        <td className="whitespace-nowrap text-right font-medium text-zinc-600">
-                          <Link
-                            href={customerHref}
-                            className="block px-4 py-3"
-                          >
-                            {formatAmount(customer.totalOutstanding)}
-                          </Link>
-                        </td>
-                        <td className="whitespace-nowrap text-zinc-600">
-                          <Link
-                            href={customerHref}
-                            className="block px-4 py-3"
-                          >
-                            {formatDate(customer.oldestDueDate)}
-                          </Link>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                  return (
+                    <tr key={customer.id} className="hover:bg-zinc-50">
+                      <td className="whitespace-nowrap font-medium">
+                        <Link
+                          href={customerHref}
+                          className="block px-4 py-3 font-semibold text-zinc-950"
+                        >
+                          {customer.name}
+                        </Link>
+                      </td>
+                      <td className="whitespace-nowrap text-zinc-600">
+                        <Link href={customerHref} className="block px-4 py-3">
+                          {customer.code}
+                        </Link>
+                      </td>
+                      <td className="whitespace-nowrap text-zinc-600">
+                        <Link href={customerHref} className="block px-4 py-3">
+                          {customer.area ?? "-"}
+                        </Link>
+                      </td>
+                      <td className="whitespace-nowrap text-zinc-600">
+                        <Link href={customerHref} className="block px-4 py-3">
+                          {customer.routeName ?? "-"}
+                        </Link>
+                      </td>
+                      <td className="whitespace-nowrap text-right font-medium text-zinc-600">
+                        <Link href={customerHref} className="block px-4 py-3">
+                          {customer.outstandingInvoiceCount}
+                        </Link>
+                      </td>
+                      <td className="whitespace-nowrap text-right font-medium text-zinc-600">
+                        <Link href={customerHref} className="block px-4 py-3">
+                          {formatAmount(customer.totalOutstanding)}
+                        </Link>
+                      </td>
+                      <td className="whitespace-nowrap text-zinc-600">
+                        <Link href={customerHref} className="block px-4 py-3">
+                          {formatDate(customer.oldestDueDate)}
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        )}
-      </div>
-    </main>
+        </div>
+      )}
+    </PageContainer>
   );
 }
