@@ -1,5 +1,41 @@
 ## Business Rules
 
+## User Roles
+
+### ADMIN
+- Full access to the system.
+- Can create, update, and delete customers.
+- Can create, update, and delete invoices.
+- Can create payments if required.
+- Can reverse PaymentParts (including cheque reversals).
+- Can undo cheque reversals.
+- Can view all reports.
+
+### SALES_REP
+- Can view all customers.
+- Can create customers.
+- Cannot update or delete customers.
+- Can create invoices.
+- Can update invoices only while no payment allocations exist.
+- Cannot delete invoices.
+- Can view reports.
+
+### COLLECTOR
+- Can view all customers.
+- Can create payments.
+- Cannot create or modify invoices.
+- Cannot reverse payments.
+- Can view reports.
+
+## General Business Principles
+
+- Authentication is handled by Supabase Auth.
+- Application permissions are determined by the User table.
+- Authorization controls who may perform an action.
+- Business rules determine whether an allowed action is valid.
+- Audit history should be preserved wherever possible.
+- Avoid deleting business records once financial activity exists.
+
 - App is for Sri Lankan distribution cash collection.
 - Collector app must be extremely simple.
 - Customers can have multiple invoices.
@@ -39,6 +75,7 @@ Payment Creation Rules
 7. Payment method total must equal allocation total.
 8. Cheque received does not mean cheque cleared.
 9. Cheque clearing is handled by office staff later.
+10. Payment creation must be atomic. Either the payment, payment parts, and allocations are all saved successfully, or none are saved.
 
 ### Invoice Outstanding Calculation
 
@@ -66,3 +103,14 @@ If a cheque bounces later:
 - The customer outstanding balance must increase again.
 - The invoice status must be recalculated.
 - The original payment history must remain for audit purposes.
+
+## SMS Notifications
+
+Customers should receive SMS notifications for:
+- Invoice creation.
+- Payment recorded.
+- Payment reversal.
+- Cheque reversal.
+- Cheque reversal undo.
+
+Each SMS should include the customer's updated outstanding balance where applicable.

@@ -50,15 +50,30 @@ Phase 4 and Phase 5 migration work is complete at this point:
 - Root frontend lint/build checks ignore the backend project, and the backend is
   checked separately from inside `backend/`.
 
-The next active phase is authentication and route protection.
+The active phase is Phase 6 authentication, authorization, and frontend login integration.
 
-Phase 6 goals:
+Phase 6 status and goals:
 
-- Add backend authentication endpoints.
+Completed backend auth work:
+
+- Supabase Auth was selected as the identity provider.
+- NestJS remains the business API and authorization layer.
+- Backend `UserRole` enum currently supports `ADMIN`, `SALES_REP`, and `COLLECTOR`.
+- Backend `User` table stores application users, roles, and active status linked to Supabase Auth users.
+- Backend auth guard verifies Supabase bearer tokens.
+- Backend auth guard loads the matching active application user and attaches it to the request.
+- `/api/auth/me` returns the current application user.
+- Roles decorator and roles guard are implemented.
+- Customer, invoice, payment, cheque, dashboard, outstanding, statement, aging, and search endpoints are protected.
+- Initial Distribio seed users exist for `admin@distribio.com`, `sales@distribio.com`, and `collector@distribio.com`.
+
+Remaining Phase 6 goals:
+
 - Add frontend login/logout and session persistence.
-- Protect authenticated pages.
-- Update the API client to attach auth credentials where needed.
-- Prepare the architecture for future mobile collector access to the same API.
+- Update the frontend API client to attach Supabase access tokens where needed.
+- Protect authenticated pages in the Next.js app.
+- Redirect users based on role where appropriate.
+- Prepare the same authenticated API flow for the future mobile collector app.
 
 ## 1.2 Tech Stack And Architecture
 
@@ -85,6 +100,16 @@ Backend stack:
   explicitly approved.
 - API style: REST endpoints under `/api/...`.
 - Financial writes should use transactions.
+
+Authentication architecture:
+
+- Product name: Distribio.
+- Supabase Auth handles identity, passwords, sessions, and future auth-provider features.
+- NestJS verifies Supabase JWT bearer tokens.
+- Application roles and active/inactive status are stored in the backend `User` table.
+- Current roles are `ADMIN`, `SALES_REP`, and `COLLECTOR`.
+- Role-based authorization is enforced in NestJS controllers using `AuthGuard`, `RolesGuard`, and the `Roles` decorator.
+- Business rules still belong in backend services, not only in role guards.
 
 Target architecture after frontend integration:
 
@@ -394,6 +419,46 @@ do not reduce outstanding balances.
 
 ## 4. Core Workflows
 
+### Authentication And Roles
+
+Current backend auth model:
+
+- Supabase Auth users are the identity records.
+- Backend `User` rows map Supabase users to Distribio application roles.
+- A valid Supabase token is not enough by itself; the backend also requires an active matching `User` row.
+- `/api/auth/me` returns the authenticated application user.
+
+Current roles:
+
+- `ADMIN`: full system access.
+- `SALES_REP`: can create customers and invoices, but cannot collect payments.
+- `COLLECTOR`: can create payments, but cannot create or modify invoices.
+
+Current endpoint authorization summary:
+
+- Customers:
+  - `ADMIN`: read, create, update, delete.
+  - `SALES_REP`: read, create.
+  - `COLLECTOR`: read.
+- Invoices:
+  - `ADMIN`: read, create, update, delete, subject to business rules.
+  - `SALES_REP`: read, create, update only while no payment allocations exist.
+  - `COLLECTOR`: read.
+- Payments:
+  - `ADMIN`: read, create, and admin-only correction flows.
+  - `SALES_REP`: read.
+  - `COLLECTOR`: read, create.
+- Cheques:
+  - All roles can read.
+  - Cheque reversal and undo reversal are `ADMIN` only.
+- Dashboard, outstanding, statements, aging, and search:
+  - All current roles can read.
+
+Current visibility rule:
+
+- For the first real deployment, `ADMIN`, `SALES_REP`, and `COLLECTOR` can all view the same customer/report data.
+- Route-based or assignment-based visibility is intentionally deferred until larger chains require it.
+
 ### Customer Creation And Editing
 
 Routes:
@@ -461,6 +526,14 @@ Invoice status filters:
 - Supports All, Paid, Partially Paid, Unpaid.
 - URL params support both uppercase values and chart-friendly lowercase aliases:
   `paid`, `partial`, `unpaid`.
+
+Invoice deletion and update business rules:
+
+- Admin can delete an invoice only if no payment allocations exist for that invoice.
+- Invoice deletion must be rejected once any payment allocation exists.
+- Sales reps must not delete invoices.
+- Sales reps may update invoices only while no payment allocations exist.
+- Invoice update/delete controls should be hidden or treated as emergency/danger-zone actions in the UI.
 
 ### Payment Creation
 
@@ -1037,6 +1110,7 @@ confirmed before backend behavior is finalized:
   current UI calculations collapse invoice display status to `PAID`,
   `PARTIALLY_PAID`, or `UNPAID`.
 
-- Authentication and route protection are not yet implemented in the current
-  app. Phase 6 should define the backend auth model, frontend session handling,
-  protected routes, and API-client auth behavior.
+- Frontend login/logout and session persistence are not yet implemented.
+- API client bearer-token attachment from the frontend is not yet implemented.
+- SMS notification provider and message templates are not yet implemented. The product requirement is to notify customers by SMS when invoices, payments, cheque reversals, and reversal undo events occur, including updated outstanding balances where applicable.
+- Future multi-chain support will likely require a `Company` or tenant model and a Distribio super-admin workflow, but this is intentionally deferred.
