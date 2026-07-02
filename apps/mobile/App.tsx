@@ -1,5 +1,6 @@
 import './global.css';
 
+import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -46,7 +47,12 @@ export default function App() {
         </View>
 
         <View style={styles.actions}>
-          <Pressable style={styles.primaryButton}>
+          <Pressable
+            style={styles.primaryButton}
+            onPress={() => {
+              router.push('/search-customer');
+            }}
+          >
             <Text style={styles.primaryButtonText}>Collect Payment</Text>
           </Pressable>
 
