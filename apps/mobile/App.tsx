@@ -32,17 +32,7 @@ export default function App() {
           <Text style={styles.kicker}>Distribio Collector</Text>
           <Text style={styles.title}>Collect Payment</Text>
           <Text style={styles.subtitle}>
-            Search a customer, review outstanding invoices, enter payment
-            methods, and allocate the payment before submitting.
-          </Text>
-        </View>
-
-        <View style={styles.heroCard}>
-          <Text style={styles.cardLabel}>Payment Workflow</Text>
-          <Text style={styles.cardTitle}>Ready to record a collection</Text>
-          <Text style={styles.cardText}>
-            Start by selecting the customer, then match cash, cheque, or bank
-            transfer amounts to the correct invoices.
+            Select a customer and record today&apos;s payment.
           </Text>
         </View>
 
@@ -71,7 +61,8 @@ export default function App() {
 
 const styles = StyleSheet.create({
   actions: {
-    marginTop: 20,
+    marginTop: 'auto',
+    paddingTop: 28,
   },
   card: {
     backgroundColor: '#ffffff',
@@ -88,28 +79,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     textTransform: 'uppercase',
   },
-  cardText: {
-    color: '#64748b',
-    fontSize: 16,
-    lineHeight: 22,
-    marginTop: 8,
-  },
-  cardTitle: {
-    color: '#020617',
-    fontSize: 24,
-    fontWeight: '800',
-    marginTop: 12,
-  },
   header: {
-    marginBottom: 24,
-  },
-  heroCard: {
-    backgroundColor: '#ffffff',
-    borderColor: '#bae6fd',
-    borderRadius: 24,
-    borderWidth: 1,
-    marginBottom: 12,
-    padding: 22,
+    marginBottom: 20,
   },
   kicker: {
     color: '#0369a1',
@@ -121,14 +92,14 @@ const styles = StyleSheet.create({
   primaryButton: {
     alignItems: 'center',
     backgroundColor: '#0369a1',
-    borderRadius: 24,
+    borderRadius: 28,
     marginBottom: 12,
     paddingHorizontal: 24,
-    paddingVertical: 20,
+    paddingVertical: 24,
   },
   primaryButtonText: {
     color: '#ffffff',
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '900',
   },
   safeArea: {
@@ -136,9 +107,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 32,
+    flexGrow: 1,
+    paddingBottom: 28,
     paddingHorizontal: 20,
-    paddingTop: 32,
+    paddingTop: 56,
   },
   scrollView: {
     flex: 1,
@@ -161,10 +133,10 @@ const styles = StyleSheet.create({
     color: '#64748b',
     fontSize: 16,
     lineHeight: 22,
-    marginTop: 8,
+    marginTop: 6,
   },
   summaryList: {
-    marginTop: 20,
+    marginTop: 0,
   },
   summaryValue: {
     color: '#020617',
