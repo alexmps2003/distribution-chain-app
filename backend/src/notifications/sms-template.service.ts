@@ -5,6 +5,9 @@ type MoneyValue = string | number;
 type PaymentReceivedInput = {
   amount: MoneyValue;
   customerName: string;
+  dateTime?: Date | string | null;
+  paymentMethod?: string | null;
+  receiptNumber?: string | null;
   outstanding: MoneyValue;
 };
 
@@ -12,18 +15,23 @@ type ChequeReversedInput = {
   amount: MoneyValue;
   chequeNumber: string;
   customerName: string;
+  dateTime?: Date | string | null;
   reason?: string | null;
+  outstanding?: MoneyValue | null;
 };
 
 type ChequeReversalUndoneInput = {
   amount: MoneyValue;
   chequeNumber: string;
   customerName: string;
+  dateTime?: Date | string | null;
+  outstanding?: MoneyValue | null;
 };
 
 type InvoiceCreatedInput = {
   amount: MoneyValue;
   customerName: string;
+  dateTime?: Date | string | null;
   dueDate?: Date | string | null;
   invoiceNumber: string;
   outstanding: MoneyValue;
@@ -33,39 +41,43 @@ type InvoiceCreatedInput = {
 export class SmsTemplateService {
   paymentReceived({
     amount,
-    customerName,
+    dateTime,
+    paymentMethod,
+    receiptNumber,
     outstanding,
   }: PaymentReceivedInput): string {
     return [
       'Distribio',
-      '',
       'Payment Received',
-      '',
-      `Customer: ${customerName}`,
+      receiptNumber ? `Receipt: ${receiptNumber}` : null,
       `Amount: ${this.formatAmount(amount)}`,
-      `Outstanding: ${this.formatAmount(outstanding)}`,
-      '',
-      'Thank you.',
-    ].join('\n');
+      paymentMethod
+        ? `Method: ${this.formatPaymentMethod(paymentMethod)}`
+        : null,
+      `Remaining Outstanding: ${this.formatAmount(outstanding)}`,
+      `Date & Time: ${this.formatDateTime(dateTime)}`,
+    ]
+      .filter((line): line is string => line !== null)
+      .join('\n');
   }
 
   chequeReversed({
     amount,
     chequeNumber,
-    customerName,
+    dateTime,
+    outstanding,
     reason,
   }: ChequeReversedInput): string {
     return [
       'Distribio',
-      '',
       'Cheque Reversed',
-      '',
-      `Customer: ${customerName}`,
       `Cheque No: ${chequeNumber}`,
       `Amount: ${this.formatAmount(amount)}`,
+      this.hasMoneyValue(outstanding)
+        ? `Updated Outstanding: ${this.formatAmount(outstanding)}`
+        : null,
+      `Date & Time: ${this.formatDateTime(dateTime)}`,
       reason ? `Reason: ${reason}` : null,
-      '',
-      'Please contact us if you need assistance.',
     ]
       .filter((line): line is string => line !== null)
       .join('\n');
@@ -74,40 +86,38 @@ export class SmsTemplateService {
   chequeReversalUndone({
     amount,
     chequeNumber,
-    customerName,
+    dateTime,
+    outstanding,
   }: ChequeReversalUndoneInput): string {
     return [
       'Distribio',
-      '',
-      'Cheque Reversal Undone',
-      '',
-      `Customer: ${customerName}`,
+      'Cheque Restored',
       `Cheque No: ${chequeNumber}`,
       `Amount: ${this.formatAmount(amount)}`,
-      '',
-      'Thank you.',
-    ].join('\n');
+      this.hasMoneyValue(outstanding)
+        ? `Updated Outstanding: ${this.formatAmount(outstanding)}`
+        : null,
+      `Date & Time: ${this.formatDateTime(dateTime)}`,
+    ]
+      .filter((line): line is string => line !== null)
+      .join('\n');
   }
 
   invoiceCreated({
     amount,
-    customerName,
+    dateTime,
     dueDate,
     invoiceNumber,
     outstanding,
   }: InvoiceCreatedInput): string {
     return [
       'Distribio',
-      '',
       'Invoice Created',
-      '',
-      `Customer: ${customerName}`,
       `Invoice No: ${invoiceNumber}`,
       `Invoice Amount: ${this.formatAmount(amount)}`,
       `Total Outstanding: ${this.formatAmount(outstanding)}`,
       dueDate ? `Due Date: ${this.formatDate(dueDate)}` : null,
-      '',
-      'Thank you.',
+      `Date & Time: ${this.formatDateTime(dateTime)}`,
     ]
       .filter((line): line is string => line !== null)
       .join('\n');
@@ -120,6 +130,10 @@ export class SmsTemplateService {
     }).format(Number(value))}`;
   }
 
+  private hasMoneyValue(value: MoneyValue | null | undefined) {
+    return value !== null && value !== undefined;
+  }
+
   private formatDate(value: Date | string) {
     const date = value instanceof Date ? value : new Date(value);
 
@@ -128,5 +142,30 @@ export class SmsTemplateService {
       month: 'short',
       day: 'numeric',
     });
+  }
+
+  private formatDateTime(value?: Date | string | null) {
+    const date = value
+      ? value instanceof Date
+        ? value
+        : new Date(value)
+      : new Date();
+
+    return date.toLocaleString('en-LK', {
+      day: '2-digit',
+      hour: '2-digit',
+      hour12: true,
+      minute: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+  }
+
+  private formatPaymentMethod(value: string) {
+    return value
+      .toLowerCase()
+      .split(/[_\s-]+/)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
   }
 }
