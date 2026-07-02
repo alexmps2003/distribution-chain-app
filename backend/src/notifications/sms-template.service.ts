@@ -54,8 +54,8 @@ export class SmsTemplateService {
       paymentMethod
         ? `Method: ${this.formatPaymentMethod(paymentMethod)}`
         : null,
-      `Remaining Outstanding: ${this.formatAmount(outstanding)}`,
-      `Date & Time: ${this.formatDateTime(dateTime)}`,
+      `Outstanding: ${this.formatAmount(outstanding)}`,
+      this.formatDateTime(dateTime),
     ]
       .filter((line): line is string => line !== null)
       .join('\n');
@@ -71,12 +71,12 @@ export class SmsTemplateService {
     return [
       'Distribio',
       'Cheque Reversed',
-      `Cheque No: ${chequeNumber}`,
+      `Cheque: ${chequeNumber}`,
       `Amount: ${this.formatAmount(amount)}`,
       this.hasMoneyValue(outstanding)
-        ? `Updated Outstanding: ${this.formatAmount(outstanding)}`
+        ? `Outstanding: ${this.formatAmount(outstanding)}`
         : null,
-      `Date & Time: ${this.formatDateTime(dateTime)}`,
+      this.formatDateTime(dateTime),
       reason ? `Reason: ${reason}` : null,
     ]
       .filter((line): line is string => line !== null)
@@ -92,12 +92,12 @@ export class SmsTemplateService {
     return [
       'Distribio',
       'Cheque Restored',
-      `Cheque No: ${chequeNumber}`,
+      `Cheque: ${chequeNumber}`,
       `Amount: ${this.formatAmount(amount)}`,
       this.hasMoneyValue(outstanding)
-        ? `Updated Outstanding: ${this.formatAmount(outstanding)}`
+        ? `Outstanding: ${this.formatAmount(outstanding)}`
         : null,
-      `Date & Time: ${this.formatDateTime(dateTime)}`,
+      this.formatDateTime(dateTime),
     ]
       .filter((line): line is string => line !== null)
       .join('\n');
@@ -113,11 +113,11 @@ export class SmsTemplateService {
     return [
       'Distribio',
       'Invoice Created',
-      `Invoice No: ${invoiceNumber}`,
-      `Invoice Amount: ${this.formatAmount(amount)}`,
-      `Total Outstanding: ${this.formatAmount(outstanding)}`,
-      dueDate ? `Due Date: ${this.formatDate(dueDate)}` : null,
-      `Date & Time: ${this.formatDateTime(dateTime)}`,
+      `Invoice: ${invoiceNumber}`,
+      `Amount: ${this.formatAmount(amount)}`,
+      `Outstanding: ${this.formatAmount(outstanding)}`,
+      dueDate ? `Due: ${this.formatDate(dueDate)}` : null,
+      this.formatDateTime(dateTime),
     ]
       .filter((line): line is string => line !== null)
       .join('\n');
