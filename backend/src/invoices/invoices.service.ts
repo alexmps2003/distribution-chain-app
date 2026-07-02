@@ -172,6 +172,7 @@ export class InvoicesService {
         customerName: customer.name,
         dueDate: invoice.dueDate,
         invoiceNumber: invoice.invoiceNumber,
+        outstanding: await this.getCustomerOutstanding(customer.id),
       });
 
       await this.notificationsService.sendSms(phoneNumber, message);
@@ -182,6 +183,47 @@ export class InvoicesService {
           : 'Invoice SMS notification failed',
       );
     }
+  }
+
+  private async getCustomerOutstanding(customerId: string) {
+    const customerInvoices = await this.databaseService.db
+      .select()
+      .from(invoices)
+      .where(eq(invoices.customerId, customerId));
+    const paymentPartRows = await this.databaseService.db
+      .select()
+      .from(paymentParts);
+    const paymentPartById = new Map(
+      paymentPartRows.map((paymentPart) => [paymentPart.id, paymentPart]),
+    );
+    let outstandingCents = 0;
+
+    for (const invoice of customerInvoices) {
+      const allocationRows = await this.databaseService.db
+        .select()
+        .from(paymentAllocations)
+        .where(eq(paymentAllocations.invoiceId, invoice.id));
+      const activePaidCents = allocationRows.reduce((sum, allocation) => {
+        if (!allocation.paymentPartId) {
+          return sum + this.toCents(allocation.amount);
+        }
+
+        const paymentPart = paymentPartById.get(allocation.paymentPartId);
+
+        if (paymentPart?.status === 'ACTIVE') {
+          return sum + this.toCents(allocation.amount);
+        }
+
+        return sum;
+      }, 0);
+
+      outstandingCents += Math.max(
+        this.toCents(invoice.amount) - activePaidCents,
+        0,
+      );
+    }
+
+    return this.fromCents(outstandingCents);
   }
 
   async findOne(id: string) {

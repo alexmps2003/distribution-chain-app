@@ -26,6 +26,7 @@ type InvoiceCreatedInput = {
   customerName: string;
   dueDate?: Date | string | null;
   invoiceNumber: string;
+  outstanding: MoneyValue;
 };
 
 @Injectable()
@@ -93,6 +94,7 @@ export class SmsTemplateService {
     customerName,
     dueDate,
     invoiceNumber,
+    outstanding,
   }: InvoiceCreatedInput): string {
     return [
       'Distribio',
@@ -101,7 +103,8 @@ export class SmsTemplateService {
       '',
       `Customer: ${customerName}`,
       `Invoice No: ${invoiceNumber}`,
-      `Amount: ${this.formatAmount(amount)}`,
+      `Invoice Amount: ${this.formatAmount(amount)}`,
+      `Total Outstanding: ${this.formatAmount(outstanding)}`,
       dueDate ? `Due Date: ${this.formatDate(dueDate)}` : null,
       '',
       'Thank you.',
