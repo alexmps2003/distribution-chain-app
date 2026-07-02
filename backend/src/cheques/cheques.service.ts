@@ -188,94 +188,104 @@ export class ChequesService {
   }
 
   async undoReversal(id: string) {
-    return this.databaseService.db.transaction(async (tx) => {
-      const [cheque] = await tx
-        .select()
-        .from(paymentParts)
-        .where(eq(paymentParts.id, id));
-
-      if (!cheque) {
-        throw new NotFoundException('Cheque not found');
-      }
-
-      if (cheque.method !== 'CHEQUE') {
-        throw new BadRequestException(
-          'Only cheque payment parts can be restored here',
-        );
-      }
-
-      if (cheque.status !== 'REVERSED') {
-        throw new BadRequestException('Only reversed cheques can be restored');
-      }
-
-      const [updatedCheque] = await tx
-        .update(paymentParts)
-        .set({
-          status: 'ACTIVE',
-          reversedAt: null,
-          reversalReason: null,
-        })
-        .where(eq(paymentParts.id, cheque.id))
-        .returning();
-
-      const chequeAllocations = await tx
-        .select()
-        .from(paymentAllocations)
-        .where(eq(paymentAllocations.paymentPartId, cheque.id));
-
-      const affectedInvoiceIds = [
-        ...new Set(chequeAllocations.map((allocation) => allocation.invoiceId)),
-      ];
-
-      for (const invoiceId of affectedInvoiceIds) {
-        const [invoice] = await tx
+    const updatedCheque = await this.databaseService.db.transaction(
+      async (tx) => {
+        const [cheque] = await tx
           .select()
-          .from(invoices)
-          .where(eq(invoices.id, invoiceId));
+          .from(paymentParts)
+          .where(eq(paymentParts.id, id));
 
-        if (!invoice) {
-          continue;
+        if (!cheque) {
+          throw new NotFoundException('Cheque not found');
         }
 
-        const invoiceAllocations = await tx
+        if (cheque.method !== 'CHEQUE') {
+          throw new BadRequestException(
+            'Only cheque payment parts can be restored here',
+          );
+        }
+
+        if (cheque.status !== 'REVERSED') {
+          throw new BadRequestException(
+            'Only reversed cheques can be restored',
+          );
+        }
+
+        const [updatedCheque] = await tx
+          .update(paymentParts)
+          .set({
+            status: 'ACTIVE',
+            reversedAt: null,
+            reversalReason: null,
+          })
+          .where(eq(paymentParts.id, cheque.id))
+          .returning();
+
+        const chequeAllocations = await tx
           .select()
           .from(paymentAllocations)
-          .where(eq(paymentAllocations.invoiceId, invoiceId));
+          .where(eq(paymentAllocations.paymentPartId, cheque.id));
 
-        let activePaidTotal = 0;
+        const affectedInvoiceIds = [
+          ...new Set(
+            chequeAllocations.map((allocation) => allocation.invoiceId),
+          ),
+        ];
 
-        for (const allocation of invoiceAllocations) {
-          if (!allocation.paymentPartId) {
-            activePaidTotal += this.toCents(allocation.amount);
+        for (const invoiceId of affectedInvoiceIds) {
+          const [invoice] = await tx
+            .select()
+            .from(invoices)
+            .where(eq(invoices.id, invoiceId));
+
+          if (!invoice) {
             continue;
           }
 
-          const [part] = await tx
+          const invoiceAllocations = await tx
             .select()
-            .from(paymentParts)
-            .where(eq(paymentParts.id, allocation.paymentPartId));
+            .from(paymentAllocations)
+            .where(eq(paymentAllocations.invoiceId, invoiceId));
 
-          if (part?.status === 'ACTIVE') {
-            activePaidTotal += this.toCents(allocation.amount);
+          let activePaidTotal = 0;
+
+          for (const allocation of invoiceAllocations) {
+            if (!allocation.paymentPartId) {
+              activePaidTotal += this.toCents(allocation.amount);
+              continue;
+            }
+
+            const [part] = await tx
+              .select()
+              .from(paymentParts)
+              .where(eq(paymentParts.id, allocation.paymentPartId));
+
+            if (part?.status === 'ACTIVE') {
+              activePaidTotal += this.toCents(allocation.amount);
+            }
           }
+
+          const invoiceAmount = this.toCents(invoice.amount);
+          const status =
+            activePaidTotal >= invoiceAmount
+              ? 'PAID'
+              : activePaidTotal > 0
+                ? 'PARTIALLY_PAID'
+                : 'UNPAID';
+
+          await tx
+            .update(invoices)
+            .set({ status })
+            .where(eq(invoices.id, invoiceId));
         }
 
-        const invoiceAmount = this.toCents(invoice.amount);
-        const status =
-          activePaidTotal >= invoiceAmount
-            ? 'PAID'
-            : activePaidTotal > 0
-              ? 'PARTIALLY_PAID'
-              : 'UNPAID';
+        return updatedCheque;
+      },
+    );
 
-        await tx
-          .update(invoices)
-          .set({ status })
-          .where(eq(invoices.id, invoiceId));
-      }
+    await this.sendChequeReversalUndoneSms(updatedCheque);
 
-      return updatedCheque;
-    });
+    return updatedCheque;
   }
 
   private async sendChequeReversedSms(
@@ -317,6 +327,48 @@ export class ChequesService {
         error instanceof Error
           ? `Cheque reversal SMS notification failed: ${error.message}`
           : 'Cheque reversal SMS notification failed',
+      );
+    }
+  }
+
+  private async sendChequeReversalUndoneSms(
+    cheque: typeof paymentParts.$inferSelect,
+  ) {
+    try {
+      const [payment] = await this.databaseService.db
+        .select()
+        .from(payments)
+        .where(eq(payments.id, cheque.paymentId));
+
+      if (!payment) {
+        return;
+      }
+
+      const [customer] = await this.databaseService.db
+        .select()
+        .from(customers)
+        .where(eq(customers.id, payment.customerId));
+      const phoneNumber = customer?.phone?.trim();
+
+      if (!customer || !phoneNumber) {
+        return;
+      }
+
+      const outstanding = await this.getCustomerOutstanding(customer.id);
+      const message = this.smsTemplateService.chequeReversalUndone({
+        amount: cheque.amount,
+        chequeNumber: cheque.chequeNumber ?? 'N/A',
+        customerName: customer.name,
+        dateTime: new Date(),
+        outstanding,
+      });
+
+      await this.notificationsService.sendSms(phoneNumber, message);
+    } catch (error) {
+      this.logger.warn(
+        error instanceof Error
+          ? `Cheque reversal undo SMS notification failed: ${error.message}`
+          : 'Cheque reversal undo SMS notification failed',
       );
     }
   }
