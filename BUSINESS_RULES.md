@@ -106,11 +106,14 @@ If a cheque bounces later:
 
 ## SMS Notifications
 
-Customers should receive SMS notifications for:
+Distribio sends customer SMS notifications through the backend NotificationsModule.
+
+Current SMS events:
 - Invoice creation.
-- Payment recorded.
-- Payment reversal.
+- Payment creation.
 - Cheque reversal.
 - Cheque reversal undo.
 
 Each SMS should include the customer's updated outstanding balance where applicable.
+
+SMS delivery failures must be logged but must not block the invoice, payment, or cheque operation that triggered the message.

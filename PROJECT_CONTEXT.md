@@ -111,6 +111,26 @@ Authentication architecture:
 - Role-based authorization is enforced in NestJS controllers using `AuthGuard`, `RolesGuard`, and the `Roles` decorator.
 - Business rules still belong in backend services, not only in role guards.
 
+Notification architecture:
+
+- Customer SMS notifications are handled by the backend `NotificationsModule`.
+- SMS delivery uses a provider abstraction selected by `SMS_PROVIDER`.
+- Supported provider values are `console` and `notifylk`.
+- `console` logs the SMS payload and is suitable for local development.
+- `notifylk` sends through Notify.lk.
+- Notify.lk requires:
+  - `NOTIFY_LK_USER_ID`
+  - `NOTIFY_LK_API_KEY`
+  - `NOTIFY_LK_SENDER_ID`
+- Implemented SMS events:
+  - Invoice creation.
+  - Payment creation.
+  - Cheque reversal.
+  - Cheque reversal undo.
+- SMS templates live in `SmsTemplateService`.
+- SMS failures are logged but must not block the invoice, payment, or cheque
+  business operation that triggered them.
+
 Target architecture after frontend integration:
 
 ```text
@@ -1112,5 +1132,4 @@ confirmed before backend behavior is finalized:
 
 - Frontend login/logout and session persistence are not yet implemented.
 - API client bearer-token attachment from the frontend is not yet implemented.
-- SMS notification provider and message templates are not yet implemented. The product requirement is to notify customers by SMS when invoices, payments, cheque reversals, and reversal undo events occur, including updated outstanding balances where applicable.
 - Future multi-chain support will likely require a `Company` or tenant model and a Distribio super-admin workflow, but this is intentionally deferred.

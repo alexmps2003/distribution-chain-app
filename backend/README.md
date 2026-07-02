@@ -31,6 +31,45 @@
 $ pnpm install
 ```
 
+## SMS notifications
+
+Distribio customer SMS notifications are handled by `NotificationsModule`.
+
+Supported providers:
+
+- `SMS_PROVIDER=console` logs SMS payloads for local development.
+- `SMS_PROVIDER=notifylk` sends SMS through Notify.lk.
+
+Notify.lk configuration:
+
+```bash
+NOTIFY_LK_USER_ID=
+NOTIFY_LK_API_KEY=
+NOTIFY_LK_SENDER_ID=
+```
+
+Manual SMS provider test:
+
+```bash
+pnpm sms:test -- 947XXXXXXXX
+```
+
+Preview SMS templates without sending messages:
+
+```bash
+pnpm sms:preview
+```
+
+Currently implemented SMS events:
+
+- Invoice creation.
+- Payment creation.
+- Cheque reversal.
+- Cheque reversal undo.
+
+SMS failures are logged but do not block the business operation that triggered
+the notification.
+
 ## Compile and run the project
 
 ```bash
