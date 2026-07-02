@@ -6,15 +6,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 const summaryCards = [
   {
-    label: 'Customers',
-    value: '0',
-  },
-  {
-    label: 'To Collect',
+    label: 'Outstanding',
     value: 'Rs. 0.00',
   },
   {
-    label: 'Completed',
+    label: 'Collected Today',
+    value: 'Rs. 0.00',
+  },
+  {
+    label: 'Payments Today',
     value: '0',
   },
 ];
@@ -30,17 +30,19 @@ export default function App() {
       >
         <View style={styles.header}>
           <Text style={styles.kicker}>Distribio Collector</Text>
-          <Text style={styles.title}>Today's Route</Text>
+          <Text style={styles.title}>Collect Payment</Text>
           <Text style={styles.subtitle}>
-            Track customers, collections, and payment progress for today.
+            Search a customer, review outstanding invoices, enter payment
+            methods, and allocate the payment before submitting.
           </Text>
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>Route Status</Text>
-          <Text style={styles.cardTitle}>No route assigned</Text>
+        <View style={styles.heroCard}>
+          <Text style={styles.cardLabel}>Payment Workflow</Text>
+          <Text style={styles.cardTitle}>Ready to record a collection</Text>
           <Text style={styles.cardText}>
-            Your assigned customers will appear here after login.
+            Start by selecting the customer, then match cash, cheque, or bank
+            transfer amounts to the correct invoices.
           </Text>
         </View>
 
@@ -55,7 +57,7 @@ export default function App() {
 
         <View style={styles.actions}>
           <Pressable style={styles.primaryButton}>
-            <Text style={styles.primaryButtonText}>Start Collections</Text>
+            <Text style={styles.primaryButtonText}>Collect Payment</Text>
           </Pressable>
 
           <Pressable style={styles.secondaryButton}>
@@ -101,6 +103,14 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: 24,
   },
+  heroCard: {
+    backgroundColor: '#ffffff',
+    borderColor: '#bae6fd',
+    borderRadius: 24,
+    borderWidth: 1,
+    marginBottom: 12,
+    padding: 22,
+  },
   kicker: {
     color: '#0369a1',
     fontSize: 14,
@@ -111,15 +121,15 @@ const styles = StyleSheet.create({
   primaryButton: {
     alignItems: 'center',
     backgroundColor: '#0369a1',
-    borderRadius: 20,
+    borderRadius: 24,
     marginBottom: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: 24,
+    paddingVertical: 20,
   },
   primaryButtonText: {
     color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 18,
+    fontWeight: '900',
   },
   safeArea: {
     backgroundColor: '#f1f5f9',
