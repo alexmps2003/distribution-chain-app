@@ -5,7 +5,9 @@ module.exports = function (api) {
     presets: [
       [
         require.resolve('expo/node_modules/babel-preset-expo'),
-        { jsxImportSource: 'nativewind' },
+        {
+          jsxImportSource: 'nativewind',
+        },
       ],
       'nativewind/babel',
     ],
