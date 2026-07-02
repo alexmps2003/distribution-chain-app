@@ -75,24 +75,19 @@ export default function SearchCustomerScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {filteredCustomers.map((customer) => (
-          <Pressable
-            key={customer.code}
-            style={({ pressed }) => [
-              styles.customerCard,
-              pressed && styles.customerCardPressed,
-            ]}
-          >
-            <View style={styles.customerHeader}>
-              <View style={styles.customerTitleBlock}>
+          <Pressable key={customer.code} style={styles.customerPressable}>
+            <View style={styles.customerCard}>
+              <View style={styles.customerHeader}>
                 <Text style={styles.customerName}>{customer.name}</Text>
-                <Text style={styles.customerCode}>{customer.code}</Text>
+                <Text style={styles.route}>{customer.route}</Text>
               </View>
-              <Text style={styles.route}>{customer.route}</Text>
-            </View>
 
-            <Text style={styles.outstanding}>
-              Outstanding {customer.outstanding}
-            </Text>
+              <Text style={styles.customerCode}>{customer.code}</Text>
+
+              <Text style={styles.outstanding}>
+                Outstanding {customer.outstanding}
+              </Text>
+            </View>
           </Pressable>
         ))}
       </ScrollView>
@@ -103,20 +98,16 @@ export default function SearchCustomerScreen() {
 const styles = StyleSheet.create({
   customerCard: {
     backgroundColor: '#ffffff',
-    borderColor: '#e2e8f0',
+    borderColor: '#cbd5e1',
     borderRadius: 20,
     borderWidth: 1,
-    marginBottom: 12,
     padding: 18,
-  },
-  customerCardPressed: {
-    backgroundColor: '#e0f2fe',
-    borderColor: '#38bdf8',
   },
   customerCode: {
     color: '#64748b',
     fontSize: 14,
     fontWeight: '700',
+    marginBottom: 4,
     marginTop: 4,
   },
   customerHeader: {
@@ -133,12 +124,13 @@ const styles = StyleSheet.create({
   },
   customerName: {
     color: '#020617',
+    flex: 1,
     fontSize: 20,
     fontWeight: '900',
-  },
-  customerTitleBlock: {
-    flex: 1,
     paddingRight: 12,
+  },
+  customerPressable: {
+    marginBottom: 16,
   },
   header: {
     paddingHorizontal: 20,
@@ -155,7 +147,7 @@ const styles = StyleSheet.create({
     color: '#0369a1',
     fontSize: 17,
     fontWeight: '900',
-    marginTop: 18,
+    marginTop: 0,
   },
   route: {
     color: '#334155',
