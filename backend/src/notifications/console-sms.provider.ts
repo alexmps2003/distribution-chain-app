@@ -15,7 +15,7 @@ export class ConsoleSmsProvider implements SmsProvider {
 
   constructor(private readonly configService: ConfigService) {}
 
-  sendSms(to: string, message: string): void {
+  sendSms(to: string, message: string): Promise<void> {
     const payload: SmsPayload = {
       message,
       provider: 'console',
@@ -24,5 +24,7 @@ export class ConsoleSmsProvider implements SmsProvider {
     };
 
     this.logger.log(`SMS payload: ${JSON.stringify(payload)}`);
+
+    return Promise.resolve();
   }
 }

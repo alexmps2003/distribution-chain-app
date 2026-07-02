@@ -8,7 +8,7 @@ export class NotificationsService {
     private readonly smsProvider: SmsProvider,
   ) {}
 
-  sendSms(to: string, message: string): void {
-    this.smsProvider.sendSms(to, message);
+  sendSms(to: string, message: string): Promise<void> {
+    return this.smsProvider.sendSms(to, message);
   }
 }
