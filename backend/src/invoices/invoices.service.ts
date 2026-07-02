@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { asc, eq } from 'drizzle-orm';
@@ -13,12 +14,20 @@ import {
   paymentParts,
   payments,
 } from '../db/schema';
+import { NotificationsService } from '../notifications/notifications.service';
+import { SmsTemplateService } from '../notifications/sms-template.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 
 @Injectable()
 export class InvoicesService {
-  constructor(private readonly databaseService: DatabaseService) {}
+  private readonly logger = new Logger(InvoicesService.name);
+
+  constructor(
+    private readonly databaseService: DatabaseService,
+    private readonly notificationsService: NotificationsService,
+    private readonly smsTemplateService: SmsTemplateService,
+  ) {}
 
   async findAll(customerId?: string) {
     const customerRows = await this.databaseService.db
@@ -140,7 +149,39 @@ export class InvoicesService {
       })
       .returning();
 
+    await this.sendInvoiceCreatedSms(invoice);
+
     return invoice;
+  }
+
+  private async sendInvoiceCreatedSms(invoice: typeof invoices.$inferSelect) {
+    try {
+      const [customer] = await this.databaseService.db
+        .select()
+        .from(customers)
+        .where(eq(customers.id, invoice.customerId));
+
+      const phoneNumber = customer?.phone?.trim();
+
+      if (!phoneNumber) {
+        return;
+      }
+
+      const message = this.smsTemplateService.invoiceCreated({
+        amount: invoice.amount,
+        customerName: customer.name,
+        dueDate: invoice.dueDate,
+        invoiceNumber: invoice.invoiceNumber,
+      });
+
+      await this.notificationsService.sendSms(phoneNumber, message);
+    } catch (error) {
+      this.logger.warn(
+        error instanceof Error
+          ? `Invoice SMS notification failed: ${error.message}`
+          : 'Invoice SMS notification failed',
+      );
+    }
   }
 
   async findOne(id: string) {
