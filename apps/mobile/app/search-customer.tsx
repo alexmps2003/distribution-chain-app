@@ -1,8 +1,9 @@
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,7 +11,11 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { apiGet } from '../lib/api-client';
+import {
+  apiGet,
+  getFriendlyError,
+  type FriendlyError,
+} from '../lib/api-client';
 import { useAuth } from '../lib/auth-context';
 
 type Customer = {
@@ -34,45 +39,60 @@ export default function SearchCustomerScreen() {
   const [query, setQuery] = useState('');
   const [customerRows, setCustomerRows] = useState<CustomerRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [screenError, setScreenError] = useState<FriendlyError | null>(null);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadCustomers() {
+  const loadCustomers = useCallback(
+    async ({
+      refreshing = false,
+      shouldUpdate = () => true,
+    }: {
+      refreshing?: boolean;
+      shouldUpdate?: () => boolean;
+    } = {}) => {
       try {
-        setIsLoading(true);
-        setErrorMessage(null);
+        if (refreshing) {
+          setIsRefreshing(true);
+        } else {
+          setIsLoading(true);
+        }
+        setScreenError(null);
 
         const rows = await apiGet<CustomerRow[]>(
           '/customers',
           accessToken ?? undefined,
         );
 
-        if (isMounted) {
+        if (shouldUpdate()) {
           setCustomerRows(rows);
         }
       } catch (error) {
-        if (isMounted) {
-          setErrorMessage(
-            error instanceof Error
-              ? error.message
-              : 'Unable to load customers right now.',
+        if (shouldUpdate()) {
+          setScreenError(
+            getFriendlyError(error, 'Unable to load customers right now.'),
           );
         }
       } finally {
-        if (isMounted) {
+        if (shouldUpdate()) {
           setIsLoading(false);
+          setIsRefreshing(false);
         }
       }
-    }
+    },
+    [accessToken],
+  );
 
-    void loadCustomers();
+  useEffect(() => {
+    let isMounted = true;
+
+    void loadCustomers({
+      shouldUpdate: () => isMounted,
+    });
 
     return () => {
       isMounted = false;
     };
-  }, [accessToken]);
+  }, [loadCustomers]);
 
   const filteredCustomers = useMemo(() => {
     const searchTerm = query.trim().toLowerCase();
@@ -88,6 +108,16 @@ export default function SearchCustomerScreen() {
       );
     });
   }, [customerRows, query]);
+
+  const isInitialLoading = isLoading && customerRows.length === 0;
+
+  function retryCustomers() {
+    void loadCustomers();
+  }
+
+  function refreshCustomers() {
+    void loadCustomers({ refreshing: true });
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -110,55 +140,67 @@ export default function SearchCustomerScreen() {
         />
       </View>
 
-      {isLoading ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyStateText}>Loading customers...</Text>
-        </View>
-      ) : errorMessage ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyStateText}>{errorMessage}</Text>
-        </View>
-      ) : filteredCustomers.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyStateText}>No customers found.</Text>
-        </View>
-      ) : (
-        <ScrollView
-          style={styles.customerList}
-          contentContainerStyle={styles.customerListContent}
-          keyboardShouldPersistTaps="handled"
-        >
-          {filteredCustomers.map(({ customer, summary }) => (
-            <Pressable
-              key={customer.id}
-              style={styles.customerPressable}
-              onPress={() => {
-                router.push({
-                  pathname: '/customer-payment',
-                  params: {
-                    customerId: customer.id,
-                  },
-                });
-              }}
-            >
-              <View style={styles.customerCard}>
-                <View style={styles.customerHeader}>
-                  <Text style={styles.customerName}>{customer.name}</Text>
-                  <Text style={styles.route}>
-                    {customer.routeName?.trim() || 'Route unavailable'}
-                  </Text>
-                </View>
-
-                <Text style={styles.customerCode}>{customer.code}</Text>
-
-                <Text style={styles.outstanding}>
-                  {formatOutstanding(summary?.totalOutstanding)}
-                </Text>
+      <ScrollView
+        style={styles.customerList}
+        contentContainerStyle={styles.customerListContent}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={refreshCustomers}
+            tintColor="#0369a1"
+          />
+        }
+      >
+        {isInitialLoading ? (
+          <View style={styles.stateCard}>
+            <Text style={styles.stateText}>Loading customers...</Text>
+          </View>
+        ) : screenError && customerRows.length === 0 ? (
+          <ErrorCard error={screenError} onRetry={retryCustomers} />
+        ) : (
+          <>
+            {screenError ? (
+              <ErrorCard error={screenError} onRetry={retryCustomers} />
+            ) : null}
+            {filteredCustomers.length === 0 ? (
+              <View style={styles.stateCard}>
+                <Text style={styles.stateText}>No customers found.</Text>
               </View>
-            </Pressable>
-          ))}
-        </ScrollView>
-      )}
+            ) : (
+              filteredCustomers.map(({ customer, summary }) => (
+                <Pressable
+                  key={customer.id}
+                  style={styles.customerPressable}
+                  onPress={() => {
+                    router.push({
+                      pathname: '/customer-payment',
+                      params: {
+                        customerId: customer.id,
+                      },
+                    });
+                  }}
+                >
+                  <View style={styles.customerCard}>
+                    <View style={styles.customerHeader}>
+                      <Text style={styles.customerName}>{customer.name}</Text>
+                      <Text style={styles.route}>
+                        {customer.routeName?.trim() || 'Route unavailable'}
+                      </Text>
+                    </View>
+
+                    <Text style={styles.customerCode}>{customer.code}</Text>
+
+                    <Text style={styles.outstanding}>
+                      {formatOutstanding(summary?.totalOutstanding)}
+                    </Text>
+                  </View>
+                </Pressable>
+              ))
+            )}
+          </>
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -172,6 +214,26 @@ function formatOutstanding(value: string | number | null | undefined) {
     maximumFractionDigits: 2,
     minimumFractionDigits: 2,
   })}`;
+}
+
+function ErrorCard({
+  error,
+  onRetry,
+}: {
+  error: FriendlyError;
+  onRetry: () => void;
+}) {
+  return (
+    <View style={styles.stateCard}>
+      <Text style={styles.stateText}>{error.message}</Text>
+      {error.detail ? (
+        <Text style={styles.stateDetail}>{error.detail}</Text>
+      ) : null}
+      <Pressable style={styles.retryButton} onPress={onRetry}>
+        <Text style={styles.retryButtonText}>Retry</Text>
+      </Pressable>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -248,6 +310,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
   },
+  retryButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#020617',
+    borderRadius: 14,
+    marginTop: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  retryButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '900',
+  },
   safeArea: {
     backgroundColor: '#f1f5f9',
     flex: 1,
@@ -267,6 +342,26 @@ const styles = StyleSheet.create({
     paddingBottom: 18,
     paddingHorizontal: 20,
     paddingTop: 20,
+  },
+  stateCard: {
+    backgroundColor: '#ffffff',
+    borderColor: '#e2e8f0',
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 20,
+  },
+  stateDetail: {
+    color: '#94a3b8',
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 18,
+    marginTop: 8,
+  },
+  stateText: {
+    color: '#64748b',
+    fontSize: 16,
+    fontWeight: '700',
+    lineHeight: 22,
   },
   title: {
     color: '#020617',
