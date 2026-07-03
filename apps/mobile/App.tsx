@@ -3,7 +3,14 @@ import './global.css';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiGet } from './lib/api-client';
 import { useAuth } from './lib/auth-context';
@@ -74,6 +81,20 @@ export default function App() {
     [isLoadingSummary, summary],
   );
 
+  function confirmLogout() {
+    Alert.alert('Logout', 'Are you sure you want to log out?', [
+      {
+        style: 'cancel',
+        text: 'Cancel',
+      },
+      {
+        onPress: logout,
+        style: 'destructive',
+        text: 'Logout',
+      },
+    ]);
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
@@ -85,7 +106,7 @@ export default function App() {
         <View style={styles.header}>
           <View style={styles.headerTop}>
             <Text style={styles.kicker}>Distribio Collector</Text>
-            <Pressable style={styles.logoutButton} onPress={logout}>
+            <Pressable style={styles.logoutButton} onPress={confirmLogout}>
               <Text style={styles.logoutButtonText}>Logout</Text>
             </Pressable>
           </View>

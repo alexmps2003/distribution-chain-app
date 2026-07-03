@@ -724,6 +724,25 @@ export default function CustomerPaymentScreen() {
     }
   }
 
+  function confirmSavePayment() {
+    Alert.alert(
+      'Confirm Payment',
+      'Are you sure you want to record this payment?\nThis action cannot be undone from the collector app.',
+      [
+        {
+          style: 'cancel',
+          text: 'Cancel',
+        },
+        {
+          onPress: () => {
+            void savePayment();
+          },
+          text: 'Save Payment',
+        },
+      ],
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
@@ -1148,7 +1167,7 @@ export default function CustomerPaymentScreen() {
                           : null,
                       ]}
                       disabled={isSavePaymentDisabled}
-                      onPress={savePayment}
+                      onPress={confirmSavePayment}
                     >
                       <Text style={styles.savePaymentButtonText}>
                         {isSaving ? 'Saving...' : 'Save Payment'}
