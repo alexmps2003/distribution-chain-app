@@ -76,6 +76,34 @@ const paymentMethods: { id: PaymentMethod; label: string }[] = [
   { id: 'CARD', label: 'Card' },
 ];
 
+const BANK_OPTIONS = [
+  'Amana Bank PLC',
+  'Bank of Ceylon',
+  'Bank of China Limited',
+  'Cargills Bank PLC',
+  'Citibank, N.A.',
+  'Commercial Bank of Ceylon PLC',
+  'Deutsche Bank AG, Colombo Branch',
+  'DFCC Bank PLC',
+  'Habib Bank Ltd',
+  'Hatton National Bank PLC',
+  'Indian Bank',
+  'Indian Overseas Bank',
+  'MCB Bank Ltd',
+  'National Development Bank PLC',
+  'Nations Trust Bank PLC',
+  'Pan Asia Banking Corporation PLC',
+  "People's Bank",
+  'Public Bank Berhad',
+  'Sampath Bank PLC',
+  'Seylan Bank PLC',
+  'Standard Chartered Bank',
+  'State Bank of India',
+  'The Hongkong & Shanghai Banking Corporation Ltd (HSBC)',
+  'Union Bank of Colombo PLC',
+  'Other',
+] as const;
+
 const emptyMethodDraft: MethodDraft = {
   amount: '',
   bankReference: '',
@@ -108,6 +136,7 @@ export default function CustomerPaymentScreen() {
   >(createInitialMethodDrafts);
   const [addedMethods, setAddedMethods] = useState<AddedMethod[]>([]);
   const [isChequeDatePickerOpen, setIsChequeDatePickerOpen] = useState(false);
+  const [isChequeBankPickerOpen, setIsChequeBankPickerOpen] = useState(false);
   const [methodMessage, setMethodMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -137,6 +166,7 @@ export default function CustomerPaymentScreen() {
           setMethodDrafts(createInitialMethodDrafts());
           setAddedMethods([]);
           setIsChequeDatePickerOpen(false);
+          setIsChequeBankPickerOpen(false);
           setMethodMessage('');
         }
       } catch (error) {
@@ -176,6 +206,15 @@ export default function CustomerPaymentScreen() {
     }, 0);
   }, [allocations, openInvoices]);
 
+  const addedMethodsTotalCents = useMemo(() => {
+    return addedMethods.reduce((total, method) => {
+      return total + toCents(method.amount);
+    }, 0);
+  }, [addedMethods]);
+
+  const selectedMethodDraft = methodDrafts[selectedMethod];
+  const selectedMethodAmountCents = toCents(selectedMethodDraft.amount);
+
   function updateAllocation(invoice: InvoiceRow, value: string) {
     const invoiceId = invoice.invoice.id;
     const sanitizedValue = sanitizeAllocationInput(value);
@@ -186,6 +225,7 @@ export default function CustomerPaymentScreen() {
         ? formatInputFromCents(outstandingCents)
         : sanitizedValue;
 
+    setMethodMessage('');
     setAllocations((current) => ({
       ...current,
       [invoiceId]: nextValue,
@@ -195,6 +235,7 @@ export default function CustomerPaymentScreen() {
   function updateMethodDraft(field: keyof MethodDraft, value: string) {
     const nextValue = field === 'amount' ? sanitizeAllocationInput(value) : value;
 
+    setMethodMessage('');
     setMethodDrafts((current) => ({
       ...current,
       [selectedMethod]: {
@@ -208,8 +249,18 @@ export default function CustomerPaymentScreen() {
     const draft = methodDrafts[selectedMethod];
     const amountCents = toCents(draft.amount);
 
+    if (totalAllocatedCents <= 0) {
+      setMethodMessage('Allocate at least one invoice before adding a method.');
+      return;
+    }
+
     if (amountCents <= 0) {
       setMethodMessage('Method amount must be greater than 0.');
+      return;
+    }
+
+    if (addedMethodsTotalCents + amountCents > totalAllocatedCents) {
+      setMethodMessage('Added methods cannot exceed total invoice allocation.');
       return;
     }
 
@@ -275,6 +326,7 @@ export default function CustomerPaymentScreen() {
       [selectedMethod]: { ...emptyMethodDraft },
     }));
     setIsChequeDatePickerOpen(false);
+    setIsChequeBankPickerOpen(false);
     setMethodMessage('');
   }
 
@@ -308,7 +360,27 @@ export default function CustomerPaymentScreen() {
     }, 250);
   }
 
-  const selectedMethodDraft = methodDrafts[selectedMethod];
+  function getAddMethodDisabledMessage() {
+    if (totalAllocatedCents <= 0) {
+      return 'Allocate at least one invoice before adding a method.';
+    }
+
+    if (selectedMethodAmountCents <= 0) {
+      return 'Enter a method amount greater than 0.';
+    }
+
+    if (
+      addedMethodsTotalCents + selectedMethodAmountCents >
+      totalAllocatedCents
+    ) {
+      return 'Added methods cannot exceed total invoice allocation.';
+    }
+
+    return '';
+  }
+
+  const addMethodDisabledMessage = getAddMethodDisabledMessage();
+  const isAddMethodDisabled = addMethodDisabledMessage !== '';
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -433,6 +505,7 @@ export default function CustomerPaymentScreen() {
                           onPress={() => {
                             setSelectedMethod(method.id);
                             setIsChequeDatePickerOpen(false);
+                            setIsChequeBankPickerOpen(false);
                             setMethodMessage('');
                           }}
                           style={[
@@ -474,17 +547,24 @@ export default function CustomerPaymentScreen() {
                             updateMethodDraft('chequeNumber', value);
                           }}
                         />
-                        <PaymentField
-                          label="Bank"
+                        <BankSelectField
                           value={selectedMethodDraft.chequeBank}
-                          onChangeText={(value) => {
-                            updateMethodDraft('chequeBank', value);
+                          isOpen={isChequeBankPickerOpen}
+                          onToggle={() => {
+                            Keyboard.dismiss();
+                            setIsChequeDatePickerOpen(false);
+                            setIsChequeBankPickerOpen((current) => !current);
+                          }}
+                          onSelect={(bank) => {
+                            updateMethodDraft('chequeBank', bank);
+                            setIsChequeBankPickerOpen(false);
                           }}
                         />
                         <ChequeDateField
                           value={selectedMethodDraft.chequeDate}
                           onPress={() => {
                             Keyboard.dismiss();
+                            setIsChequeBankPickerOpen(false);
                             setIsChequeDatePickerOpen(true);
                           }}
                         />
@@ -533,11 +613,22 @@ export default function CustomerPaymentScreen() {
                     ) : null}
                   </View>
 
-                  {methodMessage ? (
-                    <Text style={styles.methodMessage}>{methodMessage}</Text>
+                  {addMethodDisabledMessage || methodMessage ? (
+                    <Text style={styles.methodMessage}>
+                      {methodMessage || addMethodDisabledMessage}
+                    </Text>
                   ) : null}
 
-                  <Pressable style={styles.addMethodButton} onPress={addMethod}>
+                  <Pressable
+                    style={[
+                      styles.addMethodButton,
+                      isAddMethodDisabled
+                        ? styles.addMethodButtonDisabled
+                        : null,
+                    ]}
+                    disabled={isAddMethodDisabled}
+                    onPress={addMethod}
+                  >
                     <Text style={styles.addMethodButtonText}>Add Method</Text>
                   </Pressable>
 
@@ -645,6 +736,48 @@ function getMethodDetails(method: PaymentMethod, draft: MethodDraft) {
   }
 
   return '';
+}
+
+function BankSelectField({
+  isOpen,
+  onSelect,
+  onToggle,
+  value,
+}: {
+  isOpen: boolean;
+  onSelect: (bank: string) => void;
+  onToggle: () => void;
+  value: string;
+}) {
+  return (
+    <View style={styles.paymentField}>
+      <Text style={styles.paymentFieldLabel}>Bank</Text>
+      <Pressable style={styles.bankSelectButton} onPress={onToggle}>
+        <Text
+          style={value ? styles.bankSelectValue : styles.bankSelectPlaceholder}
+        >
+          {value || 'Select bank'}
+        </Text>
+      </Pressable>
+      {isOpen ? (
+        <View style={styles.bankOptionList}>
+          <ScrollView nestedScrollEnabled>
+            {BANK_OPTIONS.map((bank) => (
+              <Pressable
+                key={bank}
+                style={styles.bankOption}
+                onPress={() => {
+                  onSelect(bank);
+                }}
+              >
+                <Text style={styles.bankOptionText}>{bank}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      ) : null}
+    </View>
+  );
 }
 
 function ChequeDateField({
@@ -782,6 +915,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '900',
   },
+  addMethodButtonDisabled: {
+    backgroundColor: '#cbd5e1',
+  },
   addedMethodAmount: {
     color: '#0369a1',
     fontSize: 16,
@@ -854,6 +990,41 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '900',
     marginTop: 4,
+  },
+  bankOption: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  bankOptionList: {
+    backgroundColor: '#ffffff',
+    borderColor: '#cbd5e1',
+    borderRadius: 14,
+    borderWidth: 1,
+    maxHeight: 220,
+    overflow: 'hidden',
+  },
+  bankOptionText: {
+    color: '#020617',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  bankSelectButton: {
+    backgroundColor: '#f8fafc',
+    borderColor: '#cbd5e1',
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  bankSelectPlaceholder: {
+    color: '#94a3b8',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  bankSelectValue: {
+    color: '#020617',
+    fontSize: 16,
+    fontWeight: '700',
   },
   chequeDateButton: {
     backgroundColor: '#f8fafc',
