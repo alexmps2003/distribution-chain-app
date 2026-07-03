@@ -58,6 +58,11 @@ type MethodDraft = {
 };
 
 type AddedMethod = {
+  allocations: {
+    amount: string;
+    invoiceId: string;
+    invoiceNumber: string;
+  }[];
   amount: string;
   bankReference?: string;
   bankTransferBank?: string;
@@ -123,6 +128,18 @@ function createInitialMethodDrafts(): Record<PaymentMethod, MethodDraft> {
   };
 }
 
+function createInitialMethodAllocationDrafts(): Record<
+  PaymentMethod,
+  Record<string, string>
+> {
+  return {
+    BANK_TRANSFER: {},
+    CARD: {},
+    CASH: {},
+    CHEQUE: {},
+  };
+}
+
 export default function CustomerPaymentScreen() {
   const { accessToken } = useAuth();
   const { customerId } = useLocalSearchParams<{ customerId?: string }>();
@@ -134,6 +151,9 @@ export default function CustomerPaymentScreen() {
   const [methodDrafts, setMethodDrafts] = useState<
     Record<PaymentMethod, MethodDraft>
   >(createInitialMethodDrafts);
+  const [methodAllocationDrafts, setMethodAllocationDrafts] = useState<
+    Record<PaymentMethod, Record<string, string>>
+  >(createInitialMethodAllocationDrafts);
   const [addedMethods, setAddedMethods] = useState<AddedMethod[]>([]);
   const [isChequeDatePickerOpen, setIsChequeDatePickerOpen] = useState(false);
   const [isChequeBankPickerOpen, setIsChequeBankPickerOpen] = useState(false);
@@ -164,6 +184,7 @@ export default function CustomerPaymentScreen() {
           setData(response);
           setAllocations({});
           setMethodDrafts(createInitialMethodDrafts());
+          setMethodAllocationDrafts(createInitialMethodAllocationDrafts());
           setAddedMethods([]);
           setIsChequeDatePickerOpen(false);
           setIsChequeBankPickerOpen(false);
@@ -213,7 +234,67 @@ export default function CustomerPaymentScreen() {
   }, [addedMethods]);
 
   const selectedMethodDraft = methodDrafts[selectedMethod];
+  const selectedMethodAllocationDraft = methodAllocationDrafts[selectedMethod];
   const selectedMethodAmountCents = toCents(selectedMethodDraft.amount);
+
+  const selectedAllocationInvoices = useMemo(() => {
+    return openInvoices
+      .map((invoice) => {
+        const invoiceId = invoice.invoice.id;
+
+        return {
+          allocatedCents: toCents(allocations[invoiceId] ?? ''),
+          invoiceId,
+          invoiceNumber: invoice.invoice.invoiceNumber,
+        };
+      })
+      .filter((invoice) => invoice.allocatedCents > 0);
+  }, [allocations, openInvoices]);
+
+  const addedAllocationByInvoice = useMemo(() => {
+    return addedMethods.reduce<Record<string, number>>((totals, method) => {
+      for (const allocation of method.allocations) {
+        totals[allocation.invoiceId] =
+          (totals[allocation.invoiceId] ?? 0) + toCents(allocation.amount);
+      }
+
+      return totals;
+    }, {});
+  }, [addedMethods]);
+
+  const remainingAllocationByInvoice = useMemo(() => {
+    return selectedAllocationInvoices.reduce<Record<string, number>>(
+      (remaining, invoice) => {
+        const alreadyAdded = addedAllocationByInvoice[invoice.invoiceId] ?? 0;
+
+        remaining[invoice.invoiceId] = Math.max(
+          invoice.allocatedCents - alreadyAdded,
+          0,
+        );
+
+        return remaining;
+      },
+      {},
+    );
+  }, [addedAllocationByInvoice, selectedAllocationInvoices]);
+
+  const selectedMethodAllocationTotalCents = useMemo(() => {
+    return selectedAllocationInvoices.reduce((total, invoice) => {
+      return (
+        total +
+        toCents(selectedMethodAllocationDraft[invoice.invoiceId] ?? '')
+      );
+    }, 0);
+  }, [selectedAllocationInvoices, selectedMethodAllocationDraft]);
+
+  const hasMethodAllocationOverRemaining = selectedAllocationInvoices.some(
+    (invoice) => {
+      return (
+        toCents(selectedMethodAllocationDraft[invoice.invoiceId] ?? '') >
+        (remainingAllocationByInvoice[invoice.invoiceId] ?? 0)
+      );
+    },
+  );
 
   function updateAllocation(invoice: InvoiceRow, value: string) {
     const invoiceId = invoice.invoice.id;
@@ -245,6 +326,25 @@ export default function CustomerPaymentScreen() {
     }));
   }
 
+  function updateMethodAllocation(invoiceId: string, value: string) {
+    const sanitizedValue = sanitizeAllocationInput(value);
+    const requestedCents = toCents(sanitizedValue);
+    const remainingCents = remainingAllocationByInvoice[invoiceId] ?? 0;
+    const nextValue =
+      requestedCents > remainingCents
+        ? formatInputFromCents(remainingCents)
+        : sanitizedValue;
+
+    setMethodMessage('');
+    setMethodAllocationDrafts((current) => ({
+      ...current,
+      [selectedMethod]: {
+        ...current[selectedMethod],
+        [invoiceId]: nextValue,
+      },
+    }));
+  }
+
   function addMethod() {
     const draft = methodDrafts[selectedMethod];
     const amountCents = toCents(draft.amount);
@@ -259,8 +359,25 @@ export default function CustomerPaymentScreen() {
       return;
     }
 
+    if (selectedAllocationInvoices.length === 0) {
+      setMethodMessage('Allocate at least one invoice before adding a method.');
+      return;
+    }
+
     if (addedMethodsTotalCents + amountCents > totalAllocatedCents) {
       setMethodMessage('Added methods cannot exceed total invoice allocation.');
+      return;
+    }
+
+    if (selectedMethodAllocationTotalCents !== amountCents) {
+      setMethodMessage('Method allocations must equal the method amount.');
+      return;
+    }
+
+    if (hasMethodAllocationOverRemaining) {
+      setMethodMessage(
+        'Method allocation cannot exceed invoice remaining amount.',
+      );
       return;
     }
 
@@ -298,9 +415,25 @@ export default function CustomerPaymentScreen() {
       return;
     }
 
+    const methodAllocations = selectedAllocationInvoices
+      .map((invoice) => ({
+        amount: formatInputFromCents(
+          toCents(selectedMethodAllocationDraft[invoice.invoiceId] ?? ''),
+        ),
+        invoiceId: invoice.invoiceId,
+        invoiceNumber: invoice.invoiceNumber,
+      }))
+      .filter((allocation) => toCents(allocation.amount) > 0);
+
+    if (methodAllocations.length === 0) {
+      setMethodMessage('Add at least one method allocation amount.');
+      return;
+    }
+
     const addedMethod: AddedMethod = {
       method: selectedMethod,
       amount: formatInputFromCents(amountCents),
+      allocations: methodAllocations,
       details: getMethodDetails(selectedMethod, draft),
       chequeNumber:
         selectedMethod === 'CHEQUE' ? draft.chequeNumber.trim() : undefined,
@@ -324,6 +457,10 @@ export default function CustomerPaymentScreen() {
     setMethodDrafts((current) => ({
       ...current,
       [selectedMethod]: { ...emptyMethodDraft },
+    }));
+    setMethodAllocationDrafts((current) => ({
+      ...current,
+      [selectedMethod]: {},
     }));
     setIsChequeDatePickerOpen(false);
     setIsChequeBankPickerOpen(false);
@@ -385,6 +522,18 @@ export default function CustomerPaymentScreen() {
       totalAllocatedCents
     ) {
       return 'Added methods cannot exceed total invoice allocation.';
+    }
+
+    if (selectedAllocationInvoices.length === 0) {
+      return 'Allocate at least one invoice before adding a method.';
+    }
+
+    if (hasMethodAllocationOverRemaining) {
+      return 'Method allocation cannot exceed invoice remaining amount.';
+    }
+
+    if (selectedMethodAllocationTotalCents !== selectedMethodAmountCents) {
+      return 'Method allocations must equal the method amount.';
     }
 
     return '';
@@ -620,6 +769,72 @@ export default function CustomerPaymentScreen() {
                     ) : null}
                   </View>
 
+                  <View style={styles.methodAllocationCard}>
+                    <Text style={styles.methodAllocationTitle}>
+                      Method Allocations
+                    </Text>
+
+                    {selectedAllocationInvoices.length === 0 ? (
+                      <Text style={styles.methodAllocationEmptyText}>
+                        Allocate invoices above to allocate this method.
+                      </Text>
+                    ) : (
+                      <View style={styles.methodAllocationList}>
+                        {selectedAllocationInvoices.map((invoice) => {
+                          const remainingCents =
+                            remainingAllocationByInvoice[invoice.invoiceId] ??
+                            0;
+
+                          return (
+                            <View
+                              key={invoice.invoiceId}
+                              style={styles.methodAllocationRow}
+                            >
+                              <View style={styles.methodAllocationInfo}>
+                                <Text style={styles.methodAllocationInvoice}>
+                                  {invoice.invoiceNumber}
+                                </Text>
+                                <Text style={styles.methodAllocationRemaining}>
+                                  Remaining{' '}
+                                  {formatMoneyFromCents(remainingCents)}
+                                </Text>
+                              </View>
+
+                              <TextInput
+                                value={
+                                  selectedMethodAllocationDraft[
+                                    invoice.invoiceId
+                                  ] ?? ''
+                                }
+                                onChangeText={(value) => {
+                                  updateMethodAllocation(
+                                    invoice.invoiceId,
+                                    value,
+                                  );
+                                }}
+                                placeholder="0.00"
+                                placeholderTextColor="#94a3b8"
+                                keyboardType="decimal-pad"
+                                style={styles.methodAllocationInput}
+                              />
+                            </View>
+                          );
+                        })}
+                      </View>
+                    )}
+
+                    <View style={styles.methodAllocationTotalRow}>
+                      <Text style={styles.methodAllocationTotalLabel}>
+                        Method Allocation Total
+                      </Text>
+                      <Text style={styles.methodAllocationTotalValue}>
+                        {formatMoneyFromCents(
+                          selectedMethodAllocationTotalCents,
+                        )}
+                      </Text>
+                    </View>
+                  </View>
+
                   {addMethodDisabledMessage || methodMessage ? (
                     <Text style={styles.methodMessage}>
                       {methodMessage || addMethodDisabledMessage}
@@ -664,6 +879,17 @@ export default function CustomerPaymentScreen() {
                           <Text style={styles.addedMethodDetails}>
                             {method.details || '-'}
                           </Text>
+                          <View style={styles.addedMethodAllocations}>
+                            {method.allocations.map((allocation) => (
+                              <Text
+                                key={allocation.invoiceId}
+                                style={styles.addedMethodAllocationText}
+                              >
+                                {allocation.invoiceNumber}:{' '}
+                                {formatMoney(allocation.amount)}
+                              </Text>
+                            ))}
+                          </View>
                         </View>
                       ))
                     )}
@@ -930,6 +1156,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '900',
   },
+  addedMethodAllocationText: {
+    color: '#475569',
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 19,
+  },
+  addedMethodAllocations: {
+    gap: 4,
+    marginTop: 10,
+  },
   addedMethodCard: {
     backgroundColor: '#ffffff',
     borderColor: '#cbd5e1',
@@ -1152,6 +1388,81 @@ const styles = StyleSheet.create({
   },
   methodButtonTextSelected: {
     color: '#ffffff',
+  },
+  methodAllocationCard: {
+    backgroundColor: '#ffffff',
+    borderColor: '#cbd5e1',
+    borderRadius: 20,
+    borderWidth: 1,
+    marginTop: 14,
+    padding: 18,
+  },
+  methodAllocationEmptyText: {
+    color: '#64748b',
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 20,
+    marginTop: 12,
+  },
+  methodAllocationInfo: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  methodAllocationInput: {
+    backgroundColor: '#f8fafc',
+    borderColor: '#cbd5e1',
+    borderRadius: 14,
+    borderWidth: 1,
+    color: '#020617',
+    fontSize: 16,
+    fontWeight: '800',
+    minWidth: 118,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    textAlign: 'right',
+  },
+  methodAllocationInvoice: {
+    color: '#020617',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  methodAllocationList: {
+    gap: 12,
+    marginTop: 14,
+  },
+  methodAllocationRemaining: {
+    color: '#64748b',
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  methodAllocationRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+  },
+  methodAllocationTitle: {
+    color: '#020617',
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  methodAllocationTotalLabel: {
+    color: '#64748b',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  methodAllocationTotalRow: {
+    alignItems: 'center',
+    borderTopColor: '#e2e8f0',
+    borderTopWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 16,
+    paddingTop: 14,
+  },
+  methodAllocationTotalValue: {
+    color: '#020617',
+    fontSize: 15,
+    fontWeight: '900',
   },
   methodFormCard: {
     backgroundColor: '#ffffff',
