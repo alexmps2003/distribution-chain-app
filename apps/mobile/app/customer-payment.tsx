@@ -177,6 +177,9 @@ export default function CustomerPaymentScreen() {
   >(createInitialMethodAllocationDrafts);
   const [addedMethods, setAddedMethods] = useState<AddedMethod[]>([]);
   const [isChequeDatePickerOpen, setIsChequeDatePickerOpen] = useState(false);
+  const [chequeDatePickerValue, setChequeDatePickerValue] = useState(
+    () => new Date(),
+  );
   const [isChequeBankPickerOpen, setIsChequeBankPickerOpen] = useState(false);
   const [methodMessage, setMethodMessage] = useState('');
   const [saveMessage, setSaveMessage] = useState('');
@@ -210,6 +213,7 @@ export default function CustomerPaymentScreen() {
           setMethodAllocationDrafts(createInitialMethodAllocationDrafts());
           setAddedMethods([]);
           setIsChequeDatePickerOpen(false);
+          setChequeDatePickerValue(new Date());
           setIsChequeBankPickerOpen(false);
           setMethodMessage('');
           setSaveMessage('');
@@ -528,23 +532,32 @@ export default function CustomerPaymentScreen() {
   ) {
     if (Platform.OS === 'android') {
       setIsChequeDatePickerOpen(false);
-    }
 
-    if (event.type === 'dismissed' || !selectedDate) {
+      if (event.type !== 'dismissed' && selectedDate) {
+        updateMethodDraft('chequeDate', formatDateInput(selectedDate));
+      }
+
       return;
     }
 
-    updateMethodDraft('chequeDate', formatDateInput(selectedDate));
+    if (selectedDate) {
+      setChequeDatePickerValue(selectedDate);
+    }
+  }
+
+  function confirmChequeDate() {
+    updateMethodDraft('chequeDate', formatDateInput(chequeDatePickerValue));
+    setIsChequeDatePickerOpen(false);
+  }
+
+  function cancelChequeDate() {
+    setIsChequeDatePickerOpen(false);
   }
 
   function openChequeDatePicker() {
     Keyboard.dismiss();
     setIsChequeBankPickerOpen(false);
-
-    if (!selectedMethodDraft.chequeDate) {
-      updateMethodDraft('chequeDate', formatDateInput(new Date()));
-    }
-
+    setChequeDatePickerValue(getDatePickerValue(selectedMethodDraft.chequeDate));
     setIsChequeDatePickerOpen(true);
   }
 
@@ -631,6 +644,7 @@ export default function CustomerPaymentScreen() {
     setMethodAllocationDrafts(createInitialMethodAllocationDrafts());
     setAddedMethods([]);
     setIsChequeDatePickerOpen(false);
+    setChequeDatePickerValue(new Date());
     setIsChequeBankPickerOpen(false);
     setMethodMessage('');
     setSaveMessage('');
@@ -885,16 +899,52 @@ export default function CustomerPaymentScreen() {
                           onPress={openChequeDatePicker}
                         />
                         {isChequeDatePickerOpen ? (
-                          <DateTimePicker
-                            value={getDatePickerValue(
-                              selectedMethodDraft.chequeDate,
-                            )}
-                            mode="date"
-                            display={
-                              Platform.OS === 'ios' ? 'spinner' : 'default'
-                            }
-                            onChange={updateChequeDate}
-                          />
+                          <>
+                            <DateTimePicker
+                              value={
+                                Platform.OS === 'ios'
+                                  ? chequeDatePickerValue
+                                  : getDatePickerValue(
+                                      selectedMethodDraft.chequeDate,
+                                    )
+                              }
+                              mode="date"
+                              display={
+                                Platform.OS === 'ios' ? 'spinner' : 'default'
+                              }
+                              onChange={updateChequeDate}
+                            />
+                            {Platform.OS === 'ios' ? (
+                              <View style={styles.chequeDatePickerActions}>
+                                <Pressable
+                                  style={[
+                                    styles.chequeDatePickerButton,
+                                    styles.chequeDatePickerCancelButton,
+                                  ]}
+                                  onPress={cancelChequeDate}
+                                >
+                                  <Text
+                                    style={styles.chequeDatePickerCancelText}
+                                  >
+                                    Cancel
+                                  </Text>
+                                </Pressable>
+                                <Pressable
+                                  style={[
+                                    styles.chequeDatePickerButton,
+                                    styles.chequeDatePickerDoneButton,
+                                  ]}
+                                  onPress={confirmChequeDate}
+                                >
+                                  <Text
+                                    style={styles.chequeDatePickerDoneText}
+                                  >
+                                    Done
+                                  </Text>
+                                </Pressable>
+                              </View>
+                            ) : null}
+                          </>
                         ) : null}
                       </>
                     ) : null}
@@ -1469,6 +1519,36 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 14,
     paddingVertical: 12,
+  },
+  chequeDatePickerActions: {
+    flexDirection: 'row',
+    gap: 10,
+    justifyContent: 'flex-end',
+  },
+  chequeDatePickerButton: {
+    alignItems: 'center',
+    borderRadius: 12,
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  chequeDatePickerCancelButton: {
+    backgroundColor: '#ffffff',
+    borderColor: '#cbd5e1',
+    borderWidth: 1,
+  },
+  chequeDatePickerCancelText: {
+    color: '#334155',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  chequeDatePickerDoneButton: {
+    backgroundColor: '#020617',
+  },
+  chequeDatePickerDoneText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '900',
   },
   chequeDatePlaceholder: {
     color: '#94a3b8',
