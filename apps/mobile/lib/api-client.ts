@@ -18,6 +18,36 @@ function buildHeaders(token?: string) {
   };
 }
 
+async function getErrorMessage(response: Response, fallback: string) {
+  const text = await response.text();
+
+  if (!text) {
+    return fallback;
+  }
+
+  try {
+    const payload = JSON.parse(text) as { error?: unknown; message?: unknown };
+
+    if (typeof payload.message === 'string') {
+      return payload.message;
+    }
+
+    if (Array.isArray(payload.message)) {
+      return payload.message
+        .filter((message): message is string => typeof message === 'string')
+        .join('\n');
+    }
+
+    if (typeof payload.error === 'string') {
+      return payload.error;
+    }
+  } catch {
+    return text;
+  }
+
+  return fallback;
+}
+
 export async function apiGet<TResponse>(
   path: string,
   token?: string,
@@ -48,7 +78,12 @@ export async function apiPost<TResponse, TBody>(
   });
 
   if (!response.ok) {
-    throw new Error(`API POST ${path} failed with status ${response.status}`);
+    throw new Error(
+      await getErrorMessage(
+        response,
+        `API POST ${path} failed with status ${response.status}`,
+      ),
+    );
   }
 
   return response.json() as Promise<TResponse>;

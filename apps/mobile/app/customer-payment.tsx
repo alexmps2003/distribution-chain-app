@@ -1,10 +1,11 @@
 import DateTimePicker, {
   type DateTimePickerEvent,
 } from '@react-native-community/datetimepicker';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -17,7 +18,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { apiGet } from '../lib/api-client';
+import { apiGet, apiPost } from '../lib/api-client';
 import { useAuth } from '../lib/auth-context';
 
 type Customer = {
@@ -72,6 +73,25 @@ type AddedMethod = {
   chequeNumber?: string;
   details: string;
   method: PaymentMethod;
+};
+
+type CreatePaymentPayload = {
+  amount: string;
+  customerId: string;
+  methods: {
+    allocations: {
+      amount: string;
+      invoiceId: string;
+    }[];
+    amount: string;
+    bankReference?: string;
+    cardReference?: string;
+    chequeBank?: string;
+    chequeDate?: string;
+    chequeNumber?: string;
+    method: PaymentMethod;
+  }[];
+  notes?: string;
 };
 
 const paymentMethods: { id: PaymentMethod; label: string }[] = [
@@ -143,6 +163,7 @@ function createInitialMethodAllocationDrafts(): Record<
 export default function CustomerPaymentScreen() {
   const { accessToken } = useAuth();
   const { customerId } = useLocalSearchParams<{ customerId?: string }>();
+  const router = useRouter();
   const scrollViewRef = useRef<ScrollView>(null);
   const invoiceLayouts = useRef<Record<string, { y: number }>>({});
   const [data, setData] = useState<CustomerInvoicesResponse | null>(null);
@@ -158,6 +179,8 @@ export default function CustomerPaymentScreen() {
   const [isChequeDatePickerOpen, setIsChequeDatePickerOpen] = useState(false);
   const [isChequeBankPickerOpen, setIsChequeBankPickerOpen] = useState(false);
   const [methodMessage, setMethodMessage] = useState('');
+  const [saveMessage, setSaveMessage] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -189,6 +212,7 @@ export default function CustomerPaymentScreen() {
           setIsChequeDatePickerOpen(false);
           setIsChequeBankPickerOpen(false);
           setMethodMessage('');
+          setSaveMessage('');
         }
       } catch (error) {
         if (isMounted) {
@@ -296,6 +320,33 @@ export default function CustomerPaymentScreen() {
     },
   );
 
+  const hasInvalidAddedMethod = useMemo(() => {
+    return addedMethods.some((method) => {
+      if (toCents(method.amount) <= 0) {
+        return true;
+      }
+
+      if (method.method === 'CHEQUE') {
+        return (
+          !method.chequeNumber?.trim() ||
+          !method.chequeBank?.trim() ||
+          !method.chequeDate?.trim()
+        );
+      }
+
+      return false;
+    });
+  }, [addedMethods]);
+
+  const hasFinalPerInvoiceMismatch = selectedAllocationInvoices.some(
+    (invoice) => {
+      return (
+        (addedAllocationByInvoice[invoice.invoiceId] ?? 0) !==
+        invoice.allocatedCents
+      );
+    },
+  );
+
   function updateAllocation(invoice: InvoiceRow, value: string) {
     const invoiceId = invoice.invoice.id;
     const sanitizedValue = sanitizeAllocationInput(value);
@@ -307,6 +358,7 @@ export default function CustomerPaymentScreen() {
         : sanitizedValue;
 
     setMethodMessage('');
+    setSaveMessage('');
     setAllocations((current) => ({
       ...current,
       [invoiceId]: nextValue,
@@ -317,6 +369,7 @@ export default function CustomerPaymentScreen() {
     const nextValue = field === 'amount' ? sanitizeAllocationInput(value) : value;
 
     setMethodMessage('');
+    setSaveMessage('');
     setMethodDrafts((current) => ({
       ...current,
       [selectedMethod]: {
@@ -336,6 +389,7 @@ export default function CustomerPaymentScreen() {
         : sanitizedValue;
 
     setMethodMessage('');
+    setSaveMessage('');
     setMethodAllocationDrafts((current) => ({
       ...current,
       [selectedMethod]: {
@@ -465,6 +519,7 @@ export default function CustomerPaymentScreen() {
     setIsChequeDatePickerOpen(false);
     setIsChequeBankPickerOpen(false);
     setMethodMessage('');
+    setSaveMessage('');
   }
 
   function updateChequeDate(
@@ -541,6 +596,111 @@ export default function CustomerPaymentScreen() {
 
   const addMethodDisabledMessage = getAddMethodDisabledMessage();
   const isAddMethodDisabled = addMethodDisabledMessage !== '';
+
+  function getSavePaymentDisabledMessage() {
+    if (totalAllocatedCents <= 0) {
+      return 'Allocate at least one invoice before saving.';
+    }
+
+    if (addedMethods.length === 0) {
+      return 'Add at least one payment method before saving.';
+    }
+
+    if (hasInvalidAddedMethod) {
+      return 'Check added payment method details before saving.';
+    }
+
+    if (addedMethodsTotalCents !== totalAllocatedCents) {
+      return 'Added methods must match total invoice allocation.';
+    }
+
+    if (hasFinalPerInvoiceMismatch) {
+      return 'Method allocations for each invoice must match invoice allocations.';
+    }
+
+    return '';
+  }
+
+  const savePaymentDisabledMessage = getSavePaymentDisabledMessage();
+  const isSavePaymentDisabled =
+    isSaving || savePaymentDisabledMessage !== '';
+
+  function resetPaymentState() {
+    setAllocations({});
+    setMethodDrafts(createInitialMethodDrafts());
+    setMethodAllocationDrafts(createInitialMethodAllocationDrafts());
+    setAddedMethods([]);
+    setIsChequeDatePickerOpen(false);
+    setIsChequeBankPickerOpen(false);
+    setMethodMessage('');
+    setSaveMessage('');
+  }
+
+  async function savePayment() {
+    if (savePaymentDisabledMessage) {
+      setSaveMessage(savePaymentDisabledMessage);
+      return;
+    }
+
+    const currentCustomerId = data?.customer.id ?? customerId;
+
+    if (!currentCustomerId) {
+      setSaveMessage('Customer is required.');
+      return;
+    }
+
+    const payload: CreatePaymentPayload = {
+      customerId: currentCustomerId,
+      amount: formatInputFromCents(totalAllocatedCents),
+      methods: addedMethods.map((method) => ({
+        method: method.method,
+        amount: method.amount,
+        chequeNumber: method.chequeNumber,
+        chequeBank: method.chequeBank,
+        chequeDate: method.chequeDate,
+        bankReference: method.bankReference,
+        cardReference: method.cardReference,
+        allocations: method.allocations.map((allocation) => ({
+          invoiceId: allocation.invoiceId,
+          amount: allocation.amount,
+        })),
+      })),
+    };
+
+    try {
+      setIsSaving(true);
+      setSaveMessage('');
+
+      await apiPost<unknown, CreatePaymentPayload>(
+        '/payments',
+        payload,
+        accessToken ?? undefined,
+      );
+
+      resetPaymentState();
+      Alert.alert('Payment saved', 'Payment recorded successfully.', [
+        {
+          text: 'OK',
+          onPress: () => {
+            router.replace('/search-customer');
+          },
+        },
+      ]);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error && error.message
+          ? error.message
+          : '';
+      const message = errorMessage.startsWith('API POST /payments')
+        ? 'Payment failed. Please try again.'
+        : errorMessage || 'Payment failed. Please try again.';
+
+      setSaveMessage(message);
+      Alert.alert('Payment failed', message);
+    } finally {
+      setIsSaving(false);
+    }
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -893,6 +1053,39 @@ export default function CustomerPaymentScreen() {
                         </View>
                       ))
                     )}
+                  </View>
+
+                  <View style={styles.savePaymentSection}>
+                    <Text
+                      style={
+                        savePaymentDisabledMessage
+                          ? styles.savePaymentHint
+                          : styles.savePaymentReady
+                      }
+                    >
+                      {savePaymentDisabledMessage || 'Ready to save payment.'}
+                    </Text>
+
+                    {saveMessage ? (
+                      <Text style={styles.savePaymentMessage}>
+                        {saveMessage}
+                      </Text>
+                    ) : null}
+
+                    <Pressable
+                      style={[
+                        styles.savePaymentButton,
+                        isSavePaymentDisabled
+                          ? styles.savePaymentButtonDisabled
+                          : null,
+                      ]}
+                      disabled={isSavePaymentDisabled}
+                      onPress={savePayment}
+                    >
+                      <Text style={styles.savePaymentButtonText}>
+                        {isSaving ? 'Saving...' : 'Save Payment'}
+                      </Text>
+                    </Pressable>
                   </View>
                 </View>
               </ScrollView>
@@ -1519,6 +1712,43 @@ const styles = StyleSheet.create({
   safeArea: {
     backgroundColor: '#f1f5f9',
     flex: 1,
+  },
+  savePaymentButton: {
+    alignItems: 'center',
+    backgroundColor: '#020617',
+    borderRadius: 16,
+    justifyContent: 'center',
+    paddingVertical: 16,
+  },
+  savePaymentButtonDisabled: {
+    backgroundColor: '#cbd5e1',
+  },
+  savePaymentButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  savePaymentHint: {
+    color: '#64748b',
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 20,
+  },
+  savePaymentMessage: {
+    color: '#b45309',
+    fontSize: 14,
+    fontWeight: '800',
+    lineHeight: 20,
+  },
+  savePaymentReady: {
+    color: '#047857',
+    fontSize: 14,
+    fontWeight: '800',
+    lineHeight: 20,
+  },
+  savePaymentSection: {
+    gap: 12,
+    marginTop: 22,
   },
   screenContent: {
     flex: 1,
