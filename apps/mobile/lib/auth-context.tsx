@@ -25,6 +25,7 @@ type LoginResponse = {
 type AuthContextValue = {
   accessToken: string | null;
   login: (email: string, password: string) => Promise<void>;
+  logout: () => void;
   user: AuthUser | null;
 };
 
@@ -48,6 +49,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         setAccessToken(response.accessToken);
         setUser(response.user);
+      },
+      logout() {
+        setAccessToken(null);
+        setUser(null);
       },
       user,
     }),

@@ -15,7 +15,7 @@ type CollectorSummary = {
 };
 
 export default function App() {
-  const { accessToken } = useAuth();
+  const { accessToken, logout } = useAuth();
   const [summary, setSummary] = useState<CollectorSummary | null>(null);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
 
@@ -83,7 +83,12 @@ export default function App() {
         contentContainerStyle={styles.scrollContent}
       >
         <View style={styles.header}>
-          <Text style={styles.kicker}>Distribio Collector</Text>
+          <View style={styles.headerTop}>
+            <Text style={styles.kicker}>Distribio Collector</Text>
+            <Pressable style={styles.logoutButton} onPress={logout}>
+              <Text style={styles.logoutButtonText}>Logout</Text>
+            </Pressable>
+          </View>
           <Text style={styles.title}>Collect Payment</Text>
           <Text style={styles.subtitle}>
             Select a customer and record today&apos;s payment.
@@ -109,8 +114,22 @@ export default function App() {
             <Text style={styles.primaryButtonText}>Collect Payment</Text>
           </Pressable>
 
-          <Pressable style={styles.secondaryButton}>
+          <Pressable
+            style={styles.secondaryButton}
+            onPress={() => {
+              router.push('/search-customer');
+            }}
+          >
             <Text style={styles.secondaryButtonText}>Search Customer</Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.tertiaryButton}
+            onPress={() => {
+              router.push('/recent-payments');
+            }}
+          >
+            <Text style={styles.tertiaryButtonText}>Recent Payments</Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -159,12 +178,32 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: 20,
   },
+  headerTop: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
   kicker: {
     color: '#0369a1',
+    flex: 1,
     fontSize: 14,
     fontWeight: '800',
     letterSpacing: 0.8,
+    paddingRight: 12,
     textTransform: 'uppercase',
+  },
+  logoutButton: {
+    backgroundColor: '#ffffff',
+    borderColor: '#cbd5e1',
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  logoutButtonText: {
+    color: '#334155',
+    fontSize: 13,
+    fontWeight: '800',
   },
   primaryButton: {
     alignItems: 'center',
@@ -220,6 +259,16 @@ const styles = StyleSheet.create({
     fontSize: 30,
     fontWeight: '800',
     marginTop: 8,
+  },
+  tertiaryButton: {
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  tertiaryButtonText: {
+    color: '#0369a1',
+    fontSize: 15,
+    fontWeight: '900',
   },
   title: {
     color: '#020617',
