@@ -4,7 +4,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import {
   customers,
@@ -94,21 +94,19 @@ export class ChequesService {
         const [cheque] = await tx
           .select()
           .from(paymentParts)
-          .where(eq(paymentParts.id, id));
+          .where(
+            and(eq(paymentParts.id, id), eq(paymentParts.method, 'CHEQUE')),
+          );
 
         if (!cheque) {
           throw new NotFoundException('Cheque not found');
         }
 
-        if (cheque.method !== 'CHEQUE') {
-          throw new BadRequestException(
-            'Only cheque payment parts can be reversed here',
-          );
-        }
-
-        if (cheque.status !== 'ACTIVE') {
+        if (cheque.status === 'REVERSED') {
           throw new BadRequestException('Only active cheques can be reversed');
         }
+
+        await this.linkLegacyAllocationsIfSafe(tx, cheque);
 
         const [updatedCheque] = await tx
           .update(paymentParts)
@@ -120,10 +118,10 @@ export class ChequesService {
           .where(eq(paymentParts.id, cheque.id))
           .returning();
 
-        const chequeAllocations = await tx
-          .select()
-          .from(paymentAllocations)
-          .where(eq(paymentAllocations.paymentPartId, cheque.id));
+        const chequeAllocations = await this.getChequeAllocations(
+          tx,
+          cheque.id,
+        );
 
         const affectedInvoiceIds = [
           ...new Set(
@@ -131,52 +129,7 @@ export class ChequesService {
           ),
         ];
 
-        for (const invoiceId of affectedInvoiceIds) {
-          const [invoice] = await tx
-            .select()
-            .from(invoices)
-            .where(eq(invoices.id, invoiceId));
-
-          if (!invoice) {
-            continue;
-          }
-
-          const invoiceAllocations = await tx
-            .select()
-            .from(paymentAllocations)
-            .where(eq(paymentAllocations.invoiceId, invoiceId));
-
-          let activePaidTotal = 0;
-
-          for (const allocation of invoiceAllocations) {
-            if (!allocation.paymentPartId) {
-              activePaidTotal += this.toCents(allocation.amount);
-              continue;
-            }
-
-            const [part] = await tx
-              .select()
-              .from(paymentParts)
-              .where(eq(paymentParts.id, allocation.paymentPartId));
-
-            if (part?.status === 'ACTIVE') {
-              activePaidTotal += this.toCents(allocation.amount);
-            }
-          }
-
-          const invoiceAmount = this.toCents(invoice.amount);
-          const status =
-            activePaidTotal >= invoiceAmount
-              ? 'PAID'
-              : activePaidTotal > 0
-                ? 'PARTIALLY_PAID'
-                : 'UNPAID';
-
-          await tx
-            .update(invoices)
-            .set({ status })
-            .where(eq(invoices.id, invoiceId));
-        }
+        await this.recalculateInvoiceStatuses(tx, affectedInvoiceIds);
 
         return updatedCheque;
       },
@@ -193,16 +146,12 @@ export class ChequesService {
         const [cheque] = await tx
           .select()
           .from(paymentParts)
-          .where(eq(paymentParts.id, id));
+          .where(
+            and(eq(paymentParts.id, id), eq(paymentParts.method, 'CHEQUE')),
+          );
 
         if (!cheque) {
           throw new NotFoundException('Cheque not found');
-        }
-
-        if (cheque.method !== 'CHEQUE') {
-          throw new BadRequestException(
-            'Only cheque payment parts can be restored here',
-          );
         }
 
         if (cheque.status !== 'REVERSED') {
@@ -210,6 +159,8 @@ export class ChequesService {
             'Only reversed cheques can be restored',
           );
         }
+
+        await this.linkLegacyAllocationsIfSafe(tx, cheque);
 
         const [updatedCheque] = await tx
           .update(paymentParts)
@@ -221,10 +172,10 @@ export class ChequesService {
           .where(eq(paymentParts.id, cheque.id))
           .returning();
 
-        const chequeAllocations = await tx
-          .select()
-          .from(paymentAllocations)
-          .where(eq(paymentAllocations.paymentPartId, cheque.id));
+        const chequeAllocations = await this.getChequeAllocations(
+          tx,
+          cheque.id,
+        );
 
         const affectedInvoiceIds = [
           ...new Set(
@@ -232,52 +183,7 @@ export class ChequesService {
           ),
         ];
 
-        for (const invoiceId of affectedInvoiceIds) {
-          const [invoice] = await tx
-            .select()
-            .from(invoices)
-            .where(eq(invoices.id, invoiceId));
-
-          if (!invoice) {
-            continue;
-          }
-
-          const invoiceAllocations = await tx
-            .select()
-            .from(paymentAllocations)
-            .where(eq(paymentAllocations.invoiceId, invoiceId));
-
-          let activePaidTotal = 0;
-
-          for (const allocation of invoiceAllocations) {
-            if (!allocation.paymentPartId) {
-              activePaidTotal += this.toCents(allocation.amount);
-              continue;
-            }
-
-            const [part] = await tx
-              .select()
-              .from(paymentParts)
-              .where(eq(paymentParts.id, allocation.paymentPartId));
-
-            if (part?.status === 'ACTIVE') {
-              activePaidTotal += this.toCents(allocation.amount);
-            }
-          }
-
-          const invoiceAmount = this.toCents(invoice.amount);
-          const status =
-            activePaidTotal >= invoiceAmount
-              ? 'PAID'
-              : activePaidTotal > 0
-                ? 'PARTIALLY_PAID'
-                : 'UNPAID';
-
-          await tx
-            .update(invoices)
-            .set({ status })
-            .where(eq(invoices.id, invoiceId));
-        }
+        await this.recalculateInvoiceStatuses(tx, affectedInvoiceIds);
 
         return updatedCheque;
       },
@@ -286,6 +192,108 @@ export class ChequesService {
     await this.sendChequeReversalUndoneSms(updatedCheque);
 
     return updatedCheque;
+  }
+
+  private async linkLegacyAllocationsIfSafe(
+    tx: Parameters<
+      Parameters<typeof this.databaseService.db.transaction>[0]
+    >[0],
+    cheque: typeof paymentParts.$inferSelect,
+  ) {
+    const unlinkedAllocations = await tx
+      .select()
+      .from(paymentAllocations)
+      .where(
+        and(
+          eq(paymentAllocations.paymentId, cheque.paymentId),
+          isNull(paymentAllocations.paymentPartId),
+        ),
+      );
+
+    if (unlinkedAllocations.length === 0) {
+      return;
+    }
+
+    const paymentPartRows = await tx
+      .select()
+      .from(paymentParts)
+      .where(eq(paymentParts.paymentId, cheque.paymentId));
+
+    if (paymentPartRows.length !== 1 || paymentPartRows[0]?.id !== cheque.id) {
+      throw new BadRequestException(
+        'Cheque allocations could not be matched to this cheque',
+      );
+    }
+
+    await tx
+      .update(paymentAllocations)
+      .set({ paymentPartId: cheque.id })
+      .where(
+        and(
+          eq(paymentAllocations.paymentId, cheque.paymentId),
+          isNull(paymentAllocations.paymentPartId),
+        ),
+      );
+  }
+
+  private async getChequeAllocations(
+    tx: Parameters<
+      Parameters<typeof this.databaseService.db.transaction>[0]
+    >[0],
+    chequeId: string,
+  ) {
+    return tx
+      .select()
+      .from(paymentAllocations)
+      .where(eq(paymentAllocations.paymentPartId, chequeId));
+  }
+
+  private async recalculateInvoiceStatuses(
+    tx: Parameters<
+      Parameters<typeof this.databaseService.db.transaction>[0]
+    >[0],
+    invoiceIds: string[],
+  ) {
+    if (invoiceIds.length === 0) {
+      return;
+    }
+
+    const paymentPartRows = await tx.select().from(paymentParts);
+    const paymentPartById = new Map(
+      paymentPartRows.map((paymentPart) => [paymentPart.id, paymentPart]),
+    );
+
+    for (const invoiceId of invoiceIds) {
+      const [invoice] = await tx
+        .select()
+        .from(invoices)
+        .where(eq(invoices.id, invoiceId));
+
+      if (!invoice) {
+        continue;
+      }
+
+      const invoiceAllocations = await tx
+        .select()
+        .from(paymentAllocations)
+        .where(eq(paymentAllocations.invoiceId, invoiceId));
+      const activePaidTotal = this.getActivePaidCents(
+        invoiceAllocations,
+        paymentPartById,
+      );
+      const invoiceAmount = this.toCents(invoice.amount);
+      const status =
+        activePaidTotal >= invoiceAmount
+          ? 'PAID'
+          : activePaidTotal > 0
+            ? 'PARTIALLY_PAID'
+            : 'UNPAID';
+
+      await tx
+        .update(invoices)
+        .set({ status })
+        .where(eq(invoices.id, invoiceId));
+    }
   }
 
   private async sendChequeReversedSms(
@@ -391,19 +399,10 @@ export class ChequesService {
         .select()
         .from(paymentAllocations)
         .where(eq(paymentAllocations.invoiceId, invoice.id));
-      const activePaidCents = allocationRows.reduce((sum, allocation) => {
-        if (!allocation.paymentPartId) {
-          return sum + this.toCents(allocation.amount);
-        }
-
-        const paymentPart = paymentPartById.get(allocation.paymentPartId);
-
-        if (paymentPart?.status === 'ACTIVE') {
-          return sum + this.toCents(allocation.amount);
-        }
-
-        return sum;
-      }, 0);
+      const activePaidCents = this.getActivePaidCents(
+        allocationRows,
+        paymentPartById,
+      );
 
       outstandingCents += Math.max(
         this.toCents(invoice.amount) - activePaidCents,
@@ -412,6 +411,29 @@ export class ChequesService {
     }
 
     return this.fromCents(outstandingCents);
+  }
+
+  private getActivePaidCents(
+    allocations: (typeof paymentAllocations.$inferSelect)[],
+    paymentPartById: Map<string, typeof paymentParts.$inferSelect>,
+  ) {
+    return allocations.reduce((sum, allocation) => {
+      if (!allocation.paymentPartId) {
+        return sum + this.toCents(allocation.amount);
+      }
+
+      const paymentPart = paymentPartById.get(allocation.paymentPartId);
+
+      if (this.isActivePaymentPart(paymentPart)) {
+        return sum + this.toCents(allocation.amount);
+      }
+
+      return sum;
+    }, 0);
+  }
+
+  private isActivePaymentPart(paymentPart?: typeof paymentParts.$inferSelect) {
+    return Boolean(paymentPart && paymentPart.status !== 'REVERSED');
   }
 
   private async withPaymentAndAllocations(
