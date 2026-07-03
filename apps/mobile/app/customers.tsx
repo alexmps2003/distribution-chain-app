@@ -1,7 +1,14 @@
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiGet } from '../lib/api-client';
 import { useAuth } from '../lib/auth-context';
@@ -24,6 +31,7 @@ type CustomerRow = {
 
 export default function CustomersScreen() {
   const { accessToken } = useAuth();
+  const [query, setQuery] = useState('');
   const [customerRows, setCustomerRows] = useState<CustomerRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -66,6 +74,21 @@ export default function CustomersScreen() {
     };
   }, [accessToken]);
 
+  const filteredCustomers = useMemo(() => {
+    const searchTerm = query.trim().toLowerCase();
+
+    if (!searchTerm) {
+      return customerRows;
+    }
+
+    return customerRows.filter(({ customer }) => {
+      return (
+        customer.name.toLowerCase().includes(searchTerm) ||
+        customer.code.toLowerCase().includes(searchTerm)
+      );
+    });
+  }, [customerRows, query]);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
@@ -83,6 +106,18 @@ export default function CustomersScreen() {
         <Text style={styles.title}>Customer List</Text>
       </View>
 
+      <View style={styles.searchWrap}>
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search by customer name or code"
+          placeholderTextColor="#94a3b8"
+          autoCapitalize="none"
+          autoCorrect={false}
+          style={styles.searchInput}
+        />
+      </View>
+
       {isLoading ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyStateText}>Loading customers...</Text>
@@ -91,7 +126,7 @@ export default function CustomersScreen() {
         <View style={styles.emptyState}>
           <Text style={styles.emptyStateText}>{errorMessage}</Text>
         </View>
-      ) : customerRows.length === 0 ? (
+      ) : filteredCustomers.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyStateText}>No customers found.</Text>
         </View>
@@ -99,8 +134,9 @@ export default function CustomersScreen() {
         <ScrollView
           style={styles.customerList}
           contentContainerStyle={styles.customerListContent}
+          keyboardShouldPersistTaps="handled"
         >
-          {customerRows.map(({ customer, summary }) => (
+          {filteredCustomers.map(({ customer, summary }) => (
             <Pressable
               key={customer.id}
               style={styles.customerPressable}
@@ -239,6 +275,22 @@ const styles = StyleSheet.create({
   safeArea: {
     backgroundColor: '#f1f5f9',
     flex: 1,
+  },
+  searchInput: {
+    backgroundColor: '#ffffff',
+    borderColor: '#cbd5e1',
+    borderRadius: 18,
+    borderWidth: 1,
+    color: '#020617',
+    fontSize: 17,
+    fontWeight: '600',
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+  },
+  searchWrap: {
+    paddingBottom: 18,
+    paddingHorizontal: 20,
+    paddingTop: 20,
   },
   title: {
     color: '#020617',
