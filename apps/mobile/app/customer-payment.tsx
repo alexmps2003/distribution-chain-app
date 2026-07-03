@@ -345,6 +345,17 @@ export default function CustomerPaymentScreen() {
     updateMethodDraft('chequeDate', formatDateInput(selectedDate));
   }
 
+  function openChequeDatePicker() {
+    Keyboard.dismiss();
+    setIsChequeBankPickerOpen(false);
+
+    if (!selectedMethodDraft.chequeDate) {
+      updateMethodDraft('chequeDate', formatDateInput(new Date()));
+    }
+
+    setIsChequeDatePickerOpen(true);
+  }
+
   function scrollToInvoice(invoiceId: string) {
     const invoiceLayout = invoiceLayouts.current[invoiceId];
 
@@ -562,11 +573,7 @@ export default function CustomerPaymentScreen() {
                         />
                         <ChequeDateField
                           value={selectedMethodDraft.chequeDate}
-                          onPress={() => {
-                            Keyboard.dismiss();
-                            setIsChequeBankPickerOpen(false);
-                            setIsChequeDatePickerOpen(true);
-                          }}
+                          onPress={openChequeDatePicker}
                         />
                         {isChequeDatePickerOpen ? (
                           <DateTimePicker
