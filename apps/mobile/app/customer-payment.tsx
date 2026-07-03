@@ -725,9 +725,26 @@ export default function CustomerPaymentScreen() {
   }
 
   function confirmSavePayment() {
+    const methodSummary = addedMethods
+      .map(
+        (method) =>
+          `• ${getMethodLabel(method.method)} — ${formatMoney(method.amount)}`,
+      )
+      .join('\n');
+    const message = [
+      `Customer: ${data?.customer.name ?? 'Customer'}`,
+      '',
+      `Total Payment: ${formatMoneyFromCents(addedMethodsTotalCents)}`,
+      '',
+      'Methods:',
+      methodSummary,
+      '',
+      'Are you sure you want to record this payment?',
+    ].join('\n');
+
     Alert.alert(
       'Confirm Payment',
-      'Are you sure you want to record this payment?\nThis action cannot be undone from the collector app.',
+      message,
       [
         {
           style: 'cancel',
