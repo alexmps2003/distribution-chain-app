@@ -2,17 +2,18 @@ import './global.css';
 
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { apiGet } from './lib/api-client';
+import { apiGet, getFriendlyError, type FriendlyError } from './lib/api-client';
 import { useAuth } from './lib/auth-context';
 
 type CollectorSummary = {
@@ -25,61 +26,72 @@ export default function App() {
   const { accessToken, logout } = useAuth();
   const [summary, setSummary] = useState<CollectorSummary | null>(null);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [summaryError, setSummaryError] = useState<FriendlyError | null>(null);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadSummary() {
+  const loadSummary = useCallback(
+    async ({ refreshing = false }: { refreshing?: boolean } = {}) => {
       try {
-        setIsLoadingSummary(true);
+        if (refreshing) {
+          setIsRefreshing(true);
+        } else {
+          setIsLoadingSummary(true);
+        }
+        setSummaryError(null);
 
         const response = await apiGet<CollectorSummary>(
           '/dashboard/collector-summary',
           accessToken ?? undefined,
         );
 
-        if (isMounted) {
-          setSummary(response);
-        }
+        setSummary(response);
       } catch (error) {
-        if (isMounted) {
-          setSummary(null);
-        }
+        setSummaryError(
+          getFriendlyError(error, 'Unable to load dashboard right now.'),
+        );
       } finally {
-        if (isMounted) {
-          setIsLoadingSummary(false);
-        }
+        setIsLoadingSummary(false);
+        setIsRefreshing(false);
       }
-    }
+    },
+    [accessToken],
+  );
 
+  useEffect(() => {
     void loadSummary();
+  }, [loadSummary]);
 
-    return () => {
-      isMounted = false;
-    };
-  }, [accessToken]);
+  const isInitialLoading = isLoadingSummary && !summary;
 
   const summaryCards = useMemo(
     () => [
       {
         label: 'Outstanding',
-        value: getSummaryValue(summary?.totalOutstanding, isLoadingSummary),
+        value: getSummaryValue(summary?.totalOutstanding, isInitialLoading),
       },
       {
         label: 'Collected Today',
-        value: getSummaryValue(summary?.collectedToday, isLoadingSummary),
+        value: getSummaryValue(summary?.collectedToday, isInitialLoading),
       },
       {
         label: 'Payments Today',
-        value: isLoadingSummary
+        value: isInitialLoading
           ? '...'
           : summary?.paymentsToday !== undefined
             ? String(summary.paymentsToday)
             : 'Unavailable',
       },
     ],
-    [isLoadingSummary, summary],
+    [isInitialLoading, summary],
   );
+
+  function retrySummary() {
+    void loadSummary();
+  }
+
+  function refreshSummary() {
+    void loadSummary({ refreshing: true });
+  }
 
   function confirmLogout() {
     Alert.alert('Logout', 'Are you sure you want to log out?', [
@@ -102,6 +114,13 @@ export default function App() {
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={refreshSummary}
+            tintColor="#0369a1"
+          />
+        }
       >
         <View style={styles.header}>
           <View style={styles.headerTop}>
@@ -117,12 +136,25 @@ export default function App() {
         </View>
 
         <View style={styles.summaryList}>
-          {summaryCards.map((card) => (
-            <View key={card.label} style={styles.card}>
-              <Text style={styles.cardLabel}>{card.label}</Text>
-              <Text style={styles.summaryValue}>{card.value}</Text>
+          {isInitialLoading ? (
+            <View style={styles.stateCard}>
+              <Text style={styles.stateText}>Loading dashboard...</Text>
             </View>
-          ))}
+          ) : summaryError && !summary ? (
+            <ErrorCard error={summaryError} onRetry={retrySummary} />
+          ) : (
+            <>
+              {summaryError ? (
+                <ErrorCard error={summaryError} onRetry={retrySummary} />
+              ) : null}
+              {summaryCards.map((card) => (
+                <View key={card.label} style={styles.card}>
+                  <Text style={styles.cardLabel}>{card.label}</Text>
+                  <Text style={styles.summaryValue}>{card.value}</Text>
+                </View>
+              ))}
+            </>
+          )}
         </View>
 
         <View style={styles.actions}>
@@ -174,6 +206,26 @@ function getSummaryValue(
     maximumFractionDigits: 2,
     minimumFractionDigits: 2,
   })}`;
+}
+
+function ErrorCard({
+  error,
+  onRetry,
+}: {
+  error: FriendlyError;
+  onRetry: () => void;
+}) {
+  return (
+    <View style={styles.stateCard}>
+      <Text style={styles.stateText}>{error.message}</Text>
+      {error.detail ? (
+        <Text style={styles.stateDetail}>{error.detail}</Text>
+      ) : null}
+      <Pressable style={styles.retryButton} onPress={onRetry}>
+        <Text style={styles.retryButtonText}>Retry</Text>
+      </Pressable>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -266,11 +318,45 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
   },
+  retryButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#020617',
+    borderRadius: 14,
+    marginTop: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  retryButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '900',
+  },
   subtitle: {
     color: '#64748b',
     fontSize: 16,
     lineHeight: 22,
     marginTop: 6,
+  },
+  stateCard: {
+    backgroundColor: '#ffffff',
+    borderColor: '#e2e8f0',
+    borderRadius: 20,
+    borderWidth: 1,
+    marginBottom: 12,
+    padding: 20,
+  },
+  stateDetail: {
+    color: '#94a3b8',
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 18,
+    marginTop: 8,
+  },
+  stateText: {
+    color: '#64748b',
+    fontSize: 16,
+    fontWeight: '700',
+    lineHeight: 22,
   },
   summaryList: {
     marginTop: 0,

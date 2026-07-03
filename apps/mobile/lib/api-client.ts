@@ -1,5 +1,10 @@
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
+export type FriendlyError = {
+  detail?: string;
+  message: string;
+};
+
 function buildUrl(path: string) {
   if (!API_BASE_URL) {
     throw new Error('EXPO_PUBLIC_API_BASE_URL is not set');
@@ -15,6 +20,35 @@ function buildHeaders(token?: string) {
   return {
     Accept: 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
+function isConnectionError(message: string) {
+  return /Network request failed|Failed to fetch|Load failed|NetworkError|ECONNREFUSED|Unable to resolve host|timed out/i.test(
+    message,
+  );
+}
+
+export function getFriendlyError(
+  error: unknown,
+  fallbackMessage: string,
+): FriendlyError {
+  const detail = error instanceof Error ? error.message : '';
+
+  if (detail && isConnectionError(detail)) {
+    return {
+      detail,
+      message: 'Unable to connect. Check your internet connection and try again.',
+    };
+  }
+
+  if (!detail) {
+    return { message: fallbackMessage };
+  }
+
+  return {
+    detail,
+    message: fallbackMessage,
   };
 }
 
@@ -57,7 +91,12 @@ export async function apiGet<TResponse>(
   });
 
   if (!response.ok) {
-    throw new Error(`API GET ${path} failed with status ${response.status}`);
+    throw new Error(
+      await getErrorMessage(
+        response,
+        `API GET ${path} failed with status ${response.status}`,
+      ),
+    );
   }
 
   return response.json() as Promise<TResponse>;

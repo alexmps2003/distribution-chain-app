@@ -1,9 +1,20 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { apiGet } from '../lib/api-client';
+import {
+  apiGet,
+  getFriendlyError,
+  type FriendlyError,
+} from '../lib/api-client';
 import { useAuth } from '../lib/auth-context';
 
 type Customer = {
@@ -37,51 +48,47 @@ export default function CustomerDetailsScreen() {
   const { customerId } = useLocalSearchParams<{ customerId?: string }>();
   const [data, setData] = useState<CustomerInvoicesResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [screenError, setScreenError] = useState<FriendlyError | null>(null);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadCustomerInvoices() {
+  const loadCustomerInvoices = useCallback(
+    async ({ refreshing = false }: { refreshing?: boolean } = {}) => {
       if (!customerId) {
-        setErrorMessage('Customer is required.');
+        setScreenError({ message: 'Customer is required.' });
         setIsLoading(false);
+        setIsRefreshing(false);
         return;
       }
 
       try {
-        setIsLoading(true);
-        setErrorMessage(null);
+        if (refreshing) {
+          setIsRefreshing(true);
+        } else {
+          setIsLoading(true);
+        }
+        setScreenError(null);
 
         const response = await apiGet<CustomerInvoicesResponse>(
           `/invoices?customerId=${encodeURIComponent(customerId)}`,
           accessToken ?? undefined,
         );
 
-        if (isMounted) {
-          setData(response);
-        }
+        setData(response);
       } catch (error) {
-        if (isMounted) {
-          setErrorMessage(
-            error instanceof Error
-              ? error.message
-              : 'Unable to load customer details right now.',
-          );
-        }
+        setScreenError(
+          getFriendlyError(error, 'Unable to load invoices right now.'),
+        );
       } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
+        setIsLoading(false);
+        setIsRefreshing(false);
       }
-    }
+    },
+    [accessToken, customerId],
+  );
 
+  useEffect(() => {
     void loadCustomerInvoices();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [accessToken, customerId]);
+  }, [loadCustomerInvoices]);
 
   const openInvoices = useMemo(() => {
     return (data?.invoices ?? []).filter((invoice) => {
@@ -97,6 +104,16 @@ export default function CustomerDetailsScreen() {
       return total + Number(invoice.outstanding);
     }, 0);
   }, [openInvoices]);
+
+  const isInitialLoading = isLoading && !data;
+
+  function retryCustomerInvoices() {
+    void loadCustomerInvoices();
+  }
+
+  function refreshCustomerInvoices() {
+    void loadCustomerInvoices({ refreshing: true });
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -118,86 +135,99 @@ export default function CustomerDetailsScreen() {
         ) : null}
       </View>
 
-      {isLoading ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyStateText}>Loading customer...</Text>
-        </View>
-      ) : errorMessage ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyStateText}>{errorMessage}</Text>
-        </View>
-      ) : !data ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyStateText}>Customer not found.</Text>
-        </View>
-      ) : (
-        <ScrollView
-          style={styles.detailList}
-          contentContainerStyle={styles.detailListContent}
-        >
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>Route</Text>
-            <Text style={styles.summaryValue}>
-              {data.customer.routeName?.trim() || 'Route unavailable'}
-            </Text>
-
-            <View style={styles.summaryGrid}>
-              <View style={styles.summaryBlock}>
-                <Text style={styles.summaryLabel}>Outstanding</Text>
-                <Text style={styles.summaryNumber}>
-                  {formatMoney(totalOutstanding)}
-                </Text>
-              </View>
-              <View style={styles.summaryBlock}>
-                <Text style={styles.summaryLabel}>Open Invoices</Text>
-                <Text style={styles.summaryNumber}>
-                  {String(openInvoices.length)}
-                </Text>
-              </View>
-            </View>
+      <ScrollView
+        style={styles.detailList}
+        contentContainerStyle={styles.detailListContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={refreshCustomerInvoices}
+            tintColor="#0369a1"
+          />
+        }
+      >
+        {isInitialLoading ? (
+          <View style={styles.stateCard}>
+            <Text style={styles.stateText}>Loading invoices...</Text>
           </View>
-
-          <Text style={styles.sectionTitle}>Unpaid Invoices</Text>
-
-          {openInvoices.length === 0 ? (
-            <View style={styles.emptyStateInline}>
-              <Text style={styles.emptyStateText}>
-                No unpaid invoices for this customer.
+        ) : screenError && !data ? (
+          <ErrorCard error={screenError} onRetry={retryCustomerInvoices} />
+        ) : !data ? (
+          <View style={styles.stateCard}>
+            <Text style={styles.stateText}>Customer not found.</Text>
+          </View>
+        ) : (
+          <>
+            {screenError ? (
+              <ErrorCard
+                error={screenError}
+                onRetry={retryCustomerInvoices}
+              />
+            ) : null}
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>Route</Text>
+              <Text style={styles.summaryValue}>
+                {data.customer.routeName?.trim() || 'Route unavailable'}
               </Text>
-            </View>
-          ) : (
-            openInvoices.map((invoice) => (
-              <View key={invoice.invoice.id} style={styles.invoiceCard}>
-                <View style={styles.invoiceHeader}>
-                  <Text style={styles.invoiceNumber}>
-                    {invoice.invoice.invoiceNumber}
+
+              <View style={styles.summaryGrid}>
+                <View style={styles.summaryBlock}>
+                  <Text style={styles.summaryLabel}>Outstanding</Text>
+                  <Text style={styles.summaryNumber}>
+                    {formatMoney(totalOutstanding)}
                   </Text>
-                  <Text style={styles.status}>{formatStatus(invoice)}</Text>
                 </View>
-
-                <Text style={styles.invoiceMeta}>
-                  Due {formatDate(invoice.invoice.dueDate)}
-                </Text>
-
-                <View style={styles.amountRow}>
-                  <View style={styles.amountBlock}>
-                    <Text style={styles.amountLabel}>Invoice Total</Text>
-                    <Text style={styles.amountValue}>
-                      {formatMoney(invoice.invoice.amount)}
-                    </Text>
-                  </View>
-                  <View style={styles.amountBlock}>
-                    <Text style={styles.amountLabel}>Outstanding</Text>
-                    <Text style={styles.outstandingValue}>
-                      {formatMoney(invoice.outstanding)}
-                    </Text>
-                  </View>
+                <View style={styles.summaryBlock}>
+                  <Text style={styles.summaryLabel}>Open Invoices</Text>
+                  <Text style={styles.summaryNumber}>
+                    {String(openInvoices.length)}
+                  </Text>
                 </View>
               </View>
-            ))
-          )}
-        </ScrollView>
-      )}
+            </View>
+
+            <Text style={styles.sectionTitle}>Unpaid Invoices</Text>
+
+            {openInvoices.length === 0 ? (
+              <View style={styles.emptyStateInline}>
+                <Text style={styles.emptyStateText}>
+                  No unpaid invoices for this customer.
+                </Text>
+              </View>
+            ) : (
+              openInvoices.map((invoice) => (
+                <View key={invoice.invoice.id} style={styles.invoiceCard}>
+                  <View style={styles.invoiceHeader}>
+                    <Text style={styles.invoiceNumber}>
+                      {invoice.invoice.invoiceNumber}
+                    </Text>
+                    <Text style={styles.status}>{formatStatus(invoice)}</Text>
+                  </View>
+
+                  <Text style={styles.invoiceMeta}>
+                    Due {formatDate(invoice.invoice.dueDate)}
+                  </Text>
+
+                  <View style={styles.amountRow}>
+                    <View style={styles.amountBlock}>
+                      <Text style={styles.amountLabel}>Invoice Total</Text>
+                      <Text style={styles.amountValue}>
+                        {formatMoney(invoice.invoice.amount)}
+                      </Text>
+                    </View>
+                    <View style={styles.amountBlock}>
+                      <Text style={styles.amountLabel}>Outstanding</Text>
+                      <Text style={styles.outstandingValue}>
+                        {formatMoney(invoice.outstanding)}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              ))
+            )}
+          </>
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -227,6 +257,26 @@ function formatStatus(invoice: InvoiceRow) {
   }
 
   return 'Unpaid';
+}
+
+function ErrorCard({
+  error,
+  onRetry,
+}: {
+  error: FriendlyError;
+  onRetry: () => void;
+}) {
+  return (
+    <View style={styles.stateCard}>
+      <Text style={styles.stateText}>{error.message}</Text>
+      {error.detail ? (
+        <Text style={styles.stateDetail}>{error.detail}</Text>
+      ) : null}
+      <Pressable style={styles.retryButton} onPress={onRetry}>
+        <Text style={styles.retryButtonText}>Retry</Text>
+      </Pressable>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -338,6 +388,19 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     marginTop: 4,
   },
+  retryButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#020617',
+    borderRadius: 14,
+    marginTop: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  retryButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '900',
+  },
   safeArea: {
     backgroundColor: '#f1f5f9',
     flex: 1,
@@ -353,6 +416,26 @@ const styles = StyleSheet.create({
     color: '#334155',
     fontSize: 14,
     fontWeight: '800',
+  },
+  stateCard: {
+    backgroundColor: '#ffffff',
+    borderColor: '#e2e8f0',
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 20,
+  },
+  stateDetail: {
+    color: '#94a3b8',
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 18,
+    marginTop: 8,
+  },
+  stateText: {
+    color: '#64748b',
+    fontSize: 16,
+    fontWeight: '700',
+    lineHeight: 22,
   },
   subtitle: {
     color: '#64748b',
