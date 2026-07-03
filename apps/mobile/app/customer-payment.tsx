@@ -1,7 +1,17 @@
 import { useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableWithoutFeedback,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiGet } from '../lib/api-client';
 import { useAuth } from '../lib/auth-context';
@@ -34,6 +44,8 @@ type CustomerInvoicesResponse = {
 export default function CustomerPaymentScreen() {
   const { accessToken } = useAuth();
   const { customerId } = useLocalSearchParams<{ customerId?: string }>();
+  const scrollViewRef = useRef<ScrollView>(null);
+  const invoiceLayouts = useRef<Record<string, { y: number }>>({});
   const [data, setData] = useState<CustomerInvoicesResponse | null>(null);
   const [allocations, setAllocations] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
@@ -115,93 +127,135 @@ export default function CustomerPaymentScreen() {
     }));
   }
 
+  function scrollToInvoice(invoiceId: string) {
+    const invoiceLayout = invoiceLayouts.current[invoiceId];
+
+    if (!invoiceLayout) {
+      return;
+    }
+
+    setTimeout(() => {
+      scrollViewRef.current?.scrollTo({
+        animated: true,
+        y: Math.max(invoiceLayout.y - 20, 0),
+      });
+    }, 250);
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
 
-      <View style={styles.header}>
-        <Text style={styles.kicker}>Record Payment</Text>
-        <Text style={styles.title}>
-          {data?.customer.name ?? 'Loading customer'}
-        </Text>
-        {data?.customer.code ? (
-          <Text style={styles.subtitle}>{data.customer.code}</Text>
-        ) : null}
-      </View>
-
-      {isLoading ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyStateText}>Loading invoices...</Text>
-        </View>
-      ) : errorMessage ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyStateText}>{errorMessage}</Text>
-        </View>
-      ) : openInvoices.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyStateText}>
-            No unpaid invoices for this customer.
-          </Text>
-        </View>
-      ) : (
-        <ScrollView
-          style={styles.invoiceList}
-          contentContainerStyle={styles.invoiceListContent}
-        >
-          {openInvoices.map((invoice) => (
-            <View key={invoice.invoice.id} style={styles.invoiceCard}>
-              <View style={styles.invoiceHeader}>
-                <Text style={styles.invoiceNumber}>
-                  {invoice.invoice.invoiceNumber}
-                </Text>
-                <Text style={styles.status}>{formatStatus(invoice)}</Text>
-              </View>
-
-              <Text style={styles.invoiceMeta}>
-                Due {formatDate(invoice.invoice.dueDate)}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardAvoidingView}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+          <View style={styles.screenContent}>
+            <View style={styles.header}>
+              <Text style={styles.kicker}>Record Payment</Text>
+              <Text style={styles.title}>
+                {data?.customer.name ?? 'Loading customer'}
               </Text>
-
-              <View style={styles.amountRow}>
-                <View style={styles.amountBlock}>
-                  <Text style={styles.amountLabel}>Invoice Total</Text>
-                  <Text style={styles.amountValue}>
-                    {formatMoney(invoice.invoice.amount)}
-                  </Text>
-                </View>
-
-                <View style={styles.amountBlock}>
-                  <Text style={styles.amountLabel}>Outstanding</Text>
-                  <Text style={styles.outstandingValue}>
-                    {formatMoney(invoice.outstanding)}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.allocationBlock}>
-                <Text style={styles.allocationLabel}>Allocation</Text>
-                <TextInput
-                  value={allocations[invoice.invoice.id] ?? ''}
-                  onChangeText={(value) => {
-                    updateAllocation(invoice, value);
-                  }}
-                  placeholder="0.00"
-                  placeholderTextColor="#94a3b8"
-                  keyboardType="decimal-pad"
-                  style={styles.allocationInput}
-                />
-              </View>
+              {data?.customer.code ? (
+                <Text style={styles.subtitle}>{data.customer.code}</Text>
+              ) : null}
             </View>
-          ))}
 
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryTitle}>Allocation Summary</Text>
-            <Text style={styles.summaryLabel}>Total Allocated</Text>
-            <Text style={styles.summaryValue}>
-              {formatMoneyFromCents(totalAllocatedCents)}
-            </Text>
+            {isLoading ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyStateText}>Loading invoices...</Text>
+              </View>
+            ) : errorMessage ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyStateText}>{errorMessage}</Text>
+              </View>
+            ) : openInvoices.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyStateText}>
+                  No unpaid invoices for this customer.
+                </Text>
+              </View>
+            ) : (
+              <ScrollView
+                ref={scrollViewRef}
+                style={styles.invoiceList}
+                contentContainerStyle={styles.invoiceListContent}
+                keyboardDismissMode={
+                  Platform.OS === 'ios' ? 'interactive' : 'on-drag'
+                }
+                keyboardShouldPersistTaps="handled"
+              >
+                {openInvoices.map((invoice) => (
+                  <View
+                    key={invoice.invoice.id}
+                    style={styles.invoiceCard}
+                    onLayout={(event) => {
+                      invoiceLayouts.current[invoice.invoice.id] = {
+                        y: event.nativeEvent.layout.y,
+                      };
+                    }}
+                  >
+                    <View style={styles.invoiceHeader}>
+                      <Text style={styles.invoiceNumber}>
+                        {invoice.invoice.invoiceNumber}
+                      </Text>
+                      <Text style={styles.status}>
+                        {formatStatus(invoice)}
+                      </Text>
+                    </View>
+
+                    <Text style={styles.invoiceMeta}>
+                      Due {formatDate(invoice.invoice.dueDate)}
+                    </Text>
+
+                    <View style={styles.amountRow}>
+                      <View style={styles.amountBlock}>
+                        <Text style={styles.amountLabel}>Invoice Total</Text>
+                        <Text style={styles.amountValue}>
+                          {formatMoney(invoice.invoice.amount)}
+                        </Text>
+                      </View>
+
+                      <View style={styles.amountBlock}>
+                        <Text style={styles.amountLabel}>Outstanding</Text>
+                        <Text style={styles.outstandingValue}>
+                          {formatMoney(invoice.outstanding)}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.allocationBlock}>
+                      <Text style={styles.allocationLabel}>Allocation</Text>
+                      <TextInput
+                        value={allocations[invoice.invoice.id] ?? ''}
+                        onChangeText={(value) => {
+                          updateAllocation(invoice, value);
+                        }}
+                        onFocus={() => {
+                          scrollToInvoice(invoice.invoice.id);
+                        }}
+                        placeholder="0.00"
+                        placeholderTextColor="#94a3b8"
+                        keyboardType="decimal-pad"
+                        style={styles.allocationInput}
+                      />
+                    </View>
+                  </View>
+                ))}
+
+                <View style={styles.summaryCard}>
+                  <Text style={styles.summaryTitle}>Allocation Summary</Text>
+                  <Text style={styles.summaryLabel}>Total Allocated</Text>
+                  <Text style={styles.summaryValue}>
+                    {formatMoneyFromCents(totalAllocatedCents)}
+                  </Text>
+                </View>
+              </ScrollView>
+            )}
           </View>
-        </ScrollView>
-      )}
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -369,7 +423,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   invoiceListContent: {
-    paddingBottom: 28,
+    paddingBottom: 120,
     paddingHorizontal: 20,
     paddingTop: 20,
   },
@@ -393,6 +447,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     textTransform: 'uppercase',
   },
+  keyboardAvoidingView: {
+    flex: 1,
+  },
   outstandingValue: {
     color: '#0369a1',
     fontSize: 18,
@@ -401,6 +458,9 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     backgroundColor: '#f1f5f9',
+    flex: 1,
+  },
+  screenContent: {
     flex: 1,
   },
   status: {
