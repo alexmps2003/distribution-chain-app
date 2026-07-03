@@ -5,7 +5,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
+  ActivityIndicator,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -18,6 +18,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { AppModal } from '../components/AppModal';
 import { apiGet, apiPost } from '../lib/api-client';
 import { useAuth } from '../lib/auth-context';
 
@@ -92,6 +93,15 @@ type CreatePaymentPayload = {
     method: PaymentMethod;
   }[];
   notes?: string;
+};
+
+type PaymentModal = {
+  message: string;
+  onPrimaryPress: () => void;
+  primaryLabel: string;
+  secondaryLabel?: string;
+  onSecondaryPress?: () => void;
+  title: string;
 };
 
 const paymentMethods: { id: PaymentMethod; label: string }[] = [
@@ -186,6 +196,7 @@ export default function CustomerPaymentScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [paymentModal, setPaymentModal] = useState<PaymentModal | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -700,14 +711,15 @@ export default function CustomerPaymentScreen() {
       );
 
       resetPaymentState();
-      Alert.alert('Payment saved', 'Payment recorded successfully.', [
-        {
-          text: 'OK',
-          onPress: () => {
-            router.replace('/search-customer');
-          },
+      setPaymentModal({
+        title: 'Payment saved',
+        message: 'Payment recorded successfully.',
+        primaryLabel: 'OK',
+        onPrimaryPress: () => {
+          setPaymentModal(null);
+          router.replace('/search-customer');
         },
-      ]);
+      });
     } catch (error) {
       const errorMessage =
         error instanceof Error && error.message
@@ -718,7 +730,14 @@ export default function CustomerPaymentScreen() {
         : errorMessage || 'Payment failed. Please try again.';
 
       setSaveMessage(message);
-      Alert.alert('Payment failed', message);
+      setPaymentModal({
+        title: 'Payment failed',
+        message,
+        primaryLabel: 'OK',
+        onPrimaryPress: () => {
+          setPaymentModal(null);
+        },
+      });
     } finally {
       setIsSaving(false);
     }
@@ -742,22 +761,19 @@ export default function CustomerPaymentScreen() {
       'Are you sure you want to record this payment?',
     ].join('\n');
 
-    Alert.alert(
-      'Confirm Payment',
+    setPaymentModal({
+      title: 'Confirm Payment',
       message,
-      [
-        {
-          style: 'cancel',
-          text: 'Cancel',
-        },
-        {
-          onPress: () => {
-            void savePayment();
-          },
-          text: 'Save Payment',
-        },
-      ],
-    );
+      primaryLabel: 'Save Payment',
+      onPrimaryPress: () => {
+        setPaymentModal(null);
+        void savePayment();
+      },
+      secondaryLabel: 'Cancel',
+      onSecondaryPress: () => {
+        setPaymentModal(null);
+      },
+    });
   }
 
   return (
@@ -1197,6 +1213,28 @@ export default function CustomerPaymentScreen() {
           </View>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
+      <AppModal
+        visible={paymentModal !== null}
+        title={paymentModal?.title ?? ''}
+        message={paymentModal?.message ?? ''}
+        primaryLabel={paymentModal?.primaryLabel ?? 'OK'}
+        onPrimaryPress={() => {
+          paymentModal?.onPrimaryPress();
+        }}
+        secondaryLabel={paymentModal?.secondaryLabel}
+        onSecondaryPress={paymentModal?.onSecondaryPress}
+      />
+      {isSaving ? (
+        <View style={styles.savingOverlay}>
+          <View style={styles.savingCard}>
+            <ActivityIndicator color="#0369a1" size="large" />
+            <Text style={styles.savingTitle}>Saving payment</Text>
+            <Text style={styles.savingMessage}>
+              Please wait while we record this payment.
+            </Text>
+          </View>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -1898,6 +1936,41 @@ const styles = StyleSheet.create({
   savePaymentSection: {
     gap: 12,
     marginTop: 22,
+  },
+  savingCard: {
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderColor: '#e2e8f0',
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 22,
+    width: '100%',
+  },
+  savingMessage: {
+    color: '#64748b',
+    fontSize: 16,
+    fontWeight: '700',
+    lineHeight: 22,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  savingOverlay: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    bottom: 0,
+    justifyContent: 'center',
+    left: 0,
+    padding: 24,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
+  savingTitle: {
+    color: '#020617',
+    fontSize: 20,
+    fontWeight: '900',
+    marginTop: 14,
+    textAlign: 'center',
   },
   screenContent: {
     flex: 1,

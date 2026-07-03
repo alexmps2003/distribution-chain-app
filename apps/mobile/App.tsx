@@ -4,7 +4,6 @@ import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -13,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { AppModal } from './components/AppModal';
 import { apiGet, getFriendlyError, type FriendlyError } from './lib/api-client';
 import { useAuth } from './lib/auth-context';
 
@@ -28,6 +28,7 @@ export default function App() {
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [summaryError, setSummaryError] = useState<FriendlyError | null>(null);
+  const [isLogoutModalVisible, setIsLogoutModalVisible] = useState(false);
 
   const loadSummary = useCallback(
     async ({ refreshing = false }: { refreshing?: boolean } = {}) => {
@@ -94,17 +95,7 @@ export default function App() {
   }
 
   function confirmLogout() {
-    Alert.alert('Logout', 'Are you sure you want to log out?', [
-      {
-        style: 'cancel',
-        text: 'Cancel',
-      },
-      {
-        onPress: logout,
-        style: 'destructive',
-        text: 'Logout',
-      },
-    ]);
+    setIsLogoutModalVisible(true);
   }
 
   return (
@@ -186,6 +177,21 @@ export default function App() {
           </Pressable>
         </View>
       </ScrollView>
+
+      <AppModal
+        visible={isLogoutModalVisible}
+        title="Logout"
+        message="Are you sure you want to log out?"
+        primaryLabel="Logout"
+        onPrimaryPress={() => {
+          setIsLogoutModalVisible(false);
+          logout();
+        }}
+        secondaryLabel="Cancel"
+        onSecondaryPress={() => {
+          setIsLogoutModalVisible(false);
+        }}
+      />
     </SafeAreaView>
   );
 }
