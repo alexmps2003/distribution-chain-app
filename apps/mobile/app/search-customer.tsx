@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -128,7 +129,18 @@ export default function SearchCustomerScreen() {
           keyboardShouldPersistTaps="handled"
         >
           {filteredCustomers.map(({ customer, summary }) => (
-            <Pressable key={customer.id} style={styles.customerPressable}>
+            <Pressable
+              key={customer.id}
+              style={styles.customerPressable}
+              onPress={() => {
+                router.push({
+                  pathname: '/customer-payment',
+                  params: {
+                    customerId: customer.id,
+                  },
+                });
+              }}
+            >
               <View style={styles.customerCard}>
                 <View style={styles.customerHeader}>
                   <Text style={styles.customerName}>{customer.name}</Text>
