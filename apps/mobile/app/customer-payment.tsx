@@ -36,9 +36,6 @@ export default function CustomerPaymentScreen() {
   const { customerId } = useLocalSearchParams<{ customerId?: string }>();
   const [data, setData] = useState<CustomerInvoicesResponse | null>(null);
   const [allocations, setAllocations] = useState<Record<string, string>>({});
-  const [allocationErrors, setAllocationErrors] = useState<
-    Record<string, string>
-  >({});
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -64,7 +61,6 @@ export default function CustomerPaymentScreen() {
         if (isMounted) {
           setData(response);
           setAllocations({});
-          setAllocationErrors({});
         }
       } catch (error) {
         if (isMounted) {
@@ -105,40 +101,17 @@ export default function CustomerPaymentScreen() {
 
   function updateAllocation(invoice: InvoiceRow, value: string) {
     const invoiceId = invoice.invoice.id;
-    const parsedCents = parseAllocationInput(value);
+    const sanitizedValue = sanitizeAllocationInput(value);
+    const outstandingCents = toCents(invoice.outstanding);
+    const allocationCents = toCents(sanitizedValue);
+    const nextValue =
+      allocationCents > outstandingCents
+        ? formatInputFromCents(outstandingCents)
+        : sanitizedValue;
 
-    if (parsedCents === null) {
-      setAllocationErrors((current) => ({
-        ...current,
-        [invoiceId]: 'Enter a valid amount.',
-      }));
-      return;
-    }
-
-    if (parsedCents < 0) {
-      setAllocationErrors((current) => ({
-        ...current,
-        [invoiceId]: 'Allocation cannot be negative.',
-      }));
-      return;
-    }
-
-    if (parsedCents > toCents(invoice.outstanding)) {
-      setAllocationErrors((current) => ({
-        ...current,
-        [invoiceId]: 'Allocation cannot exceed outstanding.',
-      }));
-      return;
-    }
-
-    setAllocationErrors((current) => {
-      const next = { ...current };
-      delete next[invoiceId];
-      return next;
-    });
     setAllocations((current) => ({
       ...current,
-      [invoiceId]: value,
+      [invoiceId]: nextValue,
     }));
   }
 
@@ -216,11 +189,6 @@ export default function CustomerPaymentScreen() {
                   keyboardType="decimal-pad"
                   style={styles.allocationInput}
                 />
-                {allocationErrors[invoice.invoice.id] ? (
-                  <Text style={styles.allocationError}>
-                    {allocationErrors[invoice.invoice.id]}
-                  </Text>
-                ) : null}
               </View>
             </View>
           ))}
@@ -272,24 +240,6 @@ function formatStatus(invoice: InvoiceRow) {
   return 'Unpaid';
 }
 
-function parseAllocationInput(value: string) {
-  const trimmedValue = value.trim();
-
-  if (!trimmedValue) {
-    return 0;
-  }
-
-  if (trimmedValue.startsWith('-')) {
-    return -1;
-  }
-
-  if (!/^\d*(\.\d{0,2})?$/.test(trimmedValue)) {
-    return null;
-  }
-
-  return toCents(trimmedValue);
-}
-
 function toCents(value: string | number) {
   const text = String(value).trim();
 
@@ -304,15 +254,44 @@ function toCents(value: string | number) {
   return wholeCents + fractionCents;
 }
 
+function sanitizeAllocationInput(value: string) {
+  let hasDecimal = false;
+  let wholePart = '';
+  let fractionPart = '';
+
+  for (const character of value.trim()) {
+    if (character >= '0' && character <= '9') {
+      if (hasDecimal) {
+        fractionPart = `${fractionPart}${character}`.slice(0, 2);
+      } else {
+        wholePart = `${wholePart}${character}`;
+      }
+      continue;
+    }
+
+    if (character === '.' && !hasDecimal) {
+      hasDecimal = true;
+    }
+  }
+
+  if (!wholePart && !hasDecimal) {
+    return '';
+  }
+
+  if (hasDecimal) {
+    return `${wholePart}.${fractionPart}`;
+  }
+
+  return wholePart;
+}
+
+function formatInputFromCents(value: number) {
+  return (value / 100).toFixed(2);
+}
+
 const styles = StyleSheet.create({
   allocationBlock: {
     marginTop: 18,
-  },
-  allocationError: {
-    color: '#b91c1c',
-    fontSize: 13,
-    fontWeight: '700',
-    marginTop: 6,
   },
   allocationInput: {
     backgroundColor: '#f8fafc',
@@ -325,6 +304,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingHorizontal: 14,
     paddingVertical: 12,
+    textAlign: 'right',
   },
   allocationLabel: {
     color: '#64748b',
