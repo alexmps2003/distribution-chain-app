@@ -117,10 +117,10 @@ export default function App() {
           <Pressable
             style={styles.secondaryButton}
             onPress={() => {
-              router.push('/search-customer');
+              router.push('/customers');
             }}
           >
-            <Text style={styles.secondaryButtonText}>Search Customer</Text>
+            <Text style={styles.secondaryButtonText}>Customers</Text>
           </Pressable>
 
           <Pressable
