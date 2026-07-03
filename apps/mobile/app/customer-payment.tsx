@@ -1,3 +1,6 @@
+import DateTimePicker, {
+  type DateTimePickerEvent,
+} from '@react-native-community/datetimepicker';
 import { useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -104,6 +107,7 @@ export default function CustomerPaymentScreen() {
     Record<PaymentMethod, MethodDraft>
   >(createInitialMethodDrafts);
   const [addedMethods, setAddedMethods] = useState<AddedMethod[]>([]);
+  const [isChequeDatePickerOpen, setIsChequeDatePickerOpen] = useState(false);
   const [methodMessage, setMethodMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -132,6 +136,7 @@ export default function CustomerPaymentScreen() {
           setAllocations({});
           setMethodDrafts(createInitialMethodDrafts());
           setAddedMethods([]);
+          setIsChequeDatePickerOpen(false);
           setMethodMessage('');
         }
       } catch (error) {
@@ -269,7 +274,23 @@ export default function CustomerPaymentScreen() {
       ...current,
       [selectedMethod]: { ...emptyMethodDraft },
     }));
+    setIsChequeDatePickerOpen(false);
     setMethodMessage('');
+  }
+
+  function updateChequeDate(
+    event: DateTimePickerEvent,
+    selectedDate?: Date,
+  ) {
+    if (Platform.OS === 'android') {
+      setIsChequeDatePickerOpen(false);
+    }
+
+    if (event.type === 'dismissed' || !selectedDate) {
+      return;
+    }
+
+    updateMethodDraft('chequeDate', formatDateInput(selectedDate));
   }
 
   function scrollToInvoice(invoiceId: string) {
@@ -411,6 +432,7 @@ export default function CustomerPaymentScreen() {
                           key={method.id}
                           onPress={() => {
                             setSelectedMethod(method.id);
+                            setIsChequeDatePickerOpen(false);
                             setMethodMessage('');
                           }}
                           style={[
@@ -459,14 +481,25 @@ export default function CustomerPaymentScreen() {
                             updateMethodDraft('chequeBank', value);
                           }}
                         />
-                        <PaymentField
-                          label="Cheque Date"
-                          placeholder="YYYY-MM-DD"
+                        <ChequeDateField
                           value={selectedMethodDraft.chequeDate}
-                          onChangeText={(value) => {
-                            updateMethodDraft('chequeDate', value);
+                          onPress={() => {
+                            Keyboard.dismiss();
+                            setIsChequeDatePickerOpen(true);
                           }}
                         />
+                        {isChequeDatePickerOpen ? (
+                          <DateTimePicker
+                            value={getDatePickerValue(
+                              selectedMethodDraft.chequeDate,
+                            )}
+                            mode="date"
+                            display={
+                              Platform.OS === 'ios' ? 'spinner' : 'default'
+                            }
+                            onChange={updateChequeDate}
+                          />
+                        ) : null}
                       </>
                     ) : null}
 
@@ -614,6 +647,29 @@ function getMethodDetails(method: PaymentMethod, draft: MethodDraft) {
   return '';
 }
 
+function ChequeDateField({
+  onPress,
+  value,
+}: {
+  onPress: () => void;
+  value: string;
+}) {
+  return (
+    <View style={styles.paymentField}>
+      <Text style={styles.paymentFieldLabel}>Cheque Date</Text>
+      <Pressable style={styles.chequeDateButton} onPress={onPress}>
+        <Text
+          style={
+            value ? styles.chequeDateValue : styles.chequeDatePlaceholder
+          }
+        >
+          {value || 'Select cheque date'}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
 function PaymentField({
   keyboardType = 'default',
   label,
@@ -643,6 +699,24 @@ function PaymentField({
       />
     </View>
   );
+}
+
+function formatDateInput(value: Date) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+}
+
+function getDatePickerValue(value: string) {
+  const [year, month, day] = value.split('-').map(Number);
+
+  if (year && month && day) {
+    return new Date(year, month - 1, day);
+  }
+
+  return new Date();
 }
 
 function toCents(value: string | number) {
@@ -780,6 +854,24 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '900',
     marginTop: 4,
+  },
+  chequeDateButton: {
+    backgroundColor: '#f8fafc',
+    borderColor: '#cbd5e1',
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  chequeDatePlaceholder: {
+    color: '#94a3b8',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  chequeDateValue: {
+    color: '#020617',
+    fontSize: 16,
+    fontWeight: '700',
   },
   emptyState: {
     backgroundColor: '#ffffff',
