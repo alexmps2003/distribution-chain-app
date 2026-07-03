@@ -1,7 +1,7 @@
 import { useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiGet } from '../lib/api-client';
 import { useAuth } from '../lib/auth-context';
@@ -35,6 +35,10 @@ export default function CustomerPaymentScreen() {
   const { accessToken } = useAuth();
   const { customerId } = useLocalSearchParams<{ customerId?: string }>();
   const [data, setData] = useState<CustomerInvoicesResponse | null>(null);
+  const [allocations, setAllocations] = useState<Record<string, string>>({});
+  const [allocationErrors, setAllocationErrors] = useState<
+    Record<string, string>
+  >({});
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -59,6 +63,8 @@ export default function CustomerPaymentScreen() {
 
         if (isMounted) {
           setData(response);
+          setAllocations({});
+          setAllocationErrors({});
         }
       } catch (error) {
         if (isMounted) {
@@ -90,6 +96,51 @@ export default function CustomerPaymentScreen() {
       );
     });
   }, [data]);
+
+  const totalAllocatedCents = useMemo(() => {
+    return openInvoices.reduce((total, invoice) => {
+      return total + toCents(allocations[invoice.invoice.id] ?? '');
+    }, 0);
+  }, [allocations, openInvoices]);
+
+  function updateAllocation(invoice: InvoiceRow, value: string) {
+    const invoiceId = invoice.invoice.id;
+    const parsedCents = parseAllocationInput(value);
+
+    if (parsedCents === null) {
+      setAllocationErrors((current) => ({
+        ...current,
+        [invoiceId]: 'Enter a valid amount.',
+      }));
+      return;
+    }
+
+    if (parsedCents < 0) {
+      setAllocationErrors((current) => ({
+        ...current,
+        [invoiceId]: 'Allocation cannot be negative.',
+      }));
+      return;
+    }
+
+    if (parsedCents > toCents(invoice.outstanding)) {
+      setAllocationErrors((current) => ({
+        ...current,
+        [invoiceId]: 'Allocation cannot exceed outstanding.',
+      }));
+      return;
+    }
+
+    setAllocationErrors((current) => {
+      const next = { ...current };
+      delete next[invoiceId];
+      return next;
+    });
+    setAllocations((current) => ({
+      ...current,
+      [invoiceId]: value,
+    }));
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -152,8 +203,35 @@ export default function CustomerPaymentScreen() {
                   </Text>
                 </View>
               </View>
+
+              <View style={styles.allocationBlock}>
+                <Text style={styles.allocationLabel}>Allocation</Text>
+                <TextInput
+                  value={allocations[invoice.invoice.id] ?? ''}
+                  onChangeText={(value) => {
+                    updateAllocation(invoice, value);
+                  }}
+                  placeholder="0.00"
+                  placeholderTextColor="#94a3b8"
+                  keyboardType="decimal-pad"
+                  style={styles.allocationInput}
+                />
+                {allocationErrors[invoice.invoice.id] ? (
+                  <Text style={styles.allocationError}>
+                    {allocationErrors[invoice.invoice.id]}
+                  </Text>
+                ) : null}
+              </View>
             </View>
           ))}
+
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryTitle}>Allocation Summary</Text>
+            <Text style={styles.summaryLabel}>Total Allocated</Text>
+            <Text style={styles.summaryValue}>
+              {formatMoneyFromCents(totalAllocatedCents)}
+            </Text>
+          </View>
         </ScrollView>
       )}
     </SafeAreaView>
@@ -179,6 +257,13 @@ function formatMoney(value: string | number) {
   })}`;
 }
 
+function formatMoneyFromCents(value: number) {
+  return `Rs. ${(value / 100).toLocaleString('en-US', {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  })}`;
+}
+
 function formatStatus(invoice: InvoiceRow) {
   if (invoice.displayStatus === 'PARTIALLY_PAID') {
     return 'Partially paid';
@@ -187,7 +272,67 @@ function formatStatus(invoice: InvoiceRow) {
   return 'Unpaid';
 }
 
+function parseAllocationInput(value: string) {
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) {
+    return 0;
+  }
+
+  if (trimmedValue.startsWith('-')) {
+    return -1;
+  }
+
+  if (!/^\d*(\.\d{0,2})?$/.test(trimmedValue)) {
+    return null;
+  }
+
+  return toCents(trimmedValue);
+}
+
+function toCents(value: string | number) {
+  const text = String(value).trim();
+
+  if (!text) {
+    return 0;
+  }
+
+  const [wholePart, fractionPart = ''] = text.split('.');
+  const wholeCents = Number(wholePart || '0') * 100;
+  const fractionCents = Number(fractionPart.padEnd(2, '0').slice(0, 2));
+
+  return wholeCents + fractionCents;
+}
+
 const styles = StyleSheet.create({
+  allocationBlock: {
+    marginTop: 18,
+  },
+  allocationError: {
+    color: '#b91c1c',
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: 6,
+  },
+  allocationInput: {
+    backgroundColor: '#f8fafc',
+    borderColor: '#cbd5e1',
+    borderRadius: 14,
+    borderWidth: 1,
+    color: '#020617',
+    fontSize: 18,
+    fontWeight: '800',
+    marginTop: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  allocationLabel: {
+    color: '#64748b',
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
   amountBlock: {
     flex: 1,
   },
@@ -282,6 +427,32 @@ const styles = StyleSheet.create({
     color: '#334155',
     fontSize: 14,
     fontWeight: '800',
+  },
+  summaryCard: {
+    backgroundColor: '#ffffff',
+    borderColor: '#cbd5e1',
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 18,
+  },
+  summaryLabel: {
+    color: '#64748b',
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    marginTop: 14,
+    textTransform: 'uppercase',
+  },
+  summaryTitle: {
+    color: '#020617',
+    fontSize: 20,
+    fontWeight: '900',
+  },
+  summaryValue: {
+    color: '#0369a1',
+    fontSize: 28,
+    fontWeight: '900',
+    marginTop: 6,
   },
   subtitle: {
     color: '#64748b',
