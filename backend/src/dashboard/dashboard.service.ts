@@ -267,6 +267,29 @@ export class DashboardService {
     };
   }
 
+  async findCollectorSummary() {
+    const dashboard = await this.findSummary();
+    const paymentRows = await this.databaseService.db.select().from(payments);
+    const { endOfToday, startOfToday } = this.getTodayRange();
+    const todaysPayments = paymentRows.filter((payment) => {
+      return (
+        payment.status === 'ACTIVE' &&
+        payment.paymentDate >= startOfToday &&
+        payment.paymentDate < endOfToday
+      );
+    });
+    const collectedTodayCents = todaysPayments.reduce(
+      (sum, payment) => sum + this.toCents(payment.amount),
+      0,
+    );
+
+    return {
+      totalOutstanding: dashboard.summary.totalOutstanding,
+      collectedToday: this.fromCents(collectedTodayCents),
+      paymentsToday: todaysPayments.length,
+    };
+  }
+
   private getActivePaidCents(
     allocations: (typeof paymentAllocations.$inferSelect)[],
     paymentPartById: Map<string, typeof paymentParts.$inferSelect>,
@@ -315,6 +338,16 @@ export class DashboardService {
 
   private isOverdue(dueDate: Date | null, today: Date) {
     return dueDate !== null && dueDate < today;
+  }
+
+  private getTodayRange() {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const endOfToday = new Date(startOfToday);
+    endOfToday.setDate(endOfToday.getDate() + 1);
+
+    return { endOfToday, startOfToday };
   }
 
   private toCents(value: string | number) {

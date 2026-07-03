@@ -2,25 +2,78 @@ import './global.css';
 
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { apiGet } from './lib/api-client';
+import { useAuth } from './lib/auth-context';
 
-const summaryCards = [
-  {
-    label: 'Outstanding',
-    value: 'Rs. 0.00',
-  },
-  {
-    label: 'Collected Today',
-    value: 'Rs. 0.00',
-  },
-  {
-    label: 'Payments Today',
-    value: '0',
-  },
-];
+type CollectorSummary = {
+  collectedToday: string | number;
+  paymentsToday: number;
+  totalOutstanding: string | number;
+};
 
 export default function App() {
+  const { accessToken } = useAuth();
+  const [summary, setSummary] = useState<CollectorSummary | null>(null);
+  const [isLoadingSummary, setIsLoadingSummary] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadSummary() {
+      try {
+        setIsLoadingSummary(true);
+
+        const response = await apiGet<CollectorSummary>(
+          '/dashboard/collector-summary',
+          accessToken ?? undefined,
+        );
+
+        if (isMounted) {
+          setSummary(response);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setSummary(null);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingSummary(false);
+        }
+      }
+    }
+
+    void loadSummary();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [accessToken]);
+
+  const summaryCards = useMemo(
+    () => [
+      {
+        label: 'Outstanding',
+        value: getSummaryValue(summary?.totalOutstanding, isLoadingSummary),
+      },
+      {
+        label: 'Collected Today',
+        value: getSummaryValue(summary?.collectedToday, isLoadingSummary),
+      },
+      {
+        label: 'Payments Today',
+        value: isLoadingSummary
+          ? '...'
+          : summary?.paymentsToday !== undefined
+            ? String(summary.paymentsToday)
+            : 'Unavailable',
+      },
+    ],
+    [isLoadingSummary, summary],
+  );
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
@@ -63,6 +116,24 @@ export default function App() {
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+function getSummaryValue(
+  value: string | number | null | undefined,
+  isLoading: boolean,
+) {
+  if (isLoading) {
+    return '...';
+  }
+
+  if (value === null || value === undefined) {
+    return 'Unavailable';
+  }
+
+  return `Rs. ${Number(value).toLocaleString('en-US', {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  })}`;
 }
 
 const styles = StyleSheet.create({

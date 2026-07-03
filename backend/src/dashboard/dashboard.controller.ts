@@ -14,4 +14,10 @@ export class DashboardController {
   findSummary() {
     return this.dashboardService.findSummary();
   }
+
+  @Get('collector-summary')
+  @Roles('ADMIN', 'SALES_REP', 'COLLECTOR')
+  findCollectorSummary() {
+    return this.dashboardService.findCollectorSummary();
+  }
 }
