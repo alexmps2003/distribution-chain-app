@@ -526,6 +526,14 @@ export default function CustomerPaymentScreen() {
     setSaveMessage('');
   }
 
+  function removeAddedMethod(methodIndex: number) {
+    setAddedMethods((current) =>
+      current.filter((_, index) => index !== methodIndex),
+    );
+    setMethodMessage('');
+    setSaveMessage('');
+  }
+
   function updateChequeDate(
     event: DateTimePickerEvent,
     selectedDate?: Date,
@@ -1100,6 +1108,16 @@ export default function CustomerPaymentScreen() {
                               </Text>
                             ))}
                           </View>
+                          <Pressable
+                            style={styles.removeMethodButton}
+                            onPress={() => {
+                              removeAddedMethod(index);
+                            }}
+                          >
+                            <Text style={styles.removeMethodButtonText}>
+                              Remove
+                            </Text>
+                          </Pressable>
                         </View>
                       ))
                     )}
@@ -1788,6 +1806,21 @@ const styles = StyleSheet.create({
   },
   paymentMethodsSection: {
     marginTop: 24,
+  },
+  removeMethodButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#fff1f2',
+    borderColor: '#fecdd3',
+    borderRadius: 12,
+    borderWidth: 1,
+    marginTop: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  removeMethodButtonText: {
+    color: '#be123c',
+    fontSize: 14,
+    fontWeight: '900',
   },
   safeArea: {
     backgroundColor: '#f1f5f9',
