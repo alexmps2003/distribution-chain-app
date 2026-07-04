@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { LogOut, Search, UserCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -116,9 +117,24 @@ export default function AppNav() {
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <Link
             href="/"
-            className="text-base font-medium tracking-tight text-zinc-950 transition-colors hover:text-zinc-700"
+            className="inline-flex items-center gap-2.5 text-base font-semibold tracking-tight text-zinc-950 transition-colors hover:text-[#0f77a8]"
           >
-            Distribution Chain
+            <span className="inline-flex size-9 items-center justify-center rounded-2xl bg-[#0f77a8]/10 ring-1 ring-[#0f77a8]/15">
+              <Image
+                src="/icon.png"
+                alt="Distribio"
+                width={24}
+                height={24}
+                className="rounded-lg"
+                priority
+              />
+            </span>
+            <span className="flex flex-col leading-none">
+              <span className="text-base font-bold">Distribio</span>
+              <span className="mt-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#0f77a8]">
+                Distribution Chain
+              </span>
+            </span>
           </Link>
           <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center lg:max-w-md">
             <form
@@ -134,7 +150,7 @@ export default function AppNav() {
                 type="search"
                 name="q"
                 placeholder="Search customers, invoices, payments..."
-                className="h-10 w-full rounded-full border border-zinc-200 bg-zinc-50/80 pl-9 pr-4 text-sm text-zinc-950 outline-none transition-colors placeholder:text-zinc-400 focus:border-zinc-400 focus:bg-white focus:ring-2 focus:ring-zinc-200"
+                className="h-10 w-full rounded-full border border-zinc-200 bg-zinc-50/80 pl-9 pr-4 text-sm text-zinc-950 outline-none transition-colors placeholder:text-zinc-400 focus:border-[#0f77a8] focus:bg-white focus:ring-2 focus:ring-[#0f77a8]/15"
               />
             </form>
             <DropdownMenu>
@@ -191,8 +207,8 @@ export default function AppNav() {
                 aria-current={isActive ? "page" : undefined}
                 className={
                   isActive
-                    ? "inline-flex h-9 items-center justify-center rounded-full bg-zinc-950 px-3.5 text-sm font-medium text-white shadow-sm shadow-zinc-950/10"
-                    : "inline-flex h-9 items-center justify-center rounded-full px-3.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-950"
+                    ? "inline-flex h-9 items-center justify-center rounded-full bg-[#0f77a8] px-3.5 text-sm font-semibold text-white shadow-sm shadow-[#0f77a8]/20"
+                    : "inline-flex h-9 items-center justify-center rounded-full px-3.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-[#0f77a8]/10 hover:text-[#0f77a8]"
                 }
               >
                 {item.label}
