@@ -89,6 +89,38 @@ function formatDate(date: Date | null) {
   });
 }
 
+function formatTodayLabel() {
+  return new Date().toLocaleDateString("en-GB", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+}
+
+function formatLastUpdated(date: Date | null) {
+  if (!date) {
+    return "Not updated yet";
+  }
+
+  const minutesAgo = Math.floor((Date.now() - date.getTime()) / 60000);
+
+  if (minutesAgo <= 0) {
+    return "Updated just now";
+  }
+
+  if (minutesAgo === 1) {
+    return "Updated 1 min ago";
+  }
+
+  return `Updated ${minutesAgo} min ago`;
+}
+
+function getDashboardMetadata(userName: string | null, lastUpdatedAt: Date | null) {
+  return [formatTodayLabel(), userName?.trim(), formatLastUpdated(lastUpdatedAt)]
+    .filter(Boolean)
+    .join(" • ");
+}
+
 function getSearchParamValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
@@ -260,6 +292,8 @@ export default function Home() {
   const searchParams = useSearchParams();
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  const [userName, setUserName] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<AuthenticatedUserRole | null>(null);
   const collectionsRangeParam =
     searchParams.get("collectionsRange") ?? undefined;
@@ -287,6 +321,8 @@ export default function Home() {
 
         if (isMounted) {
           setDashboard(dashboardResponse);
+          setLastUpdatedAt(new Date());
+          setUserName(authenticatedUser.name);
           setUserRole(authenticatedUser.role);
           setErrorMessage("");
         }
@@ -387,6 +423,7 @@ export default function Home() {
   const visibleModuleCards = moduleCards.filter((card) =>
     canShowModuleCard(card.href, userRole),
   );
+  const dashboardMetadata = getDashboardMetadata(userName, lastUpdatedAt);
 
   const filteredOutstandingCustomers = highOutstandingCustomers
     .filter((customer) => Number(customer.outstanding) >= outstandingMin)
@@ -435,8 +472,18 @@ export default function Home() {
       <PageHeader
         eyebrow="Live distribution overview"
         title="Distribio Dashboard"
+        metadata={
+          <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span
+              aria-hidden="true"
+              className="h-1.5 w-1.5 rounded-full bg-[#0f77a8]"
+            />
+            <span>{dashboardMetadata}</span>
+          </span>
+        }
         subtitle="Monitor customers, invoices, payments, cheques, and outstanding balances."
         className="block"
+        metadataClassName="text-xs font-medium text-zinc-500"
         titleClassName="font-medium"
         subtitleClassName="mt-2 leading-6"
       />

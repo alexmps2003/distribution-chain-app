@@ -24,12 +24,13 @@ type CollectorSummary = {
 };
 
 export default function App() {
-  const { accessToken, logout } = useAuth();
+  const { accessToken, logout, user } = useAuth();
   const [summary, setSummary] = useState<CollectorSummary | null>(null);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [summaryError, setSummaryError] = useState<FriendlyError | null>(null);
   const [isLogoutModalVisible, setIsLogoutModalVisible] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
 
   const loadSummary = useCallback(
     async ({ refreshing = false }: { refreshing?: boolean } = {}) => {
@@ -47,6 +48,7 @@ export default function App() {
         );
 
         setSummary(response);
+        setLastSyncedAt(new Date());
       } catch (error) {
         setSummaryError(
           getFriendlyError(error, 'Unable to load dashboard right now.'),
@@ -64,6 +66,10 @@ export default function App() {
   }, [loadSummary]);
 
   const isInitialLoading = isLoadingSummary && !summary;
+  const headerMetadata = getHeaderMetadata({
+    collectorName: user?.name,
+    lastSyncedAt,
+  });
 
   const summaryCards = useMemo(
     () => [
@@ -127,6 +133,7 @@ export default function App() {
           <Text style={styles.subtitle}>
             Select a customer and record today&apos;s payment.
           </Text>
+          <Text style={styles.metadata}>{headerMetadata}</Text>
         </View>
 
         <View style={styles.summaryList}>
@@ -217,6 +224,50 @@ function getSummaryValue(
   })}`;
 }
 
+function getHeaderMetadata({
+  collectorName,
+  lastSyncedAt,
+}: {
+  collectorName?: string;
+  lastSyncedAt: Date | null;
+}) {
+  return [
+    formatTodayLabel(),
+    collectorName?.trim() || '',
+    formatLastSynced(lastSyncedAt),
+  ]
+    .filter(Boolean)
+    .join(' • ');
+}
+
+function formatTodayLabel() {
+  return new Date().toLocaleDateString('en-US', {
+    day: 'numeric',
+    month: 'long',
+    weekday: 'long',
+  });
+}
+
+function formatLastSynced(lastSyncedAt: Date | null) {
+  if (!lastSyncedAt) {
+    return 'Not updated yet';
+  }
+
+  const elapsedMinutes = Math.floor(
+    (Date.now() - lastSyncedAt.getTime()) / 60000,
+  );
+
+  if (elapsedMinutes <= 0) {
+    return 'Updated just now';
+  }
+
+  if (elapsedMinutes === 1) {
+    return 'Updated 1 min ago';
+  }
+
+  return `Updated ${elapsedMinutes} min ago`;
+}
+
 function ErrorCard({
   error,
   onRetry,
@@ -281,6 +332,13 @@ const styles = StyleSheet.create({
     color: '#334155',
     fontSize: 13,
     fontWeight: '800',
+  },
+  metadata: {
+    color: '#64748b',
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 18,
+    marginTop: 8,
   },
   primaryButton: {
     alignItems: 'center',
