@@ -8,7 +8,12 @@ async function bootstrap() {
   app.enableCors({
     allowedHeaders: ['Content-Type', 'Authorization'],
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-    origin: ['http://localhost:3000', 'http://localhost:3001'],
+    origin: [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'https://distribution-chain-app.vercel.app',
+      'https://distribution-chain-7gaq48ehj-alexmps2003s-projects.vercel.app',
+    ],
   });
 
   app.setGlobalPrefix('api');
