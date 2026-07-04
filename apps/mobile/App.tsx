@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Image,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -115,7 +116,19 @@ export default function App() {
       >
         <View style={styles.header}>
           <View style={styles.headerTop}>
-            <Text style={styles.kicker}>Distribio Collector</Text>
+            <View style={styles.brandLockup}>
+              <View style={styles.brandLogoFrame}>
+                <Image
+                  source={require('./assets/icon.png')}
+                  style={styles.brandLogo}
+                  resizeMode="contain"
+                />
+              </View>
+              <View style={styles.brandText}>
+                <Text style={styles.brandName}>Distribio</Text>
+                <Text style={styles.brandSubtitle}>COLLECTOR</Text>
+              </View>
+            </View>
             <Pressable style={styles.logoutButton} onPress={confirmLogout}>
               <Text style={styles.logoutButtonText}>Logout</Text>
             </Pressable>
@@ -254,6 +267,44 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     textTransform: 'uppercase',
   },
+  brandLockup: {
+    alignItems: 'center',
+    flex: 1,
+    flexDirection: 'row',
+    paddingRight: 12,
+  },
+  brandLogoFrame: {
+    alignItems: 'center',
+    backgroundColor: '#EAF4FE',
+    borderColor: '#D8E7F5',
+    borderRadius: 22,
+    borderWidth: 1,
+    height: 44,
+    justifyContent: 'center',
+    overflow: 'hidden',
+    padding: 7,
+    width: 44,
+  },
+  brandLogo: {
+    borderRadius: 15,
+    height: 30,
+    width: 30,
+  },
+  brandName: {
+    color: '#020617',
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  brandSubtitle: {
+    color: '#0369a1',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 2.2,
+    marginTop: 2,
+  },
+  brandText: {
+    marginLeft: 10,
+  },
   header: {
     marginBottom: 20,
   },
@@ -261,15 +312,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
-  },
-  kicker: {
-    color: '#0369a1',
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-    paddingRight: 12,
-    textTransform: 'uppercase',
   },
   logoutButton: {
     backgroundColor: '#ffffff',
