@@ -11,6 +11,7 @@ onlyBuiltDependencies:
 
 allowBuilds:
   '@prisma/engines': true
+  dtrace-provider: true
   esbuild: true
   prisma: true
   sharp: true
