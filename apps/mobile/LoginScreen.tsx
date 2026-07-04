@@ -1,13 +1,17 @@
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import {
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { BrandHeader } from './components/BrandHeader';
 import { useAuth } from './lib/auth-context';
 
 export default function LoginScreen() {
@@ -35,51 +39,61 @@ export default function LoginScreen() {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
 
-      <View style={styles.content}>
-        <View style={styles.header}>
-          <Text style={styles.kicker}>Distribio Collector</Text>
-          <Text style={styles.title}>Login</Text>
-          <Text style={styles.subtitle}>
-            Sign in to access assigned customer collections.
-          </Text>
-        </View>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.keyboardView}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.content}>
+            <View style={styles.header}>
+              <BrandHeader />
+              <Text style={styles.title}>Login</Text>
+              <Text style={styles.subtitle}>
+                Sign in to access assigned customer collections.
+              </Text>
+            </View>
 
-        <View style={styles.form}>
-          <TextInput
-            value={email}
-            onChangeText={setEmail}
-            placeholder="Email"
-            placeholderTextColor="#94a3b8"
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="email-address"
-            style={styles.input}
-          />
+            <View style={styles.form}>
+              <TextInput
+                value={email}
+                onChangeText={setEmail}
+                placeholder="Email"
+                placeholderTextColor="#94a3b8"
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="email-address"
+                style={styles.input}
+              />
 
-          <TextInput
-            value={password}
-            onChangeText={setPassword}
-            placeholder="Password"
-            placeholderTextColor="#94a3b8"
-            secureTextEntry
-            style={styles.input}
-          />
+              <TextInput
+                value={password}
+                onChangeText={setPassword}
+                placeholder="Password"
+                placeholderTextColor="#94a3b8"
+                secureTextEntry
+                style={styles.input}
+              />
 
-          {errorMessage ? (
-            <Text style={styles.errorText}>{errorMessage}</Text>
-          ) : null}
+              {errorMessage ? (
+                <Text style={styles.errorText}>{errorMessage}</Text>
+              ) : null}
 
-          <Pressable
-            style={styles.primaryButton}
-            onPress={handleLogin}
-            disabled={isSubmitting}
-          >
-            <Text style={styles.primaryButtonText}>
-              {isSubmitting ? 'Logging in...' : 'Login'}
-            </Text>
-          </Pressable>
-        </View>
-      </View>
+              <Pressable
+                style={styles.primaryButton}
+                onPress={handleLogin}
+                disabled={isSubmitting}
+              >
+                <Text style={styles.primaryButtonText}>
+                  {isSubmitting ? 'Logging in...' : 'Login'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -119,12 +133,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 16,
   },
-  kicker: {
-    color: '#0369a1',
-    fontSize: 14,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
+  keyboardView: {
+    flex: 1,
   },
   primaryButton: {
     alignItems: 'center',
@@ -141,6 +151,11 @@ const styles = StyleSheet.create({
   safeArea: {
     backgroundColor: '#f1f5f9',
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 96,
+    paddingTop: 24,
   },
   subtitle: {
     color: '#64748b',

@@ -4,7 +4,6 @@ import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Image,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -14,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppModal } from './components/AppModal';
+import { BrandHeader } from './components/BrandHeader';
 import { apiGet, getFriendlyError, type FriendlyError } from './lib/api-client';
 import { useAuth } from './lib/auth-context';
 
@@ -116,18 +116,8 @@ export default function App() {
       >
         <View style={styles.header}>
           <View style={styles.headerTop}>
-            <View style={styles.brandLockup}>
-              <View style={styles.brandLogoFrame}>
-                <Image
-                  source={require('./assets/icon.png')}
-                  style={styles.brandLogo}
-                  resizeMode="contain"
-                />
-              </View>
-              <View style={styles.brandText}>
-                <Text style={styles.brandName}>Distribio</Text>
-                <Text style={styles.brandSubtitle}>COLLECTOR</Text>
-              </View>
+            <View style={styles.brandHeaderWrap}>
+              <BrandHeader />
             </View>
             <Pressable style={styles.logoutButton} onPress={confirmLogout}>
               <Text style={styles.logoutButtonText}>Logout</Text>
@@ -267,43 +257,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     textTransform: 'uppercase',
   },
-  brandLockup: {
-    alignItems: 'center',
+  brandHeaderWrap: {
     flex: 1,
-    flexDirection: 'row',
     paddingRight: 12,
-  },
-  brandLogoFrame: {
-    alignItems: 'center',
-    backgroundColor: '#EAF4FE',
-    borderColor: '#D8E7F5',
-    borderRadius: 22,
-    borderWidth: 1,
-    height: 44,
-    justifyContent: 'center',
-    overflow: 'hidden',
-    padding: 7,
-    width: 44,
-  },
-  brandLogo: {
-    borderRadius: 15,
-    height: 30,
-    width: 30,
-  },
-  brandName: {
-    color: '#020617',
-    fontSize: 18,
-    fontWeight: '900',
-  },
-  brandSubtitle: {
-    color: '#0369a1',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 2.2,
-    marginTop: 2,
-  },
-  brandText: {
-    marginLeft: 10,
   },
   header: {
     marginBottom: 20,
