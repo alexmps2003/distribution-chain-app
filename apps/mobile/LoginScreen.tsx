@@ -16,7 +16,7 @@ import { useAuth } from './lib/auth-context';
 
 export default function LoginScreen() {
   const { login } = useAuth();
-  const [email, setEmail] = useState('collector@distribio.com');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
