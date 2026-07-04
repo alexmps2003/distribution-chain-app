@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "mobile",
+    "name": "Distribio",
     "slug": "mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -31,6 +31,12 @@
     },
     "plugins": [
       "expo-router"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "9b565b17-da5f-4314-9e13-d6ffa750fcd1"
+      }
+    }
   }
 }
