@@ -10,7 +10,10 @@
     },
     "preview": {
       "distribution": "internal",
-      "node": "22.13.1"
+      "node": "22.13.1",
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://distribution-chain-app-production.up.railway.app/api"
+      }
     },
     "production": {
       "autoIncrement": true,
