@@ -14,6 +14,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppModal } from '../components/AppModal';
+import { EmptyState } from '../components/EmptyState';
+import { ErrorState } from '../components/ErrorState';
+import { SkeletonCardList } from '../components/SkeletonCard';
 import {
   apiGet,
   getFriendlyError,
@@ -237,19 +240,18 @@ export default function PaymentDetailsScreen() {
         }
       >
         {isInitialLoading ? (
-          <View style={styles.stateCard}>
-            <Text style={styles.stateText}>Loading payment details...</Text>
-          </View>
+          <SkeletonCardList count={3} />
         ) : screenError && !details ? (
-          <ErrorCard error={screenError} onRetry={retryPayment} />
+          <ErrorState error={screenError} onRetry={retryPayment} />
         ) : !details ? (
-          <View style={styles.stateCard}>
-            <Text style={styles.stateText}>Payment not found.</Text>
-          </View>
+          <EmptyState
+            title="Payment not found"
+            description="Go back and select a payment again."
+          />
         ) : (
           <>
             {screenError ? (
-              <ErrorCard error={screenError} onRetry={retryPayment} />
+              <ErrorState error={screenError} onRetry={retryPayment} />
             ) : null}
 
             <View style={styles.summaryCard}>
@@ -295,7 +297,11 @@ export default function PaymentDetailsScreen() {
 
             <Section title="Payment Method Details">
               {paymentMethods.length === 0 ? (
-                <Text style={styles.mutedText}>No payment method details found.</Text>
+                <EmptyState
+                  title="No payment method details"
+                  description="This payment does not include method details yet."
+                  variant="inline"
+                />
               ) : (
                 paymentMethods.map((part) => (
                   <View key={part.id} style={styles.methodCard}>
@@ -327,7 +333,11 @@ export default function PaymentDetailsScreen() {
 
             <Section title="Invoice Allocations">
               {invoiceAllocations.length === 0 ? (
-                <Text style={styles.mutedText}>No invoice allocations found.</Text>
+                <EmptyState
+                  title="No allocations found"
+                  description="This payment is not linked to any invoices yet."
+                  variant="inline"
+                />
               ) : (
                 invoiceAllocations.map((allocation) => (
                   <View key={allocation.invoiceNumber} style={styles.allocationRow}>
@@ -396,26 +406,6 @@ function StatusBadge({ status }: { status: string }) {
       <Text style={[styles.statusBadgeText, getStatusBadgeTextStyle(status)]}>
         {formatStatus(status)}
       </Text>
-    </View>
-  );
-}
-
-function ErrorCard({
-  error,
-  onRetry,
-}: {
-  error: FriendlyError;
-  onRetry: () => void;
-}) {
-  return (
-    <View style={styles.stateCard}>
-      <Text style={styles.stateText}>{error.message}</Text>
-      {error.detail ? (
-        <Text style={styles.stateDetail}>{error.detail}</Text>
-      ) : null}
-      <Pressable style={styles.retryButton} onPress={onRetry}>
-        <Text style={styles.retryButtonText}>Retry</Text>
-      </Pressable>
     </View>
   );
 }

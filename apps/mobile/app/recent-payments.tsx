@@ -15,6 +15,9 @@ import {
   getFriendlyError,
   type FriendlyError,
 } from '../lib/api-client';
+import { EmptyState } from '../components/EmptyState';
+import { ErrorState } from '../components/ErrorState';
+import { SkeletonCardList } from '../components/SkeletonCard';
 import { useAuth } from '../lib/auth-context';
 
 type PaymentRow = {
@@ -106,19 +109,18 @@ export default function RecentPaymentsScreen() {
         }
       >
         {isInitialLoading ? (
-          <View style={styles.stateCard}>
-            <Text style={styles.stateText}>Loading recent payments...</Text>
-          </View>
+          <SkeletonCardList />
         ) : screenError && payments.length === 0 ? (
-          <ErrorCard error={screenError} onRetry={retryPayments} />
+          <ErrorState error={screenError} onRetry={retryPayments} />
         ) : recentPayments.length === 0 ? (
-          <View style={styles.stateCard}>
-            <Text style={styles.stateText}>No payments recorded yet.</Text>
-          </View>
+          <EmptyState
+            title="No recent payments"
+            description="Payments you collect will appear here."
+          />
         ) : (
           <>
             {screenError ? (
-              <ErrorCard error={screenError} onRetry={retryPayments} />
+              <ErrorState error={screenError} onRetry={retryPayments} />
             ) : null}
             {recentPayments.map((payment) => (
               <Pressable
@@ -175,26 +177,6 @@ function formatDateTime(value: string) {
     month: 'short',
     year: 'numeric',
   });
-}
-
-function ErrorCard({
-  error,
-  onRetry,
-}: {
-  error: FriendlyError;
-  onRetry: () => void;
-}) {
-  return (
-    <View style={styles.stateCard}>
-      <Text style={styles.stateText}>{error.message}</Text>
-      {error.detail ? (
-        <Text style={styles.stateDetail}>{error.detail}</Text>
-      ) : null}
-      <Pressable style={styles.retryButton} onPress={onRetry}>
-        <Text style={styles.retryButtonText}>Retry</Text>
-      </Pressable>
-    </View>
-  );
 }
 
 const styles = StyleSheet.create({

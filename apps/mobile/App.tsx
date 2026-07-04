@@ -14,6 +14,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppModal } from './components/AppModal';
 import { BrandHeader } from './components/BrandHeader';
+import { ErrorState } from './components/ErrorState';
+import { SkeletonCardList } from './components/SkeletonCard';
 import { apiGet, getFriendlyError, type FriendlyError } from './lib/api-client';
 import { useAuth } from './lib/auth-context';
 
@@ -138,15 +140,13 @@ export default function App() {
 
         <View style={styles.summaryList}>
           {isInitialLoading ? (
-            <View style={styles.stateCard}>
-              <Text style={styles.stateText}>Loading dashboard...</Text>
-            </View>
+            <SkeletonCardList count={3} rows={2} />
           ) : summaryError && !summary ? (
-            <ErrorCard error={summaryError} onRetry={retrySummary} />
+            <ErrorState error={summaryError} onRetry={retrySummary} />
           ) : (
             <>
               {summaryError ? (
-                <ErrorCard error={summaryError} onRetry={retrySummary} />
+                <ErrorState error={summaryError} onRetry={retrySummary} />
               ) : null}
               {summaryCards.map((card) => (
                 <View key={card.label} style={styles.card}>
@@ -268,26 +268,6 @@ function formatLastSynced(lastSyncedAt: Date | null) {
   return `Updated ${elapsedMinutes} min ago`;
 }
 
-function ErrorCard({
-  error,
-  onRetry,
-}: {
-  error: FriendlyError;
-  onRetry: () => void;
-}) {
-  return (
-    <View style={styles.stateCard}>
-      <Text style={styles.stateText}>{error.message}</Text>
-      {error.detail ? (
-        <Text style={styles.stateDetail}>{error.detail}</Text>
-      ) : null}
-      <Pressable style={styles.retryButton} onPress={onRetry}>
-        <Text style={styles.retryButtonText}>Retry</Text>
-      </Pressable>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   actions: {
     marginTop: 'auto',
@@ -380,45 +360,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
   },
-  retryButton: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#020617',
-    borderRadius: 14,
-    marginTop: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  retryButtonText: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '900',
-  },
   subtitle: {
     color: '#64748b',
     fontSize: 16,
     lineHeight: 22,
     marginTop: 6,
-  },
-  stateCard: {
-    backgroundColor: '#ffffff',
-    borderColor: '#e2e8f0',
-    borderRadius: 20,
-    borderWidth: 1,
-    marginBottom: 12,
-    padding: 20,
-  },
-  stateDetail: {
-    color: '#94a3b8',
-    fontSize: 13,
-    fontWeight: '600',
-    lineHeight: 18,
-    marginTop: 8,
-  },
-  stateText: {
-    color: '#64748b',
-    fontSize: 16,
-    fontWeight: '700',
-    lineHeight: 22,
   },
   summaryList: {
     marginTop: 0,

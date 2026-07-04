@@ -16,6 +16,9 @@ import {
   getFriendlyError,
   type FriendlyError,
 } from '../lib/api-client';
+import { EmptyState } from '../components/EmptyState';
+import { ErrorState } from '../components/ErrorState';
+import { SkeletonCardList } from '../components/SkeletonCard';
 import { useAuth } from '../lib/auth-context';
 
 type Customer = {
@@ -141,19 +144,18 @@ export default function CustomersScreen() {
         }
       >
         {isInitialLoading ? (
-          <View style={styles.stateCard}>
-            <Text style={styles.stateText}>Loading customers...</Text>
-          </View>
+          <SkeletonCardList />
         ) : screenError && customerRows.length === 0 ? (
-          <ErrorCard error={screenError} onRetry={retryCustomers} />
+          <ErrorState error={screenError} onRetry={retryCustomers} />
         ) : filteredCustomers.length === 0 ? (
-          <View style={styles.stateCard}>
-            <Text style={styles.stateText}>No customers found.</Text>
-          </View>
+          <EmptyState
+            title="No customers found"
+            description="Try another search term or check your assigned route."
+          />
         ) : (
           <>
             {screenError ? (
-              <ErrorCard error={screenError} onRetry={retryCustomers} />
+              <ErrorState error={screenError} onRetry={retryCustomers} />
             ) : null}
             {filteredCustomers.map(({ customer, summary }) => (
               <Pressable
@@ -200,26 +202,6 @@ function formatOutstanding(value: string | number | null | undefined) {
     maximumFractionDigits: 2,
     minimumFractionDigits: 2,
   })}`;
-}
-
-function ErrorCard({
-  error,
-  onRetry,
-}: {
-  error: FriendlyError;
-  onRetry: () => void;
-}) {
-  return (
-    <View style={styles.stateCard}>
-      <Text style={styles.stateText}>{error.message}</Text>
-      {error.detail ? (
-        <Text style={styles.stateDetail}>{error.detail}</Text>
-      ) : null}
-      <Pressable style={styles.retryButton} onPress={onRetry}>
-        <Text style={styles.retryButtonText}>Retry</Text>
-      </Pressable>
-    </View>
-  );
 }
 
 const styles = StyleSheet.create({

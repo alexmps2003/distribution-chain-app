@@ -15,6 +15,9 @@ import {
   getFriendlyError,
   type FriendlyError,
 } from '../lib/api-client';
+import { EmptyState } from '../components/EmptyState';
+import { ErrorState } from '../components/ErrorState';
+import { SkeletonCardList } from '../components/SkeletonCard';
 import { useAuth } from '../lib/auth-context';
 
 type Customer = {
@@ -147,19 +150,18 @@ export default function CustomerDetailsScreen() {
         }
       >
         {isInitialLoading ? (
-          <View style={styles.stateCard}>
-            <Text style={styles.stateText}>Loading invoices...</Text>
-          </View>
+          <SkeletonCardList count={2} />
         ) : screenError && !data ? (
-          <ErrorCard error={screenError} onRetry={retryCustomerInvoices} />
+          <ErrorState error={screenError} onRetry={retryCustomerInvoices} />
         ) : !data ? (
-          <View style={styles.stateCard}>
-            <Text style={styles.stateText}>Customer not found.</Text>
-          </View>
+          <EmptyState
+            title="Customer not found"
+            description="Go back and select a customer again."
+          />
         ) : (
           <>
             {screenError ? (
-              <ErrorCard
+              <ErrorState
                 error={screenError}
                 onRetry={retryCustomerInvoices}
               />
@@ -189,11 +191,10 @@ export default function CustomerDetailsScreen() {
             <Text style={styles.sectionTitle}>Unpaid Invoices</Text>
 
             {openInvoices.length === 0 ? (
-              <View style={styles.emptyStateInline}>
-                <Text style={styles.emptyStateText}>
-                  No unpaid invoices for this customer.
-                </Text>
-              </View>
+              <EmptyState
+                title="No unpaid invoices"
+                description="This customer has no unpaid or partially paid invoices."
+              />
             ) : (
               openInvoices.map((invoice) => (
                 <View key={invoice.invoice.id} style={styles.invoiceCard}>
@@ -257,26 +258,6 @@ function formatStatus(invoice: InvoiceRow) {
   }
 
   return 'Unpaid';
-}
-
-function ErrorCard({
-  error,
-  onRetry,
-}: {
-  error: FriendlyError;
-  onRetry: () => void;
-}) {
-  return (
-    <View style={styles.stateCard}>
-      <Text style={styles.stateText}>{error.message}</Text>
-      {error.detail ? (
-        <Text style={styles.stateDetail}>{error.detail}</Text>
-      ) : null}
-      <Pressable style={styles.retryButton} onPress={onRetry}>
-        <Text style={styles.retryButtonText}>Retry</Text>
-      </Pressable>
-    </View>
-  );
 }
 
 const styles = StyleSheet.create({

@@ -19,6 +19,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppModal } from '../components/AppModal';
+import { EmptyState } from '../components/EmptyState';
+import { ErrorState } from '../components/ErrorState';
+import { SkeletonCardList } from '../components/SkeletonCard';
 import { apiGet, apiPost } from '../lib/api-client';
 import { useAuth } from '../lib/auth-context';
 
@@ -797,18 +800,19 @@ export default function CustomerPaymentScreen() {
             </View>
 
             {isLoading ? (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyStateText}>Loading invoices...</Text>
+              <View style={styles.loadingStateWrap}>
+                <SkeletonCardList count={2} />
               </View>
             ) : errorMessage ? (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyStateText}>{errorMessage}</Text>
+                <ErrorState error={errorMessage} />
               </View>
             ) : openInvoices.length === 0 ? (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyStateText}>
-                  No unpaid invoices for this customer.
-                </Text>
+                <EmptyState
+                  title="No unpaid invoices"
+                  description="This customer has no unpaid or partially paid invoices."
+                />
               </View>
             ) : (
               <ScrollView
@@ -1045,9 +1049,11 @@ export default function CustomerPaymentScreen() {
                     </Text>
 
                     {selectedAllocationInvoices.length === 0 ? (
-                      <Text style={styles.methodAllocationEmptyText}>
-                        Allocate invoices above to allocate this method.
-                      </Text>
+                      <EmptyState
+                        title="No method allocations"
+                        description="Allocate invoices above to allocate this method."
+                        variant="inline"
+                      />
                     ) : (
                       <View style={styles.methodAllocationList}>
                         {selectedAllocationInvoices.map((invoice) => {
@@ -1127,11 +1133,10 @@ export default function CustomerPaymentScreen() {
                   <View style={styles.methodsAddedSection}>
                     <Text style={styles.sectionTitle}>Methods Added</Text>
                     {addedMethods.length === 0 ? (
-                      <View style={styles.emptyMethodsCard}>
-                        <Text style={styles.emptyStateText}>
-                          No methods added yet.
-                        </Text>
-                      </View>
+                      <EmptyState
+                        title="No methods added"
+                        description="Added payment methods will appear here."
+                      />
                     ) : (
                       addedMethods.map((method, index) => (
                         <View
@@ -1653,13 +1658,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   emptyState: {
-    backgroundColor: '#ffffff',
-    borderColor: '#e2e8f0',
-    borderRadius: 20,
-    borderWidth: 1,
     marginHorizontal: 20,
     marginTop: 4,
-    padding: 20,
   },
   emptyStateText: {
     color: '#64748b',
@@ -1678,6 +1678,10 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 20,
     paddingTop: 56,
+  },
+  loadingStateWrap: {
+    marginHorizontal: 20,
+    marginTop: 4,
   },
   invoiceCard: {
     backgroundColor: '#ffffff',
