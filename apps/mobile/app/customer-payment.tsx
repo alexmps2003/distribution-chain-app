@@ -14,7 +14,6 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  TouchableWithoutFeedback,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -787,17 +786,16 @@ export default function CustomerPaymentScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardAvoidingView}
       >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-          <View style={styles.screenContent}>
-            <View style={styles.header}>
-              <Text style={styles.kicker}>Record Payment</Text>
-              <Text style={styles.title}>
-                {data?.customer.name ?? 'Loading customer'}
-              </Text>
-              {data?.customer.code ? (
-                <Text style={styles.subtitle}>{data.customer.code}</Text>
-              ) : null}
-            </View>
+        <View style={styles.screenContent}>
+          <Pressable onPress={Keyboard.dismiss} style={styles.header}>
+            <Text style={styles.kicker}>Record Payment</Text>
+            <Text style={styles.title}>
+              {data?.customer.name ?? 'Loading customer'}
+            </Text>
+            {data?.customer.code ? (
+              <Text style={styles.subtitle}>{data.customer.code}</Text>
+            ) : null}
+          </Pressable>
 
             {isLoading ? (
               <View style={styles.loadingStateWrap}>
@@ -1215,8 +1213,7 @@ export default function CustomerPaymentScreen() {
                 </View>
               </ScrollView>
             )}
-          </View>
-        </TouchableWithoutFeedback>
+        </View>
       </KeyboardAvoidingView>
       <AppModal
         visible={paymentModal !== null}
