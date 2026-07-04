@@ -1,7 +1,10 @@
 import { router, useLocalSearchParams } from 'expo-router';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -65,9 +68,13 @@ export default function PaymentDetailsScreen() {
   const { paymentId } = useLocalSearchParams<{ paymentId?: string }>();
   const [details, setDetails] = useState<PaymentDetailsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isGeneratingReceipt, setIsGeneratingReceipt] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [screenError, setScreenError] = useState<FriendlyError | null>(null);
-  const [isPrintModalVisible, setIsPrintModalVisible] = useState(false);
+  const [printModal, setPrintModal] = useState<{
+    message: string;
+    title: string;
+  } | null>(null);
 
   const loadPayment = useCallback(
     async ({ refreshing = false }: { refreshing?: boolean } = {}) => {
@@ -156,6 +163,51 @@ export default function PaymentDetailsScreen() {
     void loadPayment({ refreshing: true });
   }
 
+  async function handlePrintReceipt() {
+    if (!details) {
+      return;
+    }
+
+    try {
+      setIsGeneratingReceipt(true);
+
+      const isSharingAvailable = await Sharing.isAvailableAsync();
+
+      if (!isSharingAvailable) {
+        setPrintModal({
+          title: 'Print Receipt',
+          message: 'Sharing is not available on this device.',
+        });
+        return;
+      }
+
+      const html = buildReceiptHtml({
+        details,
+        generatedAt: new Date(),
+        invoiceAllocations,
+        paymentMethods,
+        receiptReference,
+        status: paymentStatus,
+      });
+      const pdf = await Print.printToFileAsync({ html });
+
+      await Sharing.shareAsync(pdf.uri, {
+        mimeType: 'application/pdf',
+        UTI: 'com.adobe.pdf',
+      });
+    } catch (error) {
+      setPrintModal({
+        title: 'Print Receipt',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Unable to generate the receipt PDF. Please try again.',
+      });
+    } finally {
+      setIsGeneratingReceipt(false);
+    }
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
@@ -219,12 +271,18 @@ export default function PaymentDetailsScreen() {
 
             <View style={styles.actionRow}>
               <Pressable
-                style={styles.printButton}
-                onPress={() => {
-                  setIsPrintModalVisible(true);
-                }}
+                style={[
+                  styles.printButton,
+                  isGeneratingReceipt ? styles.printButtonDisabled : null,
+                ]}
+                disabled={isGeneratingReceipt}
+                onPress={handlePrintReceipt}
               >
-                <Text style={styles.printButtonText}>Print Receipt</Text>
+                {isGeneratingReceipt ? (
+                  <ActivityIndicator color="#ffffff" />
+                ) : (
+                  <Text style={styles.printButtonText}>Print Receipt</Text>
+                )}
               </Pressable>
             </View>
 
@@ -296,12 +354,12 @@ export default function PaymentDetailsScreen() {
       </ScrollView>
 
       <AppModal
-        visible={isPrintModalVisible}
-        title="Print Receipt"
-        message="Mobile receipt printing is not connected yet."
+        visible={Boolean(printModal)}
+        title={printModal?.title ?? 'Print Receipt'}
+        message={printModal?.message ?? ''}
         primaryLabel="OK"
         onPrimaryPress={() => {
-          setIsPrintModalVisible(false);
+          setPrintModal(null);
         }}
       />
     </SafeAreaView>
@@ -367,6 +425,13 @@ function formatMoney(value: MoneyValue) {
     maximumFractionDigits: 2,
     minimumFractionDigits: 2,
   })}`;
+}
+
+function formatPlainAmount(value: MoneyValue) {
+  return Number(value).toLocaleString('en-US', {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  });
 }
 
 function formatDate(value: string | null | undefined) {
@@ -438,6 +503,236 @@ function getMethodDetails(part: PaymentPart) {
   }
 
   return ['Cash payment'];
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function buildReceiptHtml({
+  details,
+  generatedAt,
+  invoiceAllocations,
+  paymentMethods,
+  receiptReference,
+  status,
+}: {
+  details: PaymentDetailsResponse;
+  generatedAt: Date;
+  invoiceAllocations: {
+    amount: number;
+    invoiceNumber: string;
+    invoiceTotal?: MoneyValue;
+  }[];
+  paymentMethods: (PaymentPart & { allocations: PaymentAllocation[] })[];
+  receiptReference: string;
+  status: string;
+}) {
+  const methodRows = paymentMethods.length
+    ? paymentMethods
+        .map((part) => {
+          const detailsText = getMethodDetails(part)
+            .map((detail) => escapeHtml(detail))
+            .join('<br />');
+
+          return `
+            <tr>
+              <td>${escapeHtml(formatMethod(part.method))}</td>
+              <td class="right">Rs. ${escapeHtml(formatPlainAmount(part.amount))}</td>
+              <td>${detailsText}</td>
+            </tr>
+          `;
+        })
+        .join('')
+    : '<tr><td colspan="3">No payment method details found.</td></tr>';
+  const allocationRows = invoiceAllocations.length
+    ? invoiceAllocations
+        .map((allocation) => {
+          return `
+            <tr>
+              <td>${escapeHtml(allocation.invoiceNumber)}</td>
+              <td class="right">${
+                allocation.invoiceTotal !== undefined
+                  ? `Rs. ${escapeHtml(formatPlainAmount(allocation.invoiceTotal))}`
+                  : 'Unavailable'
+              }</td>
+              <td class="right">Rs. ${escapeHtml(formatPlainAmount(allocation.amount))}</td>
+            </tr>
+          `;
+        })
+        .join('')
+    : '<tr><td colspan="3">No invoice allocations found.</td></tr>';
+
+  return `
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <style>
+          body {
+            color: #111827;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            font-size: 13px;
+            line-height: 1.45;
+            margin: 0;
+            padding: 32px;
+          }
+          .brand {
+            border-bottom: 3px solid #0369a1;
+            margin-bottom: 24px;
+            padding-bottom: 14px;
+          }
+          .brand-label {
+            color: #0369a1;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+          }
+          h1 {
+            font-size: 26px;
+            margin: 4px 0 0;
+          }
+          h2 {
+            color: #0369a1;
+            font-size: 15px;
+            margin: 24px 0 10px;
+          }
+          .summary {
+            border: 1px solid #dbeafe;
+            border-radius: 12px;
+            padding: 16px;
+          }
+          .grid {
+            display: grid;
+            gap: 12px 18px;
+            grid-template-columns: 1fr 1fr;
+          }
+          .label {
+            color: #64748b;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+          }
+          .value {
+            font-size: 14px;
+            font-weight: 700;
+            margin-top: 3px;
+          }
+          .amount {
+            color: #0369a1;
+            font-size: 20px;
+            font-weight: 900;
+          }
+          .status {
+            border: 1px solid #cbd5e1;
+            border-radius: 999px;
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 800;
+            margin-top: 5px;
+            padding: 4px 9px;
+            text-transform: uppercase;
+          }
+          table {
+            border-collapse: collapse;
+            width: 100%;
+          }
+          th {
+            background: #f8fafc;
+            color: #475569;
+            font-size: 10px;
+            letter-spacing: 1px;
+            text-align: left;
+            text-transform: uppercase;
+          }
+          th,
+          td {
+            border-bottom: 1px solid #e2e8f0;
+            padding: 9px 8px;
+            vertical-align: top;
+          }
+          .right {
+            text-align: right;
+          }
+          .generated {
+            color: #64748b;
+            font-size: 11px;
+            margin-top: 28px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="brand">
+          <div class="brand-label">Distribio Collector</div>
+          <h1>Payment Receipt</h1>
+        </div>
+
+        <div class="summary">
+          <div class="grid">
+            <div>
+              <div class="label">Receipt Number</div>
+              <div class="value">${escapeHtml(receiptReference)}</div>
+            </div>
+            <div>
+              <div class="label">Status</div>
+              <div class="status">${escapeHtml(formatStatus(status))}</div>
+            </div>
+            <div>
+              <div class="label">Customer</div>
+              <div class="value">${escapeHtml(details.customer?.name ?? 'Customer unavailable')}</div>
+            </div>
+            <div>
+              <div class="label">Customer Code</div>
+              <div class="value">${escapeHtml(details.customer?.code ?? 'Code unavailable')}</div>
+            </div>
+            <div>
+              <div class="label">Payment Date</div>
+              <div class="value">${escapeHtml(formatDateTime(details.payment.paymentDate))}</div>
+            </div>
+            <div>
+              <div class="label">Total Amount</div>
+              <div class="amount">Rs. ${escapeHtml(formatPlainAmount(details.payment.amount))}</div>
+            </div>
+          </div>
+        </div>
+
+        <h2>Payment Methods</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th class="right">Amount</th>
+              <th>Details</th>
+            </tr>
+          </thead>
+          <tbody>${methodRows}</tbody>
+        </table>
+
+        <h2>Invoice Allocations</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Invoice</th>
+              <th class="right">Invoice Total</th>
+              <th class="right">Allocated</th>
+            </tr>
+          </thead>
+          <tbody>${allocationRows}</tbody>
+        </table>
+
+        <p class="generated">
+          Generated ${escapeHtml(formatDateTime(generatedAt.toISOString()))}
+        </p>
+      </body>
+    </html>
+  `;
 }
 
 function getStatusBadgeStyle(status: string) {
@@ -602,6 +897,9 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: 20,
     paddingVertical: 16,
+  },
+  printButtonDisabled: {
+    opacity: 0.7,
   },
   printButtonText: {
     color: '#ffffff',
