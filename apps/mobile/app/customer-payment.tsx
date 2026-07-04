@@ -193,6 +193,8 @@ export default function CustomerPaymentScreen() {
     () => new Date(),
   );
   const [isChequeBankPickerOpen, setIsChequeBankPickerOpen] = useState(false);
+  const [isBankTransferBankPickerOpen, setIsBankTransferBankPickerOpen] =
+    useState(false);
   const [methodMessage, setMethodMessage] = useState('');
   const [saveMessage, setSaveMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -228,6 +230,7 @@ export default function CustomerPaymentScreen() {
           setIsChequeDatePickerOpen(false);
           setChequeDatePickerValue(new Date());
           setIsChequeBankPickerOpen(false);
+          setIsBankTransferBankPickerOpen(false);
           setMethodMessage('');
           setSaveMessage('');
         }
@@ -578,6 +581,7 @@ export default function CustomerPaymentScreen() {
   function openChequeDatePicker() {
     Keyboard.dismiss();
     setIsChequeBankPickerOpen(false);
+    setIsBankTransferBankPickerOpen(false);
     setChequeDatePickerValue(getDatePickerValue(selectedMethodDraft.chequeDate));
     setIsChequeDatePickerOpen(true);
   }
@@ -667,6 +671,7 @@ export default function CustomerPaymentScreen() {
     setIsChequeDatePickerOpen(false);
     setChequeDatePickerValue(new Date());
     setIsChequeBankPickerOpen(false);
+    setIsBankTransferBankPickerOpen(false);
     setMethodMessage('');
     setSaveMessage('');
   }
@@ -902,6 +907,7 @@ export default function CustomerPaymentScreen() {
                             setSelectedMethod(method.id);
                             setIsChequeDatePickerOpen(false);
                             setIsChequeBankPickerOpen(false);
+                            setIsBankTransferBankPickerOpen(false);
                             setMethodMessage('');
                           }}
                           style={[
@@ -949,6 +955,7 @@ export default function CustomerPaymentScreen() {
                           onToggle={() => {
                             Keyboard.dismiss();
                             setIsChequeDatePickerOpen(false);
+                            setIsBankTransferBankPickerOpen(false);
                             setIsChequeBankPickerOpen((current) => !current);
                           }}
                           onSelect={(bank) => {
@@ -1020,11 +1027,20 @@ export default function CustomerPaymentScreen() {
                             updateMethodDraft('bankReference', value);
                           }}
                         />
-                        <PaymentField
-                          label="Bank"
+                        <BankSelectField
                           value={selectedMethodDraft.bankTransferBank}
-                          onChangeText={(value) => {
-                            updateMethodDraft('bankTransferBank', value);
+                          isOpen={isBankTransferBankPickerOpen}
+                          onToggle={() => {
+                            Keyboard.dismiss();
+                            setIsChequeDatePickerOpen(false);
+                            setIsChequeBankPickerOpen(false);
+                            setIsBankTransferBankPickerOpen(
+                              (current) => !current,
+                            );
+                          }}
+                          onSelect={(bank) => {
+                            updateMethodDraft('bankTransferBank', bank);
+                            setIsBankTransferBankPickerOpen(false);
                           }}
                         />
                       </>
