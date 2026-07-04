@@ -15,8 +15,8 @@ export default function EmptyState({
   title: string;
 }) {
   return (
-    <div className="rounded-2xl border border-dashed border-zinc-300 bg-white/90 p-8 text-center shadow-sm shadow-zinc-950/[0.03]">
-      <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-zinc-100 text-zinc-700">
+    <div className="rounded-2xl border border-dashed border-[#0f77a8]/25 bg-white/90 p-8 text-center shadow-sm shadow-zinc-950/[0.03]">
+      <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-[#0f77a8]/10 text-[#0f77a8] ring-1 ring-[#0f77a8]/15">
         <Icon className="size-5" aria-hidden="true" />
       </div>
       <h3 className="mt-4 text-base font-medium tracking-tight text-zinc-950">

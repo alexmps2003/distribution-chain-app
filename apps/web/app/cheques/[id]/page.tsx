@@ -344,7 +344,7 @@ export default async function ChequeDetailsPage({
                     name="reversalReason"
                     required
                     placeholder="Reason for reversing this cheque"
-                    className="h-24 resize-none rounded-md border border-zinc-300 bg-white p-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
+                    className="h-24 resize-none rounded-md border border-zinc-300 bg-white p-3 text-sm font-normal text-zinc-950 outline-none focus:border-[#0f77a8] focus:ring-2 focus:ring-[#0f77a8]/15"
                   />
                 </label>
                 <div>

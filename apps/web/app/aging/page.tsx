@@ -197,6 +197,7 @@ export default async function AgingPage() {
   return (
     <PageContainer contentClassName="gap-9">
       <PageHeader
+        eyebrow="Distribio reports"
         title="Aging Report"
         subtitle="See which customer balances are current, recently overdue, or seriously overdue."
         className="block"

@@ -4,6 +4,12 @@ import { notFound } from "next/navigation";
 import FilterBar from "@/components/distribio/FilterBar";
 import PageContainer from "@/components/distribio/PageContainer";
 import PageHeader from "@/components/distribio/PageHeader";
+import {
+  brandActiveFilterClassName,
+  brandInactiveFilterClassName,
+  brandPrimaryButtonClassName,
+  brandSecondaryButtonClassName,
+} from "@/components/distribio/brand";
 import EmptyState from "@/components/EmptyState";
 import { apiGet } from "@/lib/api-client-server";
 import { getAuthenticatedUserServer } from "@/lib/auth-user-server";
@@ -154,8 +160,8 @@ function InvoiceStatusFilters({
                 })}
                 className={
                   isSelected
-                    ? "inline-flex h-9 items-center justify-center rounded-md bg-zinc-950 px-3 text-sm font-medium text-white"
-                    : "inline-flex h-9 items-center justify-center rounded-md border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
+                    ? brandActiveFilterClassName
+                    : brandInactiveFilterClassName
                 }
               >
                 {filter.label}
@@ -214,20 +220,21 @@ export default async function InvoicesPage({
     return (
       <PageContainer>
         <PageHeader
+          eyebrow="Distribio invoices"
           title={`${customer.name} Invoices`}
-          subtitle={`Customer code: ${customer.code}`}
+          subtitle={`Customer code: ${customer.code}. Review invoice status, paid amounts, and outstanding balances.`}
           actions={
             <div className="flex gap-3">
               <Link
                 href="/invoices"
-                className="inline-flex h-10 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium hover:bg-zinc-100"
+                className={brandSecondaryButtonClassName}
               >
                 Back to Customers
               </Link>
               {canCreateInvoices ? (
                 <Link
                   href="/invoices/new"
-                  className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
+                  className={brandPrimaryButtonClassName}
                 >
                   New Invoice
                 </Link>
@@ -387,13 +394,14 @@ export default async function InvoicesPage({
   return (
     <PageContainer>
       <PageHeader
+        eyebrow="Distribio invoices"
         title="Invoices"
-        subtitle="Select a customer to view their invoices."
+        subtitle="Select a customer to review invoice totals, paid amounts, and outstanding balances."
         actions={
           canCreateInvoices ? (
             <Link
               href="/invoices/new"
-              className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
+              className={brandPrimaryButtonClassName}
             >
               New Invoice
             </Link>

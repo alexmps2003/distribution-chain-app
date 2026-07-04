@@ -3,6 +3,13 @@ import { Landmark } from "lucide-react";
 import FilterBar from "@/components/distribio/FilterBar";
 import PageContainer from "@/components/distribio/PageContainer";
 import PageHeader from "@/components/distribio/PageHeader";
+import {
+  brandInputClassName,
+  brandPrimaryButtonClassName,
+  brandSecondaryButtonClassName,
+  brandSmallPrimaryButtonClassName,
+  brandSmallSecondaryButtonClassName,
+} from "@/components/distribio/brand";
 import EmptyState from "@/components/EmptyState";
 import { apiGet } from "@/lib/api-client-server";
 import { getAuthenticatedUserServer } from "@/lib/auth-user-server";
@@ -119,11 +126,13 @@ export default async function ChequesPage({
   return (
     <PageContainer>
       <PageHeader
+        eyebrow="Distribio cheques"
         title="Cheques"
+        subtitle="Review cheque payments, bank details, statuses, and receipt links."
         actions={
           <Link
             href="/payments"
-            className="inline-flex h-10 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium hover:bg-zinc-100"
+            className={brandSecondaryButtonClassName}
           >
             Back to Payments
           </Link>
@@ -140,7 +149,7 @@ export default async function ChequesPage({
                 name="search"
                 defaultValue={query}
                 placeholder="Enter cheque number"
-                className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
+                className={brandInputClassName}
               />
             </label>
             <label className="flex flex-col gap-2 text-sm font-medium text-zinc-800">
@@ -148,7 +157,7 @@ export default async function ChequesPage({
               <select
                 name="bank"
                 defaultValue={selectedBank}
-                className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
+                className={brandInputClassName}
               >
                 <option value="">All banks</option>
                 {BANK_OPTIONS.map((bankOption) => (
@@ -163,7 +172,7 @@ export default async function ChequesPage({
               <select
                 name="status"
                 defaultValue={selectedStatus}
-                className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
+                className={brandInputClassName}
               >
                 <option value="">All</option>
                 <option value="ACTIVE">ACTIVE</option>
@@ -172,13 +181,13 @@ export default async function ChequesPage({
             </label>
             <button
               type="submit"
-              className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
+              className={brandPrimaryButtonClassName}
             >
               Search
             </button>
             <Link
               href="/cheques"
-              className="inline-flex h-10 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium hover:bg-zinc-100"
+              className={brandSecondaryButtonClassName}
             >
               Clear Filters
             </Link>
@@ -274,7 +283,7 @@ export default async function ChequesPage({
                             ? `/payments/${cheque.payment.id}?returnTo=/cheques`
                             : "/payments"
                         }
-                        className="inline-flex h-8 items-center justify-center rounded-md border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
+                        className={brandSmallSecondaryButtonClassName}
                       >
                         Receipt
                       </Link>
@@ -282,7 +291,7 @@ export default async function ChequesPage({
                     <td className="whitespace-nowrap px-4 py-3 text-right">
                       <Link
                         href={`/cheques/${cheque.id}`}
-                        className="inline-flex h-8 items-center justify-center rounded-md bg-zinc-950 px-3 text-xs font-medium text-white hover:bg-zinc-800"
+                        className={brandSmallPrimaryButtonClassName}
                       >
                         View
                       </Link>

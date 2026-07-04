@@ -8,6 +8,7 @@ import PageContainer from "@/components/distribio/PageContainer";
 import PageHeader from "@/components/distribio/PageHeader";
 import StatCard from "@/components/distribio/StatCard";
 import StatsGrid from "@/components/distribio/StatsGrid";
+import { brandPillPrimaryButtonClassName } from "@/components/distribio/brand";
 import EmptyState from "@/components/EmptyState";
 import { apiGet } from "@/lib/api-client";
 import {
@@ -319,7 +320,8 @@ export default function Home() {
     return (
       <PageContainer contentClassName="gap-9">
         <PageHeader
-          title="Distribution Chain Dashboard"
+          eyebrow="Live distribution overview"
+          title="Distribio Dashboard"
           subtitle="Monitor customers, invoices, payments, cheques, and outstanding balances."
           className="block"
           titleClassName="font-medium"
@@ -336,7 +338,8 @@ export default function Home() {
     return (
       <PageContainer contentClassName="gap-9">
         <PageHeader
-          title="Distribution Chain Dashboard"
+          eyebrow="Live distribution overview"
+          title="Distribio Dashboard"
           subtitle="Monitor customers, invoices, payments, cheques, and outstanding balances."
           className="block"
           titleClassName="font-medium"
@@ -430,7 +433,8 @@ export default function Home() {
   return (
     <PageContainer contentClassName="gap-9">
       <PageHeader
-        title="Distribution Chain Dashboard"
+        eyebrow="Live distribution overview"
+        title="Distribio Dashboard"
         subtitle="Monitor customers, invoices, payments, cheques, and outstanding balances."
         className="block"
         titleClassName="font-medium"
@@ -442,7 +446,7 @@ export default function Home() {
           href="/customers"
           title="Total Customers"
           value={totalCustomers}
-          className="group rounded-2xl border-zinc-200/80 bg-white/90 shadow-sm shadow-zinc-950/[0.03] transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:bg-white hover:shadow-md hover:shadow-zinc-950/[0.06]"
+          className="group rounded-2xl border-zinc-200/80 bg-white/90 transition-all duration-200 hover:-translate-y-0.5 hover:border-[#0f77a8]/30 hover:bg-white hover:shadow-md hover:shadow-zinc-950/[0.06]"
           titleClassName="font-medium tracking-[0.08em]"
           valueClassName="font-medium"
         />
@@ -450,7 +454,7 @@ export default function Home() {
           href="/outstanding"
           title="Total Outstanding"
           value={formatAmount(totalOutstanding)}
-          className="group rounded-2xl border-zinc-200/80 bg-white/90 shadow-sm shadow-zinc-950/[0.03] transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:bg-white hover:shadow-md hover:shadow-zinc-950/[0.06]"
+          className="group rounded-2xl border-zinc-200/80 bg-white/90 transition-all duration-200 hover:-translate-y-0.5 hover:border-[#0f77a8]/30 hover:bg-white hover:shadow-md hover:shadow-zinc-950/[0.06]"
           titleClassName="font-medium tracking-[0.08em]"
           valueClassName="font-medium"
         />
@@ -458,7 +462,7 @@ export default function Home() {
           href="/cheques?status=ACTIVE"
           title="Active Cheques"
           value={activeCheques}
-          className="group rounded-2xl border-zinc-200/80 bg-white/90 shadow-sm shadow-zinc-950/[0.03] transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:bg-white hover:shadow-md hover:shadow-zinc-950/[0.06]"
+          className="group rounded-2xl border-zinc-200/80 bg-white/90 transition-all duration-200 hover:-translate-y-0.5 hover:border-[#0f77a8]/30 hover:bg-white hover:shadow-md hover:shadow-zinc-950/[0.06]"
           titleClassName="font-medium tracking-[0.08em]"
           valueClassName="font-medium"
         />
@@ -466,7 +470,7 @@ export default function Home() {
           href="/cheques?status=REVERSED"
           title="Reversed Cheques"
           value={reversedCheques}
-          className="group rounded-2xl border-zinc-200/80 bg-white/90 shadow-sm shadow-zinc-950/[0.03] transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:bg-white hover:shadow-md hover:shadow-zinc-950/[0.06]"
+          className="group rounded-2xl border-zinc-200/80 bg-white/90 transition-all duration-200 hover:-translate-y-0.5 hover:border-[#0f77a8]/30 hover:bg-white hover:shadow-md hover:shadow-zinc-950/[0.06]"
           titleClassName="font-medium tracking-[0.08em]"
           valueClassName="font-medium"
         />
@@ -474,7 +478,7 @@ export default function Home() {
           href="/invoices"
           title="Total Invoiced"
           value={formatAmount(totalInvoiced)}
-          className="group rounded-2xl border-zinc-200/80 bg-white/90 shadow-sm shadow-zinc-950/[0.03] transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:bg-white hover:shadow-md hover:shadow-zinc-950/[0.06]"
+          className="group rounded-2xl border-zinc-200/80 bg-white/90 transition-all duration-200 hover:-translate-y-0.5 hover:border-[#0f77a8]/30 hover:bg-white hover:shadow-md hover:shadow-zinc-950/[0.06]"
           titleClassName="font-medium tracking-[0.08em]"
           valueClassName="font-medium"
         />
@@ -482,7 +486,7 @@ export default function Home() {
           href="/payments"
           title="Total Paid"
           value={formatAmount(totalPaid)}
-          className="group rounded-2xl border-zinc-200/80 bg-white/90 shadow-sm shadow-zinc-950/[0.03] transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:bg-white hover:shadow-md hover:shadow-zinc-950/[0.06]"
+          className="group rounded-2xl border-zinc-200/80 bg-white/90 transition-all duration-200 hover:-translate-y-0.5 hover:border-[#0f77a8]/30 hover:bg-white hover:shadow-md hover:shadow-zinc-950/[0.06]"
           titleClassName="font-medium tracking-[0.08em]"
           valueClassName="font-medium"
         />
@@ -511,7 +515,7 @@ export default function Home() {
             {visibleModuleCards.map((card) => (
               <div
                 key={card.href}
-                className="flex flex-col justify-between rounded-2xl border border-zinc-200/80 bg-white/90 p-5 shadow-sm shadow-zinc-950/[0.03]"
+                className="flex flex-col justify-between rounded-2xl border border-zinc-200/80 bg-white/90 p-5 shadow-sm shadow-zinc-950/[0.03] transition-colors hover:border-[#0f77a8]/25"
               >
                 <div>
                   <h3 className="text-base font-medium text-zinc-950">
@@ -523,7 +527,7 @@ export default function Home() {
                 </div>
                 <Link
                   href={card.href}
-                  className="mt-5 inline-flex h-10 w-fit items-center justify-center rounded-full bg-zinc-950 px-4 text-xs font-medium text-white shadow-sm shadow-zinc-950/10 transition-colors hover:bg-zinc-800"
+                  className={brandPillPrimaryButtonClassName}
                 >
                   {card.cta}
                 </Link>
@@ -540,7 +544,7 @@ export default function Home() {
               </h2>
               <Link
                 href="/payments"
-                className="text-sm font-medium text-zinc-600 transition-colors hover:text-zinc-950"
+                className="text-sm font-medium text-zinc-600 transition-colors hover:text-[#0f77a8]"
               >
                 View all
               </Link>
@@ -612,7 +616,7 @@ export default function Home() {
               </h2>
               <Link
                 href="/outstanding"
-                className="text-sm font-medium text-zinc-600 transition-colors hover:text-zinc-950"
+                className="text-sm font-medium text-zinc-600 transition-colors hover:text-[#0f77a8]"
               >
                 View report
               </Link>

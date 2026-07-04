@@ -24,14 +24,18 @@ export default function StatCard({
   valueClassName,
 }: StatCardProps) {
   const cardClassName = cn(
-    "rounded-md border border-zinc-200 bg-white p-5",
+    "relative overflow-hidden rounded-md border border-zinc-200 bg-white p-5 shadow-sm shadow-zinc-950/[0.03]",
     className,
   );
   const content = (
     <>
+      <span
+        aria-hidden="true"
+        className="absolute inset-x-0 top-0 h-1 bg-[#0f77a8]/70"
+      />
       <p
         className={cn(
-          "text-xs font-semibold uppercase text-zinc-500",
+          "text-xs font-semibold uppercase tracking-[0.08em] text-zinc-500",
           titleClassName,
         )}
       >

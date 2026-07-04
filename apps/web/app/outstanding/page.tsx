@@ -5,6 +5,10 @@ import PageContainer from "@/components/distribio/PageContainer";
 import PageHeader from "@/components/distribio/PageHeader";
 import StatCard from "@/components/distribio/StatCard";
 import StatsGrid from "@/components/distribio/StatsGrid";
+import {
+  brandPrimaryButtonClassName,
+  brandSecondaryButtonClassName,
+} from "@/components/distribio/brand";
 import EmptyState from "@/components/EmptyState";
 import { apiGet } from "@/lib/api-client-server";
 
@@ -145,19 +149,20 @@ export default async function OutstandingPage({
       return (
         <PageContainer>
           <PageHeader
+            eyebrow="Distribio outstanding"
             title={`Outstanding Invoices for ${customer.name}`}
-            subtitle={`Customer code: ${customer.code}`}
+            subtitle={`Customer code: ${customer.code}. Review unpaid and partially paid invoices for this customer.`}
             actions={
               <div className="flex flex-col gap-3 sm:flex-row">
                 <Link
                   href={`/outstanding/export?customerId=${customer.id}`}
-                  className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
+                  className={brandPrimaryButtonClassName}
                 >
                   Export CSV
                 </Link>
                 <Link
                   href="/outstanding"
-                  className="inline-flex h-10 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium hover:bg-zinc-100"
+                  className={brandSecondaryButtonClassName}
                 >
                   Back to Outstanding
                 </Link>
@@ -176,19 +181,20 @@ export default async function OutstandingPage({
     return (
       <PageContainer>
         <PageHeader
+          eyebrow="Distribio outstanding"
           title={`Outstanding Invoices for ${customer.name}`}
-          subtitle={`Customer code: ${customer.code}`}
+          subtitle={`Customer code: ${customer.code}. Review unpaid and partially paid invoices for this customer.`}
           actions={
             <div className="flex flex-col gap-3 sm:flex-row">
               <Link
                 href={`/outstanding/export?customerId=${customer.id}`}
-                className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
+                className={brandPrimaryButtonClassName}
               >
                 Export CSV
               </Link>
               <Link
                 href="/outstanding"
-                className="inline-flex h-10 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium hover:bg-zinc-100"
+                className={brandSecondaryButtonClassName}
               >
                 Back to Outstanding
               </Link>
@@ -302,12 +308,13 @@ export default async function OutstandingPage({
   return (
     <PageContainer>
       <PageHeader
+        eyebrow="Distribio outstanding"
         title="Customer Outstanding"
-        subtitle="Customers with invoice balances still due."
+        subtitle="Customers with invoice balances still due, including overdue exposure and oldest due dates."
         actions={
           <Link
             href="/outstanding/export"
-            className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
+            className={brandPrimaryButtonClassName}
           >
             Export CSV
           </Link>

@@ -393,7 +393,7 @@ export default function PaymentMethodEntry({
                             value={invoice.id}
                             checked={isSelected}
                             onChange={() => toggleInvoice(invoice.id)}
-                            className="h-4 w-4 rounded border-zinc-300 text-zinc-950 focus:ring-zinc-950"
+                            className="h-4 w-4 rounded border-zinc-300 text-[#0f77a8] focus:ring-[#0f77a8]"
                           />
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 font-medium text-zinc-950">
@@ -428,7 +428,7 @@ export default function PaymentMethodEntry({
                                 event.target.value,
                               )
                             }
-                            className="h-9 w-36 rounded-md border border-zinc-300 bg-white px-3 text-right text-sm text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400"
+                            className="h-9 w-36 rounded-md border border-zinc-300 bg-white px-3 text-right text-sm text-zinc-950 outline-none focus:border-[#0f77a8] focus:ring-2 focus:ring-[#0f77a8]/15 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400"
                           />
                         </td>
                       </tr>
@@ -558,7 +558,7 @@ export default function PaymentMethodEntry({
                           event.target.value,
                         )
                       }
-                      className="h-9 rounded-md border border-zinc-300 bg-white px-3 text-right text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
+                      className="h-9 rounded-md border border-zinc-300 bg-white px-3 text-right text-sm font-normal text-zinc-950 outline-none focus:border-[#0f77a8] focus:ring-2 focus:ring-[#0f77a8]/15"
                     />
                   </label>
                 );
@@ -803,7 +803,7 @@ function BankSelect({
         required
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
+        className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-[#0f77a8] focus:ring-2 focus:ring-[#0f77a8]/15"
       >
         <option value="">Select bank</option>
         {BANK_OPTIONS.map((bank) => (
@@ -843,7 +843,7 @@ function Field({
         step={step}
         value={value}
         onChange={onChange ? (event) => onChange(event.target.value) : undefined}
-        className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
+        className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-[#0f77a8] focus:ring-2 focus:ring-[#0f77a8]/15"
       />
     </label>
   );

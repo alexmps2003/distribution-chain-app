@@ -36,7 +36,11 @@ export function ErrorState({
           </CardHeader>
           <CardContent className="flex flex-col justify-center gap-3 sm:flex-row">
             {onReset ? (
-              <Button type="button" onClick={onReset} className="h-10 px-4">
+              <Button
+                type="button"
+                onClick={onReset}
+                className="h-10 bg-zinc-950 px-4 text-white hover:bg-zinc-800"
+              >
                 Try Again
               </Button>
             ) : null}

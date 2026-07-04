@@ -9,6 +9,14 @@ import PageContainer from "@/components/distribio/PageContainer";
 import PageHeader from "@/components/distribio/PageHeader";
 import StatCard from "@/components/distribio/StatCard";
 import StatsGrid from "@/components/distribio/StatsGrid";
+import {
+  brandCheckboxClassName,
+  brandInputClassName,
+  brandPrimaryButtonClassName,
+  brandSecondaryButtonClassName,
+  brandSmallPrimaryButtonClassName,
+  brandSmallSecondaryButtonClassName,
+} from "@/components/distribio/brand";
 import EmptyState from "@/components/EmptyState";
 import { apiGet } from "@/lib/api-client";
 import {
@@ -88,9 +96,13 @@ function getUniqueOptions(values: (string | null)[]) {
 function CustomersLoading() {
   return (
     <PageContainer>
-      <PageHeader title="Customers" />
+      <PageHeader
+        eyebrow="Distribio customers"
+        title="Customers"
+        subtitle="Manage customer routes, collectors, balances, and account status."
+      />
 
-      <div className="rounded-md border border-zinc-200 bg-white p-5 text-sm font-medium text-zinc-600">
+      <div className="rounded-md border border-[#0f77a8]/15 bg-white p-5 text-sm font-medium text-zinc-600 shadow-sm shadow-zinc-950/[0.03]">
         Loading customers...
       </div>
     </PageContainer>
@@ -142,9 +154,13 @@ function CustomersContent() {
   if (errorMessage) {
     return (
       <PageContainer>
-        <PageHeader title="Customers" />
+        <PageHeader
+          eyebrow="Distribio customers"
+          title="Customers"
+          subtitle="Manage customer routes, collectors, balances, and account status."
+        />
 
-        <div className="rounded-md border border-red-200 bg-red-50 p-5 text-sm font-medium text-red-700">
+        <div className="rounded-md border border-red-200 bg-red-50 p-5 text-sm font-medium text-red-700 shadow-sm shadow-red-950/[0.03]">
           {errorMessage}
         </div>
       </PageContainer>
@@ -197,12 +213,14 @@ function CustomersContent() {
   return (
     <PageContainer>
       <PageHeader
+        eyebrow="Distribio customers"
         title="Customers"
+        subtitle="Manage customer routes, collectors, balances, and account status."
         actions={
           canCreateCustomers ? (
             <Link
               href="/customers/new"
-              className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
+              className={brandPrimaryButtonClassName}
             >
               New Customer
             </Link>
@@ -220,7 +238,7 @@ function CustomersContent() {
                 name="search"
                 defaultValue={search ?? ""}
                 placeholder="Name or code"
-                className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
+                className={brandInputClassName}
               />
             </label>
             <label className="flex flex-col gap-2 text-sm font-medium text-zinc-800">
@@ -228,7 +246,7 @@ function CustomersContent() {
               <select
                 name="area"
                 defaultValue={selectedArea}
-                className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
+                className={brandInputClassName}
               >
                 <option value="">All areas</option>
                 {areaOptions.map((areaOption) => (
@@ -243,7 +261,7 @@ function CustomersContent() {
               <select
                 name="route"
                 defaultValue={selectedRoute}
-                className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
+                className={brandInputClassName}
               >
                 <option value="">All routes</option>
                 {routeOptions.map((routeOption) => (
@@ -259,20 +277,20 @@ function CustomersContent() {
                 name="outstanding"
                 value="true"
                 defaultChecked={outstandingOnly}
-                className="h-4 w-4 rounded border-zinc-300 text-zinc-950 focus:ring-zinc-950"
+                className={brandCheckboxClassName}
               />
               Outstanding Only
             </label>
             <div className="flex flex-col gap-3 sm:flex-row">
               <button
                 type="submit"
-                className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
+                className={brandPrimaryButtonClassName}
               >
                 Filter
               </button>
               <Link
                 href="/customers"
-                className="inline-flex h-10 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium hover:bg-zinc-100"
+                className={brandSecondaryButtonClassName}
               >
                 Clear Filters
               </Link>
@@ -385,14 +403,14 @@ function CustomersContent() {
                       <div className="flex justify-end gap-2">
                         <Link
                           href={`/customers/${customer.id}`}
-                          className="inline-flex h-8 items-center justify-center rounded-md border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
+                          className={brandSmallSecondaryButtonClassName}
                         >
                           View
                         </Link>
                         {canEditCustomers ? (
                           <Link
                             href={`/customers/${customer.id}/edit`}
-                            className="inline-flex h-8 items-center justify-center rounded-md bg-zinc-950 px-3 text-xs font-medium text-white hover:bg-zinc-800"
+                            className={brandSmallPrimaryButtonClassName}
                           >
                             Edit
                           </Link>

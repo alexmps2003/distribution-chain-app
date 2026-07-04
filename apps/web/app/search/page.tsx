@@ -111,7 +111,7 @@ function ResultSection({
   return (
     <section className="rounded-2xl border border-zinc-200/80 bg-white/90 p-5 shadow-sm shadow-zinc-950/[0.03]">
       <div className="flex items-center gap-2">
-        <div className="flex size-9 items-center justify-center rounded-full bg-zinc-100 text-zinc-700">
+        <div className="flex size-9 items-center justify-center rounded-full bg-[#0f77a8]/10 text-[#0f77a8] ring-1 ring-[#0f77a8]/15">
           <Icon className="size-4" aria-hidden="true" />
         </div>
         <h2 className="text-lg font-medium tracking-tight text-zinc-950">
@@ -136,7 +136,7 @@ function ResultSection({
                 {result.subtitle}
               </p>
             </div>
-            <span className="text-sm font-medium text-zinc-500">Open</span>
+            <span className="text-sm font-medium text-[#0f77a8]">Open</span>
           </Link>
         ))}
       </div>
@@ -157,6 +157,7 @@ export default async function SearchPage({
     return (
       <PageContainer>
         <PageHeader
+          eyebrow="Distribio search"
           title="Search"
           subtitle="Find customers, invoices, payment receipts, and cheques from one place."
           className="block"
@@ -241,6 +242,7 @@ export default async function SearchPage({
   return (
     <PageContainer>
       <PageHeader
+        eyebrow="Distribio search"
         title="Search"
         subtitle={
           <>

@@ -3,6 +3,12 @@ import { CreditCard } from "lucide-react";
 import FilterBar from "@/components/distribio/FilterBar";
 import PageContainer from "@/components/distribio/PageContainer";
 import PageHeader from "@/components/distribio/PageHeader";
+import {
+  brandInputClassName,
+  brandPrimaryButtonClassName,
+  brandSecondaryButtonClassName,
+  brandSmallSecondaryButtonClassName,
+} from "@/components/distribio/brand";
 import EmptyState from "@/components/EmptyState";
 import { apiGet } from "@/lib/api-client-server";
 import { getAuthenticatedUserServer } from "@/lib/auth-user-server";
@@ -108,12 +114,14 @@ export default async function PaymentsPage({
   return (
     <PageContainer>
       <PageHeader
+        eyebrow="Distribio payments"
         title="Payments"
+        subtitle="Track receipts, payment dates, methods, and customer allocation history."
         actions={
           canCreatePayments ? (
             <Link
               href="/payments/new"
-              className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
+              className={brandPrimaryButtonClassName}
             >
               New Payment
             </Link>
@@ -131,7 +139,7 @@ export default async function PaymentsPage({
                 name="search"
                 defaultValue={searchQuery}
                 placeholder="Name or code"
-                className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
+                className={brandInputClassName}
               />
             </label>
             <label className="flex flex-col gap-2 text-sm font-medium text-zinc-800">
@@ -139,7 +147,7 @@ export default async function PaymentsPage({
               <select
                 name="method"
                 defaultValue={selectedMethod}
-                className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
+                className={brandInputClassName}
               >
                 {methodOptions.map((option) => (
                   <option key={option.value || "ALL"} value={option.value}>
@@ -154,7 +162,7 @@ export default async function PaymentsPage({
                 type="date"
                 name="from"
                 defaultValue={from ?? ""}
-                className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
+                className={brandInputClassName}
               />
             </label>
             <label className="flex flex-col gap-2 text-sm font-medium text-zinc-800">
@@ -163,18 +171,18 @@ export default async function PaymentsPage({
                 type="date"
                 name="to"
                 defaultValue={to ?? ""}
-                className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
+                className={brandInputClassName}
               />
             </label>
             <button
               type="submit"
-              className="inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
+              className={brandPrimaryButtonClassName}
             >
               Filter
             </button>
             <Link
               href="/payments"
-              className="inline-flex h-10 items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium hover:bg-zinc-100"
+              className={brandSecondaryButtonClassName}
             >
               Clear Filters
             </Link>
@@ -231,7 +239,7 @@ export default async function PaymentsPage({
                     <td className="whitespace-nowrap px-4 py-3 text-right">
                       <Link
                         href={`/payments/${payment.id}`}
-                        className="inline-flex h-8 items-center justify-center rounded-md border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
+                        className={brandSmallSecondaryButtonClassName}
                       >
                         View
                       </Link>

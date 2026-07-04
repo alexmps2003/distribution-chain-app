@@ -6,6 +6,7 @@ type PageHeaderProps = {
   subtitle?: ReactNode;
   actions?: ReactNode;
   className?: string;
+  eyebrow?: ReactNode;
   subtitleClassName?: string;
   titleClassName?: string;
 };
@@ -15,6 +16,7 @@ export default function PageHeader({
   subtitle,
   actions,
   className,
+  eyebrow,
   subtitleClassName,
   titleClassName,
 }: PageHeaderProps) {
@@ -25,8 +27,13 @@ export default function PageHeader({
         className,
       )}
     >
-      {subtitle ? (
+      {subtitle || eyebrow ? (
         <div>
+          {eyebrow ? (
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#0f77a8]">
+              {eyebrow}
+            </p>
+          ) : null}
           <h1
             className={cn(
               "text-3xl font-semibold tracking-tight",

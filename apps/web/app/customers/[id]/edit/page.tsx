@@ -301,7 +301,7 @@ export default async function EditCustomerPage({
                   getFormValue(submittedValues, "isActive") ??
                   (customer.isActive ? "true" : "false")
                 }
-                className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
+                className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-[#0f77a8] focus:ring-2 focus:ring-[#0f77a8]/15"
               >
                 <option value="true">Active</option>
                 <option value="false">Inactive</option>
@@ -354,7 +354,7 @@ function Field({
         type={type}
         placeholder={placeholder}
         defaultValue={defaultValue}
-        className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
+        className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-normal text-zinc-950 outline-none focus:border-[#0f77a8] focus:ring-2 focus:ring-[#0f77a8]/15"
       />
     </label>
   );

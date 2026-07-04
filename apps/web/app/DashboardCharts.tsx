@@ -203,7 +203,7 @@ function ChartFilterSelect({
             scroll: false,
           });
         }}
-        className="h-9 rounded-full border border-zinc-300 bg-white px-3 text-xs font-medium normal-case tracking-normal text-zinc-700 outline-none transition-colors hover:bg-zinc-50 focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200"
+        className="h-9 rounded-full border border-zinc-300 bg-white px-3 text-xs font-medium normal-case tracking-normal text-zinc-700 outline-none transition-colors hover:border-[#0f77a8]/30 hover:bg-[#0f77a8]/5 focus:border-[#0f77a8] focus:ring-2 focus:ring-[#0f77a8]/15"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
