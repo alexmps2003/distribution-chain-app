@@ -17,29 +17,14 @@ import {
 } from '../lib/api-client';
 import { useAuth } from '../lib/auth-context';
 
-type PaymentMethod = 'CASH' | 'CHEQUE' | 'BANK_TRANSFER' | 'CARD' | 'MIXED';
-
-type PaymentPart = {
-  amount: string | number;
-  method: PaymentMethod;
-};
-
-type PaymentAllocation = {
-  amount: string | number;
-  invoiceId: string;
-};
-
 type PaymentRow = {
-  allocations?: PaymentAllocation[];
   amount: string | number;
   customer?: {
     code: string;
     name: string;
   } | null;
   id: string;
-  parts?: PaymentPart[];
   paymentDate: string;
-  paymentMethod?: PaymentMethod;
 };
 
 export default function RecentPaymentsScreen() {
@@ -136,43 +121,37 @@ export default function RecentPaymentsScreen() {
               <ErrorCard error={screenError} onRetry={retryPayments} />
             ) : null}
             {recentPayments.map((payment) => (
-              <View key={payment.id} style={styles.paymentCard}>
+              <Pressable
+                key={payment.id}
+                style={styles.paymentCard}
+                onPress={() => {
+                  router.push({
+                    pathname: '/payment-details',
+                    params: { paymentId: payment.id },
+                  });
+                }}
+              >
                 <View style={styles.paymentHeader}>
                   <View style={styles.customerBlock}>
                     <Text style={styles.customerName}>
                       {payment.customer?.name ?? 'Customer unavailable'}
                     </Text>
-                    {payment.customer?.code ? (
-                      <Text style={styles.customerCode}>
-                        {payment.customer.code}
-                      </Text>
-                    ) : null}
+                    <Text style={styles.customerCode}>
+                      {payment.customer?.code ?? 'Code unavailable'}
+                    </Text>
                   </View>
                   <Text style={styles.amount}>
                     {formatMoney(payment.amount)}
                   </Text>
                 </View>
 
-                <Text style={styles.paymentDate}>
-                  {formatDateTime(payment.paymentDate)}
-                </Text>
-
-                <View style={styles.detailBlock}>
-                  <Text style={styles.detailLabel}>Methods</Text>
-                  <Text style={styles.detailValue}>
-                    {formatMethodSummary(payment)}
+                <View style={styles.paymentMetaRow}>
+                  <Text style={styles.paymentDate}>
+                    {formatDateTime(payment.paymentDate)}
                   </Text>
+                  <Text style={styles.viewText}>View</Text>
                 </View>
-
-                {payment.allocations ? (
-                  <View style={styles.detailBlock}>
-                    <Text style={styles.detailLabel}>Invoice Allocations</Text>
-                    <Text style={styles.detailValue}>
-                      {formatAllocationSummary(payment.allocations)}
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
+              </Pressable>
             ))}
           </>
         )}
@@ -196,43 +175,6 @@ function formatDateTime(value: string) {
     month: 'short',
     year: 'numeric',
   });
-}
-
-function formatMethodSummary(payment: PaymentRow) {
-  const parts = payment.parts ?? [];
-
-  if (parts.length === 0) {
-    return getMethodLabel(payment.paymentMethod ?? 'MIXED');
-  }
-
-  return parts
-    .map((part) => `${getMethodLabel(part.method)} ${formatMoney(part.amount)}`)
-    .join(' + ');
-}
-
-function formatAllocationSummary(allocations: PaymentAllocation[]) {
-  if (allocations.length === 0) {
-    return 'No invoice allocations returned';
-  }
-
-  const total = allocations.reduce((sum, allocation) => {
-    return sum + Number(allocation.amount);
-  }, 0);
-  const label = allocations.length === 1 ? 'allocation' : 'allocations';
-
-  return `${allocations.length} invoice ${label} - ${formatMoney(total)}`;
-}
-
-function getMethodLabel(method: PaymentMethod) {
-  if (method === 'BANK_TRANSFER') {
-    return 'Bank Transfer';
-  }
-
-  if (method === 'MIXED') {
-    return 'Mixed';
-  }
-
-  return method.charAt(0) + method.slice(1).toLowerCase();
 }
 
 function ErrorCard({
@@ -291,23 +233,6 @@ const styles = StyleSheet.create({
     fontSize: 19,
     fontWeight: '900',
   },
-  detailBlock: {
-    marginTop: 14,
-  },
-  detailLabel: {
-    color: '#64748b',
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-  },
-  detailValue: {
-    color: '#334155',
-    fontSize: 14,
-    fontWeight: '700',
-    lineHeight: 20,
-    marginTop: 4,
-  },
   emptyState: {
     backgroundColor: '#ffffff',
     borderColor: '#e2e8f0',
@@ -346,7 +271,6 @@ const styles = StyleSheet.create({
     color: '#64748b',
     fontSize: 14,
     fontWeight: '700',
-    marginTop: 10,
   },
   paymentHeader: {
     alignItems: 'flex-start',
@@ -360,6 +284,12 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
     paddingHorizontal: 20,
     paddingTop: 20,
+  },
+  paymentMetaRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 12,
   },
   retryButton: {
     alignSelf: 'flex-start',
@@ -403,5 +333,10 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: '900',
     marginTop: 8,
+  },
+  viewText: {
+    color: '#0369a1',
+    fontSize: 13,
+    fontWeight: '900',
   },
 });
