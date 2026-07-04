@@ -32,8 +32,6 @@
   ],
   "exclude": [
     "node_modules",
-    "backend",
-    "backend/**",
     "prisma",
     "prisma/**"
   ]

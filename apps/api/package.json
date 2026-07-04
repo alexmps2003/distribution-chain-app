@@ -1,5 +1,5 @@
 {
-  "name": "backend",
+  "name": "@distribio/api",
   "version": "0.0.1",
   "description": "",
   "author": "",
@@ -11,6 +11,7 @@
     "seed": "ts-node scripts/seed-users.ts",
     "sms:preview": "ts-node scripts/preview-sms-templates.ts",
     "sms:test": "ts-node scripts/test-sms.ts",
+    "dev": "pnpm run start:dev",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",

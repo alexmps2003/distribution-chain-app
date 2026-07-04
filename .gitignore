@@ -12,10 +12,13 @@
 
 # testing
 /coverage
+.turbo/
 
 # next.js
 /.next/
 /out/
+apps/web/.next/
+apps/web/out/
 
 # production
 /build
@@ -38,15 +41,17 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
-next-env.d.ts
 
-/app/generated/prisma
+apps/web/app/generated/prisma
 
 # Backend generated files
-backend/node_modules/
-backend/dist/
-backend/coverage/
-backend/.env
+apps/api/node_modules/
+apps/api/dist/
+apps/api/coverage/
+apps/api/.env
+
+# Mobile generated files
+apps/mobile/node_modules/
 
 
 #md

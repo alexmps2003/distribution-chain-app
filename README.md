@@ -1,36 +1,56 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Distribio
+
+Distribio is a pnpm + Turborepo monorepo.
+
+## Workspace Layout
+
+- `apps/web` - Next.js web application
+- `apps/api` - NestJS backend API
+- `apps/mobile` - Expo mobile app
+- `packages/shared` - shared workspace package
 
 ## Getting Started
 
-First, run the development server:
+Enable Corepack if needed, then install dependencies from the repository root:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+corepack enable
+pnpm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Run all development apps/services:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+pnpm dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Run a single app:
 
-## Learn More
+```bash
+pnpm --filter @distribio/web dev
+pnpm --filter @distribio/api dev
+pnpm --filter @distribio/mobile dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+Build apps with build scripts:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+pnpm build
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Deployment Notes
 
-## Deploy on Vercel
+For the web app, set the deployment root directory to `apps/web`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+For the backend API on Railway, set the deployment root directory to the
+repository root and use:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+corepack enable && pnpm install --frozen-lockfile && pnpm --filter @distribio/api build
+```
+
+Start command:
+
+```bash
+pnpm --filter @distribio/api start:prod
+```
