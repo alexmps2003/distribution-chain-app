@@ -1,0 +1,1 @@
+ALTER TABLE "PaymentAllocation" ADD CONSTRAINT "PaymentAllocation_amount_positive" CHECK ("PaymentAllocation"."amount" > 0);

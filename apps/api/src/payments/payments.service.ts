@@ -17,6 +17,7 @@ import { DatabaseService } from '../database/database.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { SmsTemplateService } from '../notifications/sms-template.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
+import { parsePositiveMoneyToCents } from './payment-amount';
 
 type PaymentListFilters = {
   from?: string;
@@ -206,6 +207,7 @@ export class PaymentsService {
 
   async create(dto: CreatePaymentDto) {
     const paymentAmount = this.toCents(dto.amount);
+    const requestedAllocationCentsByInvoiceId = new Map<string, number>();
 
     if (paymentAmount <= 0) {
       throw new BadRequestException('Payment total must be greater than 0');
@@ -224,9 +226,24 @@ export class PaymentsService {
         );
       }
 
-      const methodAllocationTotal = this.sumMoney(
-        (method.allocations ?? []).map((allocation) => allocation.amount),
-      );
+      let methodAllocationTotal = 0;
+
+      for (const allocation of method.allocations ?? []) {
+        const allocationCents = parsePositiveMoneyToCents(allocation.amount);
+
+        if (allocationCents === null) {
+          throw new BadRequestException(
+            'Allocation amount must be greater than 0 with at most 2 decimal places',
+          );
+        }
+
+        methodAllocationTotal += allocationCents;
+        requestedAllocationCentsByInvoiceId.set(
+          allocation.invoiceId,
+          (requestedAllocationCentsByInvoiceId.get(allocation.invoiceId) ?? 0) +
+            allocationCents,
+        );
+      }
 
       if (methodAmount !== methodAllocationTotal) {
         throw new BadRequestException(
@@ -259,11 +276,9 @@ export class PaymentsService {
       );
     }
 
-    const allocationTotal = this.sumMoney(
-      dto.methods.flatMap((method) =>
-        (method.allocations ?? []).map((allocation) => allocation.amount),
-      ),
-    );
+    const allocationTotal = [
+      ...requestedAllocationCentsByInvoiceId.values(),
+    ].reduce((total, amount) => total + amount, 0);
 
     if (paymentAmount !== allocationTotal) {
       throw new BadRequestException(
@@ -273,6 +288,15 @@ export class PaymentsService {
 
     const createdPayment = await this.databaseService.db.transaction(
       async (tx) => {
+        const invoiceIds = [
+          ...requestedAllocationCentsByInvoiceId.keys(),
+        ].sort();
+        const lockedInvoiceById = await this.lockInvoicesForPayment(
+          tx,
+          invoiceIds,
+          dto.customerId,
+        );
+
         const paymentMethod =
           dto.methods.length === 1 ? dto.methods[0].method : 'MIXED';
         const [payment] = await tx
@@ -292,8 +316,12 @@ export class PaymentsService {
 
         const parts: (typeof paymentParts.$inferSelect)[] = [];
         const allocations: (typeof paymentAllocations.$inferSelect)[] = [];
+        const partByMethodIndex = new Map<
+          number,
+          typeof paymentParts.$inferSelect
+        >();
 
-        for (const method of dto.methods) {
+        for (const [methodIndex, method] of dto.methods.entries()) {
           const [part] = await tx
             .insert(paymentParts)
             .values({
@@ -312,42 +340,48 @@ export class PaymentsService {
             .returning();
 
           parts.push(part);
+          partByMethodIndex.set(methodIndex, part);
+        }
+
+        for (const invoiceId of invoiceIds) {
+          const invoice = lockedInvoiceById.get(invoiceId);
+
+          if (!invoice) {
+            throw new BadRequestException(
+              'Selected invoice could not be found',
+            );
+          }
+
+          const existingAllocations = await tx
+            .select()
+            .from(paymentAllocations)
+            .where(eq(paymentAllocations.invoiceId, invoiceId));
+
+          const allocatedTotal = await this.getActiveAllocationTotal(
+            tx,
+            existingAllocations,
+          );
+          const outstanding = this.toCents(invoice.amount) - allocatedTotal;
+          const requestedAllocation =
+            requestedAllocationCentsByInvoiceId.get(invoiceId) ?? 0;
+
+          if (requestedAllocation > outstanding) {
+            throw new BadRequestException(
+              'Allocation exceeds invoice outstanding balance',
+            );
+          }
+        }
+
+        for (const [methodIndex, method] of dto.methods.entries()) {
+          const part = partByMethodIndex.get(methodIndex);
+
+          if (!part) {
+            throw new BadRequestException(
+              'Payment method could not be created',
+            );
+          }
 
           for (const allocation of method.allocations ?? []) {
-            const [invoice] = await tx
-              .select()
-              .from(invoices)
-              .where(eq(invoices.id, allocation.invoiceId));
-
-            if (!invoice) {
-              throw new BadRequestException(
-                'Selected invoice could not be found',
-              );
-            }
-
-            if (invoice.customerId !== dto.customerId) {
-              throw new BadRequestException(
-                'Selected invoice does not belong to customer',
-              );
-            }
-
-            const existingAllocations = await tx
-              .select()
-              .from(paymentAllocations)
-              .where(eq(paymentAllocations.invoiceId, allocation.invoiceId));
-
-            const allocatedTotal = await this.getActiveAllocationTotal(
-              tx,
-              existingAllocations,
-            );
-            const outstanding = this.toCents(invoice.amount) - allocatedTotal;
-
-            if (this.toCents(allocation.amount) > outstanding) {
-              throw new BadRequestException(
-                'Allocation exceeds invoice outstanding balance',
-              );
-            }
-
             const [createdAllocation] = await tx
               .insert(paymentAllocations)
               .values({
@@ -368,10 +402,7 @@ export class PaymentsService {
         ];
 
         for (const invoiceId of affectedInvoiceIds) {
-          const [invoice] = await tx
-            .select()
-            .from(invoices)
-            .where(eq(invoices.id, invoiceId));
+          const invoice = lockedInvoiceById.get(invoiceId);
 
           if (!invoice) {
             continue;
@@ -414,6 +445,49 @@ export class PaymentsService {
     });
 
     return createdPayment;
+  }
+
+  private async lockInvoicesForPayment(
+    tx: Parameters<
+      Parameters<typeof this.databaseService.db.transaction>[0]
+    >[0],
+    invoiceIds: string[],
+    customerId: string,
+  ) {
+    const lockedInvoiceById = new Map<string, typeof invoices.$inferSelect>();
+
+    for (const invoiceId of [...new Set(invoiceIds)].sort()) {
+      const invoice = await this.lockInvoiceForUpdate(tx, invoiceId);
+
+      if (!invoice) {
+        throw new BadRequestException('Selected invoice could not be found');
+      }
+
+      if (invoice.customerId !== customerId) {
+        throw new BadRequestException(
+          'Selected invoice does not belong to customer',
+        );
+      }
+
+      lockedInvoiceById.set(invoiceId, invoice);
+    }
+
+    return lockedInvoiceById;
+  }
+
+  private async lockInvoiceForUpdate(
+    tx: Parameters<
+      Parameters<typeof this.databaseService.db.transaction>[0]
+    >[0],
+    invoiceId: string,
+  ) {
+    const [invoice] = await tx
+      .select()
+      .from(invoices)
+      .where(eq(invoices.id, invoiceId))
+      .for('update');
+
+    return invoice;
   }
 
   private async sendPaymentReceivedSms(

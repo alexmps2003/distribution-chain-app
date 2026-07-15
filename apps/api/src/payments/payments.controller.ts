@@ -11,6 +11,7 @@ import {
 import { AuthGuard } from '../auth/auth/auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
+import { CreatePaymentValidationPipe } from './create-payment-validation.pipe';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { PaymentsService } from './payments.service';
 
@@ -41,7 +42,7 @@ export class PaymentsController {
 
   @Post()
   @Roles('ADMIN', 'COLLECTOR')
-  create(@Body() body: CreatePaymentDto) {
+  create(@Body(new CreatePaymentValidationPipe()) body: CreatePaymentDto) {
     return this.paymentsService.create(body);
   }
 

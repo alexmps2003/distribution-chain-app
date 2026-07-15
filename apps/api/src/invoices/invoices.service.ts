@@ -284,17 +284,67 @@ export class InvoicesService {
   }
 
   async update(id: string, dto: UpdateInvoiceDto) {
-    const [invoice] = await this.databaseService.db
-      .update(invoices)
-      .set({
-        ...dto,
-        invoiceDate: dto.invoiceDate ? new Date(dto.invoiceDate) : undefined,
-        dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
-      })
-      .where(eq(invoices.id, id))
-      .returning();
+    return this.databaseService.db.transaction(async (tx) => {
+      const [existingInvoice] = await tx
+        .select()
+        .from(invoices)
+        .where(eq(invoices.id, id))
+        .for('update');
 
-    return invoice ?? null;
+      if (!existingInvoice) {
+        return null;
+      }
+
+      const updateValues: Partial<typeof invoices.$inferInsert> = {};
+
+      if (dto.invoiceNumber !== undefined) {
+        updateValues.invoiceNumber = dto.invoiceNumber;
+      }
+
+      if (dto.amount !== undefined) {
+        updateValues.amount = dto.amount;
+      }
+
+      if (dto.invoiceDate !== undefined) {
+        updateValues.invoiceDate = new Date(dto.invoiceDate);
+      }
+
+      if (dto.dueDate) {
+        updateValues.dueDate = new Date(dto.dueDate);
+      }
+
+      if (dto.status !== undefined) {
+        updateValues.status = dto.status;
+      }
+
+      if (dto.customerId !== undefined) {
+        updateValues.customerId = dto.customerId;
+      }
+
+      if (Object.keys(updateValues).length === 0) {
+        return existingInvoice;
+      }
+
+      const allocationRows = await tx
+        .select({ id: paymentAllocations.id })
+        .from(paymentAllocations)
+        .where(eq(paymentAllocations.invoiceId, id))
+        .limit(1);
+
+      if (allocationRows.length > 0) {
+        throw new BadRequestException(
+          'Invoice cannot be changed because it has payment allocations',
+        );
+      }
+
+      const [invoice] = await tx
+        .update(invoices)
+        .set(updateValues)
+        .where(eq(invoices.id, id))
+        .returning();
+
+      return invoice ?? null;
+    });
   }
 
   async remove(id: string) {

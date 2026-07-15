@@ -1,5 +1,6 @@
 import {
   boolean,
+  check,
   integer,
   numeric,
   pgEnum,
@@ -7,6 +8,7 @@ import {
   text,
   timestamp,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 export const invoiceStatus = pgEnum('InvoiceStatus', [
   'UNPAID',
@@ -105,10 +107,16 @@ export const paymentParts = pgTable('PaymentPart', {
   createdAt: timestamp('createdAt').notNull().defaultNow(),
 });
 
-export const paymentAllocations = pgTable('PaymentAllocation', {
-  id: text('id').primaryKey(),
-  paymentId: text('paymentId').notNull(),
-  invoiceId: text('invoiceId').notNull(),
-  paymentPartId: text('paymentPartId'),
-  amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
-});
+export const paymentAllocations = pgTable(
+  'PaymentAllocation',
+  {
+    id: text('id').primaryKey(),
+    paymentId: text('paymentId').notNull(),
+    invoiceId: text('invoiceId').notNull(),
+    paymentPartId: text('paymentPartId'),
+    amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
+  },
+  (table) => [
+    check('PaymentAllocation_amount_positive', sql`${table.amount} > 0`),
+  ],
+);
